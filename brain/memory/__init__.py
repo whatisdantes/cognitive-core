@@ -1,11 +1,47 @@
 """
-memory — Система памяти (многоуровневая, аналог человеческой).
+brain/memory — Система памяти мозга (многоуровневая, аналог человеческой).
 
 Модули:
-    working_memory.py   — рабочая память (текущий контекст, ~7 элементов)
-    episodic_memory.py  — эпизодическая память (события с временными метками)
-    semantic_memory.py  — семантическая память (факты, концепции, связи)
-    procedural_memory.py — процедурная память (навыки, паттерны действий)
-    source_memory.py    — память об источниках (откуда получены знания)
-    memory_manager.py   — единый интерфейс ко всем видам памяти
+    working_memory      — рабочая память (текущий контекст, RAM-only)
+    semantic_memory     — семантическая память (факты, понятия, граф связей)
+    episodic_memory     — эпизодическая память (история событий)
+    source_memory       — память об источниках (доверие, происхождение)
+    procedural_memory   — процедурная память (навыки, стратегии)
+    consolidation_engine — движок консолидации (Гиппокамп)
+    memory_manager      — единый интерфейс ко всей системе памяти
 """
+
+from .working_memory import WorkingMemory, MemoryItem
+from .semantic_memory import SemanticMemory, SemanticNode, Relation
+from .episodic_memory import EpisodicMemory, Episode, ModalEvidence
+from .source_memory import SourceMemory, SourceRecord
+from .procedural_memory import ProceduralMemory, Procedure, ProcedureStep
+from .consolidation_engine import ConsolidationEngine, ConsolidationConfig
+from .memory_manager import MemoryManager, MemorySearchResult
+
+__all__ = [
+    # Менеджер (главная точка входа)
+    "MemoryManager",
+    "MemorySearchResult",
+    # Рабочая память
+    "WorkingMemory",
+    "MemoryItem",
+    # Семантическая память
+    "SemanticMemory",
+    "SemanticNode",
+    "Relation",
+    # Эпизодическая память
+    "EpisodicMemory",
+    "Episode",
+    "ModalEvidence",
+    # Память об источниках
+    "SourceMemory",
+    "SourceRecord",
+    # Процедурная память
+    "ProceduralMemory",
+    "Procedure",
+    "ProcedureStep",
+    # Консолидация
+    "ConsolidationEngine",
+    "ConsolidationConfig",
+]

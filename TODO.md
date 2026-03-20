@@ -72,12 +72,12 @@
   **DoD:** модули могут публиковать и подписываться на события без прямых зависимостей.
   → depends on: #1.1
 
-- [ ] **1.4** Определить dataclasses событий в `core/events.py`:
+- [x] **1.4** Определить dataclasses событий в `core/events.py`:
   - `PerceptEvent` (source, modality, content, quality, ts),
   - `CognitiveEvent` (goal, step, confidence, trace_id),
   - `MemoryEvent` (operation, key, value, memory_type),
   - `LearningEvent` (trigger, delta, affected_module).
-  **DoD:** все события сериализуются в JSON без ошибок.
+  **DoD:** все события сериализуются в JSON без ошибок. ✅
   → depends on: #1.3
 
 ---
@@ -216,46 +216,52 @@
 ## ФАЗА 6 — Memory System (BRAIN.md §5.4, §6)
 > Цель: мозг помнит, что видел, слышал и читал.
 
-- [ ] **6.1** Реализовать `memory/working_memory.py`:
+- [x] **6.1** Реализовать `memory/working_memory.py`:
   - активный контекст текущего цикла,
   - ограниченный размер (sliding window),
-  - быстрый доступ.
-  **DoD:** текущий контекст доступен всем когнитивным модулям.
+  - быстрый доступ, importance-aware защита, resource-aware адаптация.
+  **DoD:** текущий контекст доступен всем когнитивным модулям. ✅
   → depends on: #1.4
 
-- [ ] **6.2** Реализовать `memory/episodic_memory.py`:
+- [x] **6.2** Реализовать `memory/episodic_memory.py`:
   - хранение событий во времени,
   - кросс-модальные записи (text/image/audio/video evidence),
   - поиск по времени, источнику, концепту.
-  **DoD:** любое событие можно найти по `trace_id` или временному диапазону.
+  **DoD:** любое событие можно найти по `trace_id` или временному диапазону. ✅
   → depends on: #6.1, #5.3
 
-- [ ] **6.3** Реализовать `memory/semantic_graph.py`:
+- [x] **6.3** Реализовать `memory/semantic_memory.py` (semantic graph):
   - граф понятий и связей,
   - добавление/обновление/удаление узлов,
-  - поиск по смыслу (semantic search).
-  **DoD:** запрос «нейрон» возвращает связанные понятия с весами.
+  - поиск по смыслу, BFS цепочки понятий.
+  **DoD:** запрос «нейрон» возвращает связанные понятия с весами. ✅
   → depends on: #6.2
 
-- [ ] **6.4** Реализовать `memory/procedural_memory.py`:
+- [x] **6.4** Реализовать `memory/procedural_memory.py`:
   - хранение стратегий и навыков,
-  - автоматизация повторяющихся паттернов.
-  **DoD:** часто используемые цепочки действий кэшируются и ускоряются.
+  - success rate tracking, автоматизация повторяющихся паттернов.
+  **DoD:** часто используемые цепочки действий кэшируются и ускоряются. ✅
   → depends on: #6.1
 
-- [ ] **6.5** Реализовать `memory/source_memory.py`:
+- [x] **6.5** Реализовать `memory/source_memory.py`:
   - trust score для каждого источника,
   - provenance (откуда пришёл факт),
-  - история подтверждений/опровержений.
-  **DoD:** каждый факт имеет ссылку на источник и уровень доверия.
+  - история подтверждений/опровержений, blacklist/whitelist.
+  **DoD:** каждый факт имеет ссылку на источник и уровень доверия. ✅
   → depends on: #6.2
 
-- [ ] **6.6** Реализовать `memory/consolidation_engine.py` (аналог Гиппокампа):
+- [x] **6.6** Реализовать `memory/consolidation_engine.py` (аналог Гиппокампа):
   - перенос важных событий из working → episodic → semantic,
-  - забывание неважного (decay),
-  - усиление часто используемого.
-  **DoD:** после N циклов важные факты переходят в LTM, неважные затухают.
+  - забывание неважного (decay), усиление часто используемого,
+  - фоновый поток, resource-aware агрессивное забывание при RAM > 85%.
+  **DoD:** после N циклов важные факты переходят в LTM, неважные затухают. ✅
   → depends on: #6.1, #6.2, #6.3
+
+- [x] **6.7** Реализовать `memory/memory_manager.py` (единый интерфейс):
+  - агрегирует все 5 видов памяти + consolidation engine,
+  - единый store()/retrieve() интерфейс,
+  - автосохранение JSON, resource monitoring через psutil.
+  **DoD:** 101/101 тестов пройдено (`test_memory.py`). ✅
 
 ---
 
@@ -457,7 +463,7 @@
 | 3 | Perception Layer | [ ] |
 | 4 | Modality Encoders | [ ] |
 | 5 | Cross-Modal Fusion | [ ] |
-| 6 | Memory System | [ ] |
+| 6 | Memory System | [x] ✅ |
 | 7 | Cognitive Core | [ ] |
 | 8 | Attention & Resource Control | [ ] |
 | 9 | Learning Loop | [ ] |
