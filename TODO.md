@@ -1,473 +1,426 @@
-# 🧠 TODO — Implementation Master Plan
-## Искусственный мультимодальный мозг (по BRAIN.md)
+# 🧠 TODO — Dependency-First Roadmap
+## Искусственный мультимодальный мозг (по BRAIN.md + chatgpt_dialog.txt)
 
 > Статусы: `[ ]` — не начато | `[~]` — в процессе | `[x]` — завершено  
-> Зависимости указаны как `→ depends on: #N`
+> Формат: dependency-first (сначала контракты и сквозной text-only цикл, затем усложнение).  
+> Принцип: **как можно раньше получить живой e2e цикл мышления**, а не “почти готовую инфраструктуру”.
 
 ---
 
-## ФАЗА 0 — Foundation & Bootstrap
-> Цель: создать минимальный запускаемый каркас проекта.
+## 🎯 Цель первой итерации (обязательный MVP)
 
-- [ ] **0.1** Создать структуру директорий проекта:
-  ```
-  brain/
-  ├── core/          # always-on loop, scheduler, resource monitor
-  ├── perception/    # text/vision/audio ingestors
-  ├── encoders/      # text/vision/audio/temporal encoders
-  ├── fusion/        # cross-modal fusion
-  ├── memory/        # working/episodic/semantic/procedural/source
-  ├── cognition/     # planner, reasoner, contradiction, uncertainty
-  ├── learning/      # online, replay, self-supervised
-  ├── logging/       # JSONL logger, digest generator
-  ├── safety/        # source trust, conflict detector
-  ├── output/        # dialogue, action, trace
-  └── data/          # persistent storage
-  ```
-  **DoD:** все директории созданы, каждая содержит `__init__.py`.
+Система должна уметь:
 
-- [ ] **0.2** Создать `requirements.txt` с базовыми зависимостями:
-  - `numpy`, `torch` (CPU-only build), `pymorphy3`, `razdel`, `navec`, `nltk`
-  - `sentence-transformers` (text encoder, large модель ~1.3 GB)
-  - `pillow`, `open-clip-torch` (vision, CLIP ViT-B/32 ~600 MB)
-  - `openai-whisper` (audio, medium модель ~1.5 GB)
-  - `jsonlines` (JSONL logging)
-  > Суммарный бюджет моделей: ~3.4 GB — в рамках лимита 3 GB (выбрать medium/small при необходимости).
-  **DoD:** `pip install -r requirements.txt` проходит без ошибок.
+1. Принять **текстовый** вопрос  
+2. Извлечь релевантное из памяти  
+3. Построить 1–3 гипотезы  
+4. Выбрать форму ответа  
+5. Выдать `text + confidence + trace + log`
 
-- [ ] **0.3** Создать `main.py` — точка входа always-on цикла:
-  - инициализация всех модулей,
-  - запуск scheduler/tick loop,
-  - graceful shutdown по SIGINT/SIGTERM.
-  **DoD:** `python main.py` запускается и выводит системный лог старта.
-
-- [ ] **0.4** Создать единый словарь терминов `GLOSSARY.md`:
-  - зафиксировать имена всех модулей и классов,
-  - предотвратить расхождение архитектуры в коде.
-  **DoD:** все имена из BRAIN.md зафиксированы в GLOSSARY.md.
+**MVP definition of done:**
+- один стабильный text-only pipeline работает end-to-end;
+- каждый ответ имеет trace chain и запись в JSONL;
+- latency и confidence измеряются и видны в логах.
 
 ---
 
-## ФАЗА 1 — Always-On Autonomous Loop (BRAIN.md §14)
-> Цель: мозг работает непрерывно, не ждёт команды.
+## ✅ Что уже реализовано (не переписывать, использовать как базу)
 
-- [ ] **1.1** Реализовать `core/scheduler.py` — тик-планировщик:
-  - clock-driven тики (configurable interval),
-  - event-driven обработка входящих событий,
-  - приоритетная очередь задач.
-  **DoD:** scheduler запускается, генерирует тики, логирует каждый цикл.
-  → depends on: #0.3
+- [x] `brain/core/events.py` — типизированные события + EventFactory  
+- [x] `brain/core/contracts.py` — ContractMixin, ResourceState, Task, EncodedPercept, FusedPercept, TraceChain, CognitiveResult, BrainOutput  
+- [x] `brain/core/event_bus.py` — EventBus (pub/sub, wildcard, error isolation)  
+- [x] `brain/core/scheduler.py` — Scheduler (heapq, 4 приоритета, адаптивный tick 100/500/2000/5000ms)  
+- [x] `brain/core/resource_monitor.py` — ResourceMonitor (4 политики, hysteresis, inject_state)  
+- [x] `brain/memory/*` — Working/Semantic/Episodic/Source/Procedural/Consolidation/MemoryManager  
+- [x] `brain/logging/*` — BrainLogger, DigestGenerator, TraceBuilder  
+- [x] `brain/perception/*` — MetadataExtractor, TextIngestor, InputRouter (text-only MVP)  
+- [x] `test_memory.py` — 101/101 тестов  
+- [x] `test_scheduler.py` — 11/11 тестов  
+- [x] `test_resource_monitor.py` — 13/13 тестов  
+- [x] `test_logging.py` — 25/25 тестов  
+- [x] `test_perception.py` — 79/79 тестов  
+- [x] Доки слоёв `docs/layers/00..11` (включая Cognitive Core и Reward)
 
-- [ ] **1.2** Реализовать `core/resource_monitor.py`:
-  - мониторинг CPU (Ryzen 7 5700X, 16 потоков) и RAM (32 GB),
-  - динамический бюджет вычислений (лимит: CPU ≤70%, RAM ≤22 GB),
-  - graceful degradation при нехватке ресурсов,
-  - флаг `USE_GPU=False` (зарезервировано для будущего подключения GPU).
-  **DoD:** при нагрузке >80% CPU система снижает частоту тиков; при RAM >28 GB — выгружает неактивные модели.
-  → depends on: #1.1
+## ✅ Аудит и исправления (завершено)
 
-- [ ] **1.3** Реализовать `core/event_bus.py`:
-  - publish/subscribe для всех модулей,
-  - типизированные события (`PerceptEvent`, `CognitiveEvent`, `MemoryEvent`).
-  **DoD:** модули могут публиковать и подписываться на события без прямых зависимостей.
-  → depends on: #1.1
-
-- [x] **1.4** Определить dataclasses событий в `core/events.py`:
-  - `PerceptEvent` (source, modality, content, quality, ts),
-  - `CognitiveEvent` (goal, step, confidence, trace_id),
-  - `MemoryEvent` (operation, key, value, memory_type),
-  - `LearningEvent` (trigger, delta, affected_module).
-  **DoD:** все события сериализуются в JSON без ошибок. ✅
-  → depends on: #1.3
-
----
-
-## ФАЗА 2 — Logging & Observability (BRAIN.md §13)
-> Цель: читаемый, воспроизводимый след мышления.  
-> ⚠️ Реализуется РАНО — до остальных модулей, чтобы всё логировалось с самого начала.
-
-- [ ] **2.1** Реализовать `logging/brain_logger.py`:
-  - JSONL-формат (одна строка = одно событие),
-  - поля: `ts`, `level`, `module`, `event`, `session_id`, `cycle_id`, `trace_id`,
-    `input_ref`, `state`, `decision`, `latency_ms`, `notes`.
-  **DoD:** каждый модуль может вызвать `logger.log(...)` и событие появляется в файле.
-  → depends on: #0.1
-
-- [ ] **2.2** Реализовать уровни логов: `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`.
-  **DoD:** фильтрация по уровню работает через конфиг.
-  → depends on: #2.1
-
-- [ ] **2.3** Реализовать `logging/digest_generator.py` — human-readable digest:
-  - сводка по циклу: цель → шаги → решение → ошибки → next actions,
-  - вывод в `logs/digest_YYYYMMDD.txt`.
-  **DoD:** после каждого цикла генерируется читаемая сводка.
-  → depends on: #2.1
-
-- [ ] **2.4** Реализовать ротацию логов:
-  - лимит размера файла (configurable),
-  - архивирование старых логов,
-  - разделение горячих/архивных.
-  **DoD:** при превышении лимита создаётся новый файл, старый архивируется.
-  → depends on: #2.1
-
-- [ ] **2.5** Реализовать trace chain:
-  - каждое решение связано с `input_ref`, `memory_refs`, `hypothesis_refs`, `decision_ref`,
-  - никаких «магических» ответов без trace.
-  **DoD:** любой вывод системы можно восстановить по `trace_id`.
-  → depends on: #2.1, #1.4
+- [x] `brain/core/resource_monitor.py` — разделены `brain_level_map`/`python_level_map`, добавлено поле `"level"` в событие EventBus
+- [x] `brain/core/scheduler.py` — добавлен `tick_emergency_ms`, `ram_*_gb` поля, `get_tick_interval()` поддерживает 4 уровня
+- [x] `brain/__init__.py` — версия исправлена: `"0.1.0"` → `"0.3.0"`
+- [x] `test_logging.py` — UnicodeEncodeError: emoji `✅` заменён на `[OK]`
+- [x] `brain/memory/consolidation_engine.py` — `@dataclass` для `ConsolidationConfig`, `print()` → `_logger.*`
+- [x] `brain/memory/semantic_memory.py` — `log(access_count+1+1)` → `log(access_count+1)`, `print()` → `_logger.*`
+- [x] `brain/memory/memory_manager.py` — добавлен `_logger`, `print()` → `_logger.*`
+- [x] `brain/memory/episodic_memory.py` — добавлен `import logging`, `_logger`, `print()` → `_logger.*`
+- [x] `brain/memory/source_memory.py` — добавлен `import logging`, `_logger`, `print()` → `_logger.*`
+- [x] `brain/memory/procedural_memory.py` — добавлен `import logging`, `_logger`, `print()` → `_logger.*`
+- [x] `docs/layers/09_logging_observability.md` — статусы обновлены: `⬜` → `✅`
+- [x] Регрессия: 229/229 тестов ✅ (101 memory + 11 scheduler + 13 resource_monitor + 25 logging + 79 perception)
 
 ---
 
-## ФАЗА 3 — Perception Layer (BRAIN.md §4, §5.1)
-> Цель: мозг умеет принимать text/image/audio/video.
+## ЭТАП A — Shared Contracts (общие типы и протоколы)
 
-- [ ] **3.1** Реализовать `perception/text_ingestor.py`:
-  - поддержка форматов: `.txt`, `.md`, `.pdf`, `.docx`, `.json`,
-  - структурный парсинг (заголовки, разделы, таблицы),
-  - извлечение фактов/тезисов,
-  - provenance (источник, страница, параграф).
-  **DoD:** любой текстовый файл → список `PerceptEvent` с метаданными.
-  → depends on: #1.4, #2.1
+> Сначала фиксируем сквозные контракты, чтобы слои не “разъехались”.
 
-- [ ] **3.2** Реализовать `perception/vision_ingestor.py`:
-  - загрузка изображений (jpg/png/webp),
-  - OCR (извлечение текста с изображений),
-  - базовое image understanding (объекты, сцены).
-  **DoD:** изображение → `PerceptEvent` с текстом и описанием объектов.
-  → depends on: #1.4, #2.1
+- [x] **A.1** Создать `brain/core/contracts.py`:
+  - dataclass/enum/protocol для:
+    - `ResourceState`
+    - `Task`
+    - `PerceptEvent` (ссылка на core/events совместимость)
+    - `EncodedPercept`
+    - `FusedPercept`
+    - `CognitiveResult`
+    - `BrainOutput`
+    - trace-структуры (`TraceRef`, `TraceStep`, `TraceChain`)
+  **DoD:** все сущности импортируются из одного места, типы стабильны. ✅
 
-- [ ] **3.3** Реализовать `perception/audio_ingestor.py`:
-  - ASR (speech-to-text),
-  - speaker/event detection,
-  - временные метки сегментов.
-  **DoD:** аудиофайл → `PerceptEvent` с транскриптом и временными метками.
-  → depends on: #1.4, #2.1
-
-- [ ] **3.4** Реализовать `perception/metadata_extractor.py`:
-  - извлечение: source, timestamp, quality score, language, modality.
-  **DoD:** каждый `PerceptEvent` содержит полные метаданные.
-  → depends on: #3.1, #3.2, #3.3
-
-- [ ] **3.5** Реализовать `perception/input_router.py` (аналог Таламуса):
-  - маршрутизация входящих данных по типу модальности,
-  - фильтрация дубликатов и низкокачественных входов.
-  **DoD:** любой входящий файл автоматически направляется в нужный ingestor.
-  → depends on: #3.1, #3.2, #3.3
+- [x] **A.2** Добавить правила совместимости контрактов:
+  - no breaking field rename без миграции (политика зафиксирована в docstring contracts.py),
+  - единый стиль сериализации: `ContractMixin.to_dict()` / `from_dict()` на всех 9 dataclass,
+  - `trace_id/session_id/cycle_id` добавлены в `TraceChain`, `CognitiveResult`, `BrainOutput`.
+  **DoD:** smoke-тест сериализации (7 сценариев) пройден ✅, регрессия 101/101 ✅
+  → depends on: A.1
 
 ---
 
-## ФАЗА 4 — Modality Encoders (BRAIN.md §5.2)
-> Цель: перевести сырые данные в векторные представления.
+## ЭТАП B — Minimal Autonomous Runtime (живой минимальный loop)
 
-- [ ] **4.1** Реализовать `encoders/text_encoder.py`:
-  - токенизация + лемматизация (RU + EN, pymorphy3 + razdel),
-  - эмбеддинги предложений: `sentence-transformers` large (~1.3 GB) — основной вариант,
-  - fallback: navec (~200 MB) при нехватке памяти,
-  - нормализация векторов.
-  **DoD:** текст → вектор фиксированной размерности (768d или 1024d).
-  → depends on: #3.1
+> Не “полный ствол мозга”, а минимум: принять задачу → выполнить → опубликовать результат.
 
-- [ ] **4.2** Реализовать `encoders/vision_encoder.py`:
-  - feature extraction из изображений: CLIP ViT-B/32 (~600 MB) — основной вариант,
-  - fallback: ResNet-50 (~100 MB) при нехватке памяти,
-  - нормализация в общее пространство с текстовым энкодером.
-  **DoD:** изображение → вектор той же размерности, что и текстовый (512d для CLIP).
-  → depends on: #3.2
+- [x] **B.1** Реализовать `brain/core/event_bus.py`:
+  - publish/subscribe,
+  - typed handlers (wildcard `"*"` поддержан),
+  - минимальная защита от падения хэндлера (error isolation).
+  **DoD:** событие проходит через 2+ подписчика. ✅ (smoke-тесты пройдены)
+  → depends on: A.1
 
-- [ ] **4.3** Реализовать `encoders/audio_encoder.py`:
-  - ASR + feature extraction: Whisper medium (~1.5 GB) — основной вариант,
-  - fallback: Whisper base (~150 MB) при нехватке памяти,
-  - MFCC как лёгкая альтернатива для акустических признаков,
-  - нормализация.
-  **DoD:** аудио → транскрипт + вектор признаков той же размерности.
-  → depends on: #3.3
+- [x] **B.2** Реализовать `brain/core/scheduler.py`:
+  - clock-driven tick (100/500/2000 мс по нагрузке),
+  - event-triggered task enqueue (приоритетная очередь heapq),
+  - выполнение одной задачи за тик (MVP режим).
+  - `TaskPriority` (CRITICAL/HIGH/NORMAL/LOW/IDLE), `SchedulerConfig`, `SchedulerStats`
+  - `tick_start` / `tick_end` / `task_done` / `task_failed` через EventBus
+  **DoD:** 11/11 smoke-тестов пройдено ✅ (`test_scheduler.py`)
+  → depends on: B.1
 
-- [ ] **4.4** Реализовать `encoders/temporal_encoder.py`:
-  - кодирование последовательностей (для видео/временных рядов),
-  - позиционное кодирование.
-  **DoD:** последовательность кадров → вектор с временной информацией.
-  → depends on: #4.2
+- [x] **B.3** Реализовать `brain/core/resource_monitor.py`:
+  - CPU/RAM sampling (psutil), фоновый daemon-поток,
+  - 4 политики деградации: NORMAL/DEGRADED/CRITICAL/EMERGENCY,
+  - гистерезис флагов `soft_blocked` и `ring2_allowed`,
+  - `inject_state()` для тестирования без реального CPU,
+  - `resource_policy_changed` event через EventBus при смене политики.
+  **DoD:** 13/13 smoke-тестов пройдено ✅ (`test_resource_monitor.py`)
+  → depends on: B.2
 
 ---
 
-## ФАЗА 5 — Cross-Modal Fusion (BRAIN.md §5.3)
-> Цель: объединить разные модальности в единое понимание.
+## ЭТАП C — Logging & Observability (раньше остальных слоёв)
 
-- [ ] **5.1** Реализовать `fusion/shared_space.py`:
-  - проекция всех модальностей в единое латентное пространство,
-  - alignment (text-image, audio-video).
-  **DoD:** вектора разных модальностей об одном объекте близки в пространстве.
-  → depends on: #4.1, #4.2, #4.3
+> Без этого дальше всё будет “чёрным ящиком”.
 
-- [ ] **5.2** Реализовать `fusion/confidence_calibrator.py`:
-  - оценка качества слияния по источникам,
-  - confidence score для каждого факта.
-  **DoD:** каждый слитый факт имеет `confidence` от 0.0 до 1.0.
-  → depends on: #5.1
+- [x] **C.1** Реализовать `brain/logging/brain_logger.py`:
+  - JSONL logger, 5 уровней (DEBUG/INFO/WARN/ERROR/CRITICAL),
+  - обязательные поля: `ts, level, module, event, trace_id, session_id, cycle_id`,
+  - категорийные файлы: cognitive/memory/perception/learning/safety_audit,
+  - in-memory индекс по trace_id и session_id, ротация при > 100 MB.
+  **DoD:** каждый тик и ключевое действие логируются. ✅
+  → depends on: B.2
 
-- [ ] **5.3** Реализовать `fusion/entity_linker.py`:
-  - связывание одних и тех же сущностей из разных модальностей,
-  - обновление кросс-модальной памяти.
-  **DoD:** «нейрон» в тексте и «нейрон» на изображении → одна запись в памяти.
-  → depends on: #5.1, #5.2
+- [x] **C.2** Реализовать `brain/logging/digest_generator.py`:
+  - `CycleInfo` dataclass, `generate_cycle_digest()`, `generate_session_digest()`,
+  - запись в `brain/data/logs/digests/YYYY-MM-DD.txt` и `session_<id>.txt`.
+  **DoD:** на каждый завершённый цикл формируется digest-запись. ✅
+  → depends on: C.1
 
----
-
-## ФАЗА 6 — Memory System (BRAIN.md §5.4, §6)
-> Цель: мозг помнит, что видел, слышал и читал.
-
-- [x] **6.1** Реализовать `memory/working_memory.py`:
-  - активный контекст текущего цикла,
-  - ограниченный размер (sliding window),
-  - быстрый доступ, importance-aware защита, resource-aware адаптация.
-  **DoD:** текущий контекст доступен всем когнитивным модулям. ✅
-  → depends on: #1.4
-
-- [x] **6.2** Реализовать `memory/episodic_memory.py`:
-  - хранение событий во времени,
-  - кросс-модальные записи (text/image/audio/video evidence),
-  - поиск по времени, источнику, концепту.
-  **DoD:** любое событие можно найти по `trace_id` или временному диапазону. ✅
-  → depends on: #6.1, #5.3
-
-- [x] **6.3** Реализовать `memory/semantic_memory.py` (semantic graph):
-  - граф понятий и связей,
-  - добавление/обновление/удаление узлов,
-  - поиск по смыслу, BFS цепочки понятий.
-  **DoD:** запрос «нейрон» возвращает связанные понятия с весами. ✅
-  → depends on: #6.2
-
-- [x] **6.4** Реализовать `memory/procedural_memory.py`:
-  - хранение стратегий и навыков,
-  - success rate tracking, автоматизация повторяющихся паттернов.
-  **DoD:** часто используемые цепочки действий кэшируются и ускоряются. ✅
-  → depends on: #6.1
-
-- [x] **6.5** Реализовать `memory/source_memory.py`:
-  - trust score для каждого источника,
-  - provenance (откуда пришёл факт),
-  - история подтверждений/опровержений, blacklist/whitelist.
-  **DoD:** каждый факт имеет ссылку на источник и уровень доверия. ✅
-  → depends on: #6.2
-
-- [x] **6.6** Реализовать `memory/consolidation_engine.py` (аналог Гиппокампа):
-  - перенос важных событий из working → episodic → semantic,
-  - забывание неважного (decay), усиление часто используемого,
-  - фоновый поток, resource-aware агрессивное забывание при RAM > 85%.
-  **DoD:** после N циклов важные факты переходят в LTM, неважные затухают. ✅
-  → depends on: #6.1, #6.2, #6.3
-
-- [x] **6.7** Реализовать `memory/memory_manager.py` (единый интерфейс):
-  - агрегирует все 5 видов памяти + consolidation engine,
-  - единый store()/retrieve() интерфейс,
-  - автосохранение JSON, resource monitoring через psutil.
-  **DoD:** 101/101 тестов пройдено (`test_memory.py`). ✅
+- [x] **C.3** Реализовать `brain/logging/trace_builder.py`:
+  - `start_trace / add_step / add_input_ref / add_memory_ref / add_output_ref / finish_trace`,
+  - `reconstruct(trace_id)` → `TraceChain`, `reconstruct_from_logger(trace_id, logger)`,
+  - `to_human_readable(chain)` — читаемый вывод цепочки причинности.
+  **DoD:** по `trace_id` восстанавливается полный путь решения. ✅
+  → depends on: C.1, A.1
 
 ---
 
-## ФАЗА 7 — Cognitive Core (BRAIN.md §5.5, §2.1–2.4)
-> Цель: мозг планирует, рассуждает и контролирует себя.
+## ЭТАП D — Text-Only Perception (первая рабочая вертикаль входа)
 
-- [ ] **7.1** Реализовать `cognition/planner.py` (аналог Префронтальной коры):
-  - стек целей (goal stack),
-  - декомпозиция цели на шаги,
-  - приоритизация задач.
-  **DoD:** при получении задачи система строит план из шагов и выполняет их.
-  → depends on: #6.1, #1.3
+> Только текст: без vision/audio/video на этом этапе.
 
-- [ ] **7.2** Реализовать `cognition/reasoner.py`:
-  - причинное рассуждение (causal),
-  - ассоциативное рассуждение,
-  - аналогическое рассуждение.
-  **DoD:** на вопрос «почему X?» система строит цепочку причин из памяти.
-  → depends on: #6.3, #7.1
+- [x] **D.1** Реализовать `brain/perception/text_ingestor.py`:
+  - `.txt/.md/.pdf/.docx/.json/.csv`, paragraph-aware chunking (1000–1500 chars, overlap 120),
+  - graceful fallback при отсутствии pymupdf/python-docx.
+  **DoD:** любой текстовый файл превращается в `PerceptEvent`. ✅ (79/79 тестов)
+  → depends on: A.1, C.1
 
-- [ ] **7.3** Реализовать `cognition/contradiction_detector.py`:
-  - поиск конфликтующих фактов в памяти,
-  - флаг противоречия в логе,
-  - запрос дополнительных доказательств.
-  **DoD:** при конфликте двух фактов система логирует `WARN` и снижает confidence.
-  → depends on: #6.3, #6.5
+- [x] **D.2** Реализовать `brain/perception/metadata_extractor.py`:
+  - `source`, `language` (ru/en/mixed/unknown), `quality` (0.0–1.0), `timestamp`.
+  - quality_label: normal/warning/low_priority; hard reject только для пустого контента.
+  **DoD:** каждый `PerceptEvent` дополнен метаданными. ✅
+  → depends on: D.1
 
-- [ ] **7.4** Реализовать `cognition/uncertainty_monitor.py`:
-  - отслеживание уровня уверенности по всем активным гипотезам,
-  - сигнал «нужно больше данных».
-  **DoD:** при confidence < threshold система запрашивает дополнительный ввод.
-  → depends on: #7.2, #7.3
-
-- [ ] **7.5** Реализовать `cognition/salience_engine.py` (аналог Миндалины):
-  - быстрая оценка значимости входящего события,
-  - приоритизация срочных/аномальных сигналов.
-  **DoD:** аномальный ввод немедленно поднимается в приоритете обработки.
-  → depends on: #1.3, #7.1
-
-- [ ] **7.6** Реализовать `cognition/action_selector.py` (аналог Базальных ганглий):
-  - выбор действия среди конкурирующих вариантов,
-  - policy gate (фильтр нежелательных действий).
-  **DoD:** система выбирает одно действие из N кандидатов с обоснованием.
-  → depends on: #7.1, #7.2
+- [x] **D.3** Реализовать `brain/perception/input_router.py` (MVP):
+  - маршрутизация только text-входов, SHA256 дедупликация, quality policy.
+  - image/audio/video → warning + пропуск (MVP).
+  **DoD:** текстовый input стабильно доходит до энкодера. ✅
+  → depends on: D.1, D.2
 
 ---
 
-## ФАЗА 8 — Attention & Resource Control (BRAIN.md §7)
-> Цель: мозг знает, на что тратить ресурсы.
+## ЭТАП E — Minimal Text Encoder (дешёвый и стабильный путь)
 
-- [ ] **8.1** Реализовать `core/attention_controller.py`:
-  - goal-driven attention (что важно для цели),
-  - salience-driven attention (что аномально/новое),
-  - бюджет вычислений по модальностям.
-  **DoD:** при ограниченных ресурсах система фокусируется на приоритетных модальностях.
-  → depends on: #1.2, #7.5
+- [ ] **E.1** Реализовать `brain/encoders/text_encoder.py`:
+  - базовый рабочий энкодер (sentence-transformers),
+  - fallback при нехватке ресурсов.
+  **DoD:** `PerceptEvent -> EncodedPercept` стабильно.
+  → depends on: D.3, B.3
 
----
-
-## ФАЗА 9 — Learning Loop (BRAIN.md §8)
-> Цель: мозг учится из опыта.
-
-- [ ] **9.1** Реализовать `learning/online_learner.py`:
-  - обновление ассоциаций после каждого взаимодействия,
-  - обновление confidence фактов,
-  - адаптация весов энкодеров.
-  **DoD:** после каждого цикла веса обновляются и логируются в Learning Logs.
-  → depends on: #6.3, #4.1
-
-- [ ] **9.2** Реализовать `learning/replay_engine.py`:
-  - периодическое воспроизведение важных эпизодов,
-  - усиление устойчивых паттернов,
-  - удаление шума.
-  **DoD:** каждые N циклов запускается replay, результаты логируются.
-  → depends on: #6.2, #9.1
-
-- [ ] **9.3** Реализовать `learning/self_supervised.py`:
-  - проверка согласованности «картинка ↔ текст»,
-  - проверка «аудио ↔ транскрипт»,
-  - сигнал ошибки при несогласованности.
-  **DoD:** несогласованные пары снижают confidence источника.
-  → depends on: #5.1, #9.1
-
-- [ ] **9.4** Реализовать `learning/hypothesis_engine.py`:
-  - генерация гипотез на основе пробелов в знаниях,
-  - тестирование гипотез через новые данные,
-  - подтверждение/опровержение.
-  **DoD:** система самостоятельно формулирует вопросы для заполнения пробелов.
-  → depends on: #7.2, #9.1
+- [ ] **E.2** Добавить lightweight режим:
+  - переключение на fallback по флагу resource monitor.
+  **DoD:** при high load путь не падает, а деградирует предсказуемо.
+  → depends on: E.1, B.3
 
 ---
 
-## ФАЗА 10 — Explainability & Output (BRAIN.md §9)
-> Цель: каждый вывод объяснён и прослеживаем.
+## ЭТАП F — Cognitive MVP поверх готовой памяти
 
-- [ ] **10.1** Реализовать `output/trace_builder.py`:
-  - сборка полного trace chain для каждого вывода,
-  - поля: источники, факты, гипотезы, решение, confidence, риски.
-  **DoD:** любой ответ системы сопровождается полным trace.
-  → depends on: #2.5, #7.6
+> Центральный контур: `retrieve -> hypotheses -> score -> select -> act`.
 
-- [ ] **10.2** Реализовать `output/dialogue_responder.py`:
-  - формирование текстового ответа,
-  - включение объяснения (почему так решено),
-  - уровень уверенности в ответе.
-  **DoD:** ответ содержит текст + краткое объяснение + confidence.
-  → depends on: #10.1
+### F1 — Context + Goal Set
+- [ ] **F.1** Реализовать `brain/cognition/context.py`:
+  - сбор рабочего контекста из MemoryManager,
+  - ограничение по объёму/важности.
+  **DoD:** контекст формируется детерминированно и логируется.
+  → depends on: E.1, C.1
 
-- [ ] **10.3** Реализовать `output/action_proposer.py`:
-  - предложение действий (не только текстовых ответов),
-  - обоснование каждого действия.
-  **DoD:** система может предложить конкретное действие с объяснением.
-  → depends on: #7.6, #10.1
+- [ ] **F.2** Реализовать `brain/cognition/goal_manager.py` + `planner.py` (MVP):
+  - цели: `answer_question`, `verify_claim`.
+  **DoD:** цель ставится и декомпозируется в 1–3 шага.
+  → depends on: F.1
 
----
+### F2 — Hypotheses + Score
+- [ ] **F.3** Реализовать `brain/cognition/hypothesis_engine.py` (template-based):
+  - генерация 1–3 гипотез,
+  - scoring на базе evidence/trust/coherence/contradiction.
+  **DoD:** на один запрос создаётся набор гипотез с числовым score.
+  → depends on: F.1, F.2
 
-## ФАЗА 11 — Safety & Boundaries (BRAIN.md §10)
-> Цель: мозг не делает вредного и не доверяет ненадёжному.
+- [ ] **F.4** Реализовать `brain/cognition/reasoner.py` (Ring 1 only):
+  - retrieve + ранжирование + выбор лучшей гипотезы.
+  **DoD:** выдаёт `CognitiveResult` со structured reasoning trace.
+  → depends on: F.3
 
-- [ ] **11.1** Реализовать `safety/source_trust.py`:
-  - оценка надёжности источников,
-  - blacklist/whitelist источников,
-  - decay доверия при противоречиях.
-  **DoD:** ненадёжный источник снижает confidence всех связанных фактов.
-  → depends on: #6.5
-
-- [ ] **11.2** Реализовать `safety/conflict_detector.py`:
-  - детектор конфликтов фактов из разных источников,
-  - логирование в Safety/Audit Logs.
-  **DoD:** конфликт фактов → `WARN` лог + снижение confidence.
-  → depends on: #7.3, #11.1
+### F3 — Uncertainty + Action
+- [ ] **F.5** Реализовать `brain/cognition/uncertainty_monitor.py` + `action_selector.py`:
+  - ветки: ответить / ответить с оговоркой / запросить уточнение.
+  **DoD:** поведение меняется от confidence и contradiction flags.
+  → depends on: F.4
 
 ---
 
-## ФАЗА 12 — Self-Development & Reflection (BRAIN.md §11.E)
-> Цель: мозг анализирует себя и улучшается.
+## ЭТАП F.5 — Retrieval Integration (стык памяти и reasoning)
 
-- [ ] **12.1** Реализовать `cognition/self_reflector.py`:
-  - периодический анализ качества мышления,
-  - выявление пробелов в знаниях,
-  - отчёт о саморазвитии.
-  **DoD:** каждые N циклов генерируется reflection report.
-  → depends on: #9.4, #7.4
+> Явный интеграционный этап между encoder и cognition, чтобы не прятать критичный стык внутри reasoner.
 
-- [ ] **12.2** Реализовать `cognition/skill_refiner.py` (аналог Мозжечка):
-  - тонкая коррекция повторяющихся ошибок,
-  - автоматизация успешных паттернов.
-  **DoD:** повторяющиеся ошибки снижаются после N итераций.
-  → depends on: #9.1, #12.1
+- [ ] **F.6** Реализовать `MemoryManager.retrieve() -> reasoning input` адаптер:
+  - нормализация формата результатов retrieve,
+  - ранжирование кандидатов для hypothesis engine,
+  - contradiction-first сигнал в reasoning context.
+  **DoD:** reasoner получает единый и стабильный вход из memory retrieval без ad-hoc преобразований.
+  → depends on: F.2, C.3
 
 ---
 
-## ФАЗА 13 — Metrics & KPI Dashboard (BRAIN.md §12, §13.8)
-> Цель: измерять качество работы мозга.
+## ЭТАП G — Output MVP (объяснимый ответ наружу)
 
-- [ ] **13.1** Реализовать `logging/metrics_collector.py`:
-  - Cross-Modal Retrieval Accuracy,
-  - Source Reliability Calibration,
-  - Contradiction Detection Rate,
-  - Reasoning Depth & Coherence,
-  - Learning Velocity,
-  - Self-Correction Rate,
-  - Explainability Completeness,
-  - Trace Completeness,
-  - Error Localization Time,
-  - Logging Overhead.
-  **DoD:** метрики обновляются каждый цикл и доступны в `logs/metrics.jsonl`.
-  → depends on: #2.1, #7.2, #9.1
+- [ ] **G.1** Реализовать `brain/output/trace_builder.py`:
+  - превращает внутренний trace в читаемую структуру.
+  **DoD:** trace прикладывается к каждому ответу.
+  → depends on: C.3, F.4
 
-- [ ] **13.2** Реализовать `logging/dashboard.py` — текстовый дашборд:
-  - вывод ключевых метрик в терминал,
-  - обновление в реальном времени.
-  **DoD:** `python -m brain.logging.dashboard` показывает live-метрики.
-  → depends on: #13.1
+- [ ] **G.2** Реализовать `brain/output/dialogue_responder.py`:
+  - формирует `BrainOutput(text, confidence, trace_ref, digest)`.
+  **DoD:** пользователь получает текст + confidence + trace.
+  → depends on: G.1, F.5
+
+- [ ] **G.3** Реализовать `brain/output/response_validator.py` (минимум, MVP Safety):
+  - фильтр пустых/невалидных/опасных ответов на MVP-уровне.
+  **DoD:** невалидный output блокируется и логируется.
+  → depends on: G.2
 
 ---
 
-## ПОРЯДОК РЕАЛИЗАЦИИ (рекомендуемый)
+## ЭТАП H — Attention & Resource integration (после e2e)
 
-```
-0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
+> Подключаем только когда text-only цикл уже живой.
+
+- [ ] **H.1** Реализовать `brain/core/attention_controller.py`:
+  - приоритизация задач по goal/salience.
+  **DoD:** при нагрузке система сохраняет качество critical-path.
+  → depends on: G.2, B.3
+
+- [ ] **H.2** Реализовать policy деградации:
+  - отключение тяжёлых веток reasoning при high load.
+  **DoD:** деградация предсказуема, без падений.
+  → depends on: H.1
+
+---
+
+## ЭТАП I — Learning Loop (урезанный и поздний старт)
+
+- [ ] **I.1** Реализовать `brain/learning/online_learner.py` (MVP):
+  - обновление confidence по результатам ответа/фидбэка.
+  **DoD:** feedback влияет на последующие ответы.
+  → depends on: G.2
+
+- [ ] **I.2** Реализовать `brain/learning/knowledge_gap_detector.py`:
+  - фиксирует пробелы и создаёт обучающие подцели.
+  **DoD:** при низком покрытии знаний создаётся gap-goal.
+  → depends on: I.1
+
+- [ ] **I.3** Реализовать `brain/learning/replay_engine.py`:
+  - replay важных эпизодов в idle.
+  **DoD:** replay запускается без деградации realtime-ответов.
+  → depends on: I.1, H.2
+
+---
+
+## ЭТАП J — Расширение мультимодальности (позже)
+
+- [ ] **J.1** Vision encoder path (ingest + encode)
+- [ ] **J.2** Audio encoder path (ingest + encode)
+- [ ] **J.3** Temporal/video path (минимум)
+  **DoD:** каждая модальность проходит отдельный smoke e2e.
+  → depends on: E.2, G.2
+
+---
+
+## ЭТАП K — Cross-Modal Fusion (почти в конце)
+
+- [ ] **K.1** `brain/fusion/shared_space_projector.py`
+- [ ] **K.2** `brain/fusion/entity_linker.py`
+- [ ] **K.3** `brain/fusion/confidence_calibrator.py`
+- [ ] **K.4** `brain/fusion/contradiction_detector.py`
+  **DoD:** факты из разных модальностей связываются в единое представление.
+  → depends on: J.1, J.2, J.3
+
+---
+
+## ЭТАП L — Safety & Boundaries (Expanded Safety, до Reward)
+
+- [ ] **L.1** `brain/safety/source_trust.py`
+- [ ] **L.2** `brain/safety/conflict_detector.py`
+- [ ] **L.3** `brain/safety/boundary_guard.py`
+- [ ] **L.4** `brain/safety/audit_logger.py`
+  **DoD:** high-risk решения блокируются/аудируются.
+  → depends on: G.3, K.4
+
+---
+
+## ЭТАП M — Reward & Motivation (последним)
+
+- [ ] **M.1** `brain/motivation/reward_engine.py`
+- [ ] **M.2** `brain/motivation/motivation_engine.py`
+- [ ] **M.3** `brain/motivation/curiosity_engine.py`
+  **DoD:** reward сигнал влияет на приоритет целей и learning.
+  → depends on: I.3, L.3
+
+---
+
+## 🧪 Тестовый план по этапам
+
+- [ ] **T.1 Contracts tests** (serialization, backward-compatibility)  
+- [ ] **T.2 Runtime tests** (event bus + scheduler + resource flags)  
+- [ ] **T.3 Text-only e2e tests** (input -> memory -> reason -> output -> trace/log)  
+- [ ] **T.4 Regression memory tests** (`python test_memory.py`, должно остаться 101/101)  
+- [ ] **T.5 Load/degradation tests** (CPU/RAM pressure сценарии)
+
+---
+
+## 📅 План на 1 неделю по файлам (первая реализация)
+
+### День 1 — Contracts + skeleton runtime ✅ (почти завершён)
+- [x] `brain/core/contracts.py` — реализовано
+- [x] `brain/core/event_bus.py` — реализовано (полный, не skeleton)
+- [x] `brain/core/scheduler.py` — реализовано (полный, 11/11 тестов)
+- [x] `brain/core/resource_monitor.py` — реализовано (полный, 13/13 тестов)
+
+### День 2 — Logging first ✅ ЗАВЕРШЕНО
+- [x] `brain/logging/brain_logger.py`   — BrainLogger (25/25 тестов)
+- [x] `brain/logging/digest_generator.py` — DigestGenerator + CycleInfo
+- [x] `brain/logging/trace_builder.py`  — TraceBuilder + reconstruct_from_logger
+
+### День 3 — Text ingestion MVP ✅ ЗАВЕРШЕНО
+- [x] `brain/perception/text_ingestor.py`   — TextIngestor (79/79 тестов)
+- [x] `brain/perception/metadata_extractor.py` — MetadataExtractor
+- [x] `brain/perception/input_router.py`    — InputRouter (text-only MVP)
+
+### День 4 — Text encoder MVP
+- `brain/encoders/text_encoder.py`
+- fallback logic + интеграция с resource monitor
+
+### День 5 — Cognitive core MVP (part 1)
+- `brain/cognition/context.py`
+- `brain/cognition/goal_manager.py`
+- `brain/cognition/planner.py`
+- `brain/cognition/hypothesis_engine.py`
+
+### День 6 — Cognitive core MVP (part 2)
+- `brain/cognition/reasoner.py`
+- `brain/cognition/uncertainty_monitor.py`
+- `brain/cognition/action_selector.py`
+- Retrieval integration (`F.6`) и фиксация формата reasoning input
+
+### День 7 — Output MVP + validation
+- `brain/output/trace_builder.py`
+- `brain/output/dialogue_responder.py`
+- `brain/output/response_validator.py` (MVP safety)
+
+### День 8–9 — E2E stabilization + tests
+- e2e test scripts for text-only loop
+- `python test_memory.py` regression
+- фиксы по trace/log/digest
+- минимальная документация новых модулей
+
+**Итог первой итерации (реалистичный горизонт 8–9 дней):**
+- живой text-only e2e цикл,
+- ответы с trace и confidence,
+- стабильный runtime без падений на базовой нагрузке.
+
+---
+
+## 📌 Порядок реализации (коротко)
+
+```text
+A Contracts
+→ B Runtime
+→ C Logging
+→ D Text Perception
+→ E Text Encoder
+→ F Cognitive MVP
+→ G Output MVP
+→ H Attention/Degradation
+→ I Learning (light)
+→ J Multimodal encoders
+→ K Cross-modal fusion
+→ L Safety
+→ M Reward/Motivation
 ```
 
-Минимальный MVP (запускаемый мозг):
-```
-0.1 → 0.2 → 0.3 → 1.1 → 1.3 → 1.4 → 2.1 → 2.2 → 3.1 → 6.1 → 7.1 → 10.1 → 10.2
-```
-> ⚠️ 10.1 (trace_builder) обязателен перед 10.2 (dialogue_responder) — зависимость.
-
 ---
 
-## ПРОГРЕСС
+## 📊 Прогресс (новый формат)
 
-| Фаза | Название | Статус |
-|------|----------|--------|
-| 0 | Foundation & Bootstrap | [ ] |
-| 1 | Always-On Autonomous Loop | [ ] |
-| 2 | Logging & Observability | [ ] |
-| 3 | Perception Layer | [ ] |
-| 4 | Modality Encoders | [ ] |
-| 5 | Cross-Modal Fusion | [ ] |
-| 6 | Memory System | [x] ✅ |
-| 7 | Cognitive Core | [ ] |
-| 8 | Attention & Resource Control | [ ] |
-| 9 | Learning Loop | [ ] |
-| 10 | Explainability & Output | [ ] |
-| 11 | Safety & Boundaries | [ ] |
-| 12 | Self-Development & Reflection | [ ] |
-| 13 | Metrics & KPI Dashboard | [ ] |
+| Этап | Название | Статус | Риск/Сложность |
+|------|----------|--------|----------------|
+| A | Shared Contracts | [x] A.1 ✅, A.2 ✅ | Средний |
+| B | Minimal Runtime | [x] B.1 ✅, B.2 ✅, B.3 ✅ | Средний |
+| C | Logging & Observability (early) | [x] C.1 ✅, C.2 ✅, C.3 ✅ | Низкий |
+| D | Text-Only Perception | [x] D.1 ✅, D.2 ✅, D.3 ✅ | Средний |
+| E | Minimal Text Encoder | [ ] | Средний |
+| F | Cognitive MVP | [ ] | Высокий |
+| G | Output MVP | [ ] | Средний |
+| H | Attention & Degradation | [ ] | Средний |
+| I | Learning (light) | [ ] | Средний |
+| J | Multimodal Expansion | [ ] | Высокий |
+| K | Cross-Modal Fusion | [ ] | Высокий |
+| L | Safety & Boundaries (Expanded) | [ ] | Средний |
+| M | Reward & Motivation | [ ] | Высокий |

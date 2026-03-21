@@ -14,10 +14,13 @@ procedural_memory.py — Процедурная память (навыки, па
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+_logger = logging.getLogger(__name__)
 
 
 # ─── Шаг процедуры ───────────────────────────────────────────────────────────
@@ -327,7 +330,7 @@ class ProceduralMemory:
         for name in to_delete:
             del self._procedures[name]
         if to_delete:
-            print(f"🗑 Удалено {len(to_delete)} неэффективных процедур")
+            _logger.info("Удалено %d неэффективных процедур", len(to_delete))
         return len(to_delete)
 
     # ─── Персистентность ─────────────────────────────────────────────────────
@@ -353,7 +356,7 @@ class ProceduralMemory:
         else:
             os.rename(tmp_path, path)
 
-        print(f"💾 Процедурная память сохранена: {len(self._procedures)} процедур → {path}")
+        _logger.info("Процедурная память сохранена: %d процедур -> %s", len(self._procedures), path)
 
     def _load(self):
         """Загрузить процедурную память с диска."""
@@ -367,9 +370,9 @@ class ProceduralMemory:
             for name, proc_dict in data.get("procedures", {}).items():
                 self._procedures[name] = Procedure.from_dict(proc_dict)
 
-            print(f"📂 Процедурная память загружена: {len(self._procedures)} процедур ← {self._data_path}")
+            _logger.info("Процедурная память загружена: %d процедур <- %s", len(self._procedures), self._data_path)
         except Exception as e:
-            print(f"⚠ Ошибка загрузки процедурной памяти: {e}")
+            _logger.warning("Ошибка загрузки процедурной памяти: %s", e)
 
     def _maybe_autosave(self):
         if self._write_count % self._autosave_every == 0:

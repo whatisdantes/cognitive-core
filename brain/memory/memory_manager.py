@@ -20,8 +20,11 @@ MemoryManager — это "диспетчер" памяти мозга:
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
+
+_logger = logging.getLogger(__name__)
 
 try:
     import psutil
@@ -474,8 +477,14 @@ class MemoryManager:
         if self._on_event:
             self._on_event(level, {"module": "memory_manager", "message": message})
         else:
-            prefix = {"info": "ℹ", "error": "⚠", "warn": "⚡"}.get(level, "·")
-            print(f"  {prefix} [MemoryManager] {message}")
+            log_fn = {
+                "debug":    _logger.debug,
+                "info":     _logger.info,
+                "warn":     _logger.warning,
+                "error":    _logger.error,
+                "critical": _logger.critical,
+            }.get(level, _logger.info)
+            log_fn("[MemoryManager] %s", message)
 
     def __repr__(self) -> str:
         return (

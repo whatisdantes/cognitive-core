@@ -16,9 +16,13 @@ consolidation_engine.py — Движок консолидации памяти (
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
+
+_logger = logging.getLogger(__name__)
 
 try:
     import psutil
@@ -35,26 +39,27 @@ from .procedural_memory import ProceduralMemory
 
 # ─── Конфигурация консолидации ───────────────────────────────────────────────
 
+@dataclass
 class ConsolidationConfig:
     """Настройки движка консолидации."""
 
     # Интервалы (в секундах)
-    CONSOLIDATION_INTERVAL = 30.0       # как часто запускать консолидацию
-    DECAY_INTERVAL = 300.0              # как часто применять decay (5 минут)
-    SAVE_INTERVAL = 120.0               # как часто сохранять на диск (2 минуты)
+    CONSOLIDATION_INTERVAL: float = 30.0    # как часто запускать консолидацию
+    DECAY_INTERVAL: float         = 300.0   # как часто применять decay (5 минут)
+    SAVE_INTERVAL: float          = 120.0   # как часто сохранять на диск (2 минуты)
 
     # Пороги
-    IMPORTANCE_TO_EPISODIC = 0.3        # минимальная важность для переноса в Episodic
-    IMPORTANCE_TO_SEMANTIC = 0.4        # минимальная важность для переноса в Semantic
-    CONFIDENCE_DECAY_RATE = 0.003       # скорость затухания уверенности
-    SOURCE_DECAY_RATE = 0.001           # скорость затухания доверия к источникам
+    IMPORTANCE_TO_EPISODIC: float = 0.3     # минимальная важность для переноса в Episodic
+    IMPORTANCE_TO_SEMANTIC: float = 0.4     # минимальная важность для переноса в Semantic
+    CONFIDENCE_DECAY_RATE: float  = 0.003   # скорость затухания уверенности
+    SOURCE_DECAY_RATE: float      = 0.001   # скорость затухания доверия к источникам
 
     # Ресурсы
-    RAM_AGGRESSIVE_DECAY_PCT = 85.0     # при RAM > 85% — агрессивное забывание
-    RAM_NORMAL_DECAY_PCT = 70.0         # при RAM > 70% — ускоренное затухание
+    RAM_AGGRESSIVE_DECAY_PCT: float = 85.0  # при RAM > 85% — агрессивное забывание
+    RAM_NORMAL_DECAY_PCT: float     = 70.0  # при RAM > 70% — ускоренное затухание
 
     # Лимиты
-    MAX_ITEMS_PER_CONSOLIDATION = 50    # максимум элементов за один цикл
+    MAX_ITEMS_PER_CONSOLIDATION: int = 50   # максимум элементов за один цикл
 
 
 # ─── Движок консолидации ─────────────────────────────────────────────────────
@@ -423,9 +428,15 @@ class ConsolidationEngine:
                 "ts": time.time(),
             })
         else:
-            prefix = {"info": "ℹ", "debug": "·", "error": "⚠", "warn": "⚡"}.get(level, "·")
-            if level != "debug":  # debug не выводим в консоль по умолчанию
-                print(f"  {prefix} [ConsolidationEngine] {message}")
+            # Используем стандартный logging вместо print()
+            log_fn = {
+                "debug":    _logger.debug,
+                "info":     _logger.info,
+                "warn":     _logger.warning,
+                "error":    _logger.error,
+                "critical": _logger.critical,
+            }.get(level, _logger.info)
+            log_fn("[ConsolidationEngine] %s", message)
 
     # ─── Статистика ──────────────────────────────────────────────────────────
 

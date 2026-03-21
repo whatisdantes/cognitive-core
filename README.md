@@ -1,8 +1,9 @@
 # 🧠 Искусственный Мультимодальный Мозг
 
-> **Версия:** 0.1.0 — Foundation & Bootstrap  
-> **Статус:** 🚧 В разработке (Фаза 0)  
-> **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4
+> **Версия:** 0.3.0  
+> **Статус:** 🚧 В разработке — Этап D (Perception) ✅ завершён → Этап E (Text Encoder) в очереди  
+> **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
+> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -12,19 +13,64 @@
 
 ## 📋 Содержание
 
+- [Быстрый старт](#-быстрый-старт)
 - [Концепция](#-концепция)
 - [Целевая платформа](#-целевая-платформа)
 - [Архитектура](#-архитектура)
 - [Биологические аналоги](#-биологические-аналоги)
 - [Структура проекта](#-структура-проекта)
+- [Реализованные модули](#-реализованные-модули)
 - [Зависимости](#-зависимости)
 - [Установка](#-установка)
-- [Запуск](#-запуск)
-- [Модули](#-модули)
+- [Запуск тестов](#-запуск-тестов)
+- [Система памяти — API](#-система-памяти--api)
+- [Система событий — API](#-система-событий--api)
 - [Логирование](#-логирование)
 - [Метрики качества](#-метрики-качества)
-- [Roadmap](#-roadmap)
+- [Документация](#-документация)
 - [Прогресс реализации](#-прогресс-реализации)
+
+---
+
+## ⚡ Быстрый старт
+
+> Для запуска достаточно установить зависимости и запустить тесты. Полный мозг (all phases) ещё в разработке.
+
+```bash
+# 1. Клонировать репозиторий
+git clone <repo_url>
+cd AI
+
+# 2. Установить зависимости (Windows — автоматически)
+download_libraries.bat
+
+# 3. Активировать окружение
+venv\Scripts\activate
+
+# 4. Проверить установку
+python check_deps.py
+
+# 5. Запустить тесты (реализованные модули)
+python test_memory.py           # 101/101 ✅ Memory System
+python test_scheduler.py        # 11/11  ✅ Scheduler
+python test_resource_monitor.py # 13/13  ✅ ResourceMonitor
+python test_logging.py          # 25/25  ✅ Logging & Observability
+
+# 6. Использовать Memory System в коде
+python -c "
+from brain.memory import MemoryManager
+mm = MemoryManager(data_dir='brain/data/memory', auto_consolidate=False)
+mm.start()
+mm.store('нейрон это клетка нервной системы', importance=0.8, source_ref='test')
+result = mm.retrieve('нейрон')
+print(result.summary())
+mm.stop()
+"
+```
+
+> 📖 Полная архитектурная спецификация: [`BRAIN.md`](BRAIN.md)  
+> 📋 План реализации (14 фаз): [`TODO.md`](TODO.md)  
+> 🗂️ Документация по слоям: [`docs/layers/`](docs/layers/)
 
 ---
 
@@ -32,16 +78,16 @@
 
 Человеческий мозг — это сеть взаимосвязанных контуров, работающих **параллельно и асинхронно**:
 
-1. Восприятие сигналов
-2. Предобработка и распознавание
-3. Смысловая интеграция
-4. Оценка значимости / риска
-5. Рабочая память и внимание
-6. Выбор действия
+1. Восприятие сигналов из внешнего мира
+2. Предобработка и распознавание паттернов
+3. Смысловая интеграция из разных источников
+4. Оценка значимости и риска
+5. Рабочая память и управление вниманием
+6. Выбор действия среди конкурирующих вариантов
 7. Обучение по ошибке и подкреплению
-8. Консолидация памяти
+8. Консолидация памяти (краткосрочная → долгосрочная)
 
-**Главная инженерная идея:**  
+**Главная инженерная идея:**
 > Разум — это не генерация текста, а **управление внутренним состоянием и памятью**.
 
 Система работает с несколькими модальностями:
@@ -55,31 +101,32 @@
 ## 💻 Целевая платформа
 
 | Компонент | Характеристика |
-|-----------|---------------|
+|-----------|----------------|
 | CPU | AMD Ryzen 7 5700X — 8 ядер / 16 потоков, до 4.6 GHz |
 | RAM | DDR4 32 GB, 3200 MHz |
-| GPU | — (не используется) |
-| Режим | ✅ **CPU-only** (`USE_GPU=False`) |
+| GPU | — (не используется, `USE_GPU=False`) |
+| ОС | Windows 10/11 (основная), Linux/macOS (совместимо) |
+| Python | 3.10+ |
 
 ### Ресурсные лимиты
 
-| Ресурс | Лимит для мозга | Порог деградации |
-|--------|----------------|-----------------|
-| RAM | ≤ 22 GB | > 28 GB → снизить частоту тиков |
-| CPU | ≤ 70% avg | > 85% → graceful degradation |
+| Ресурс | Рабочий лимит | Порог деградации |
+|--------|--------------|-----------------|
+| RAM | ≤ 22 GB | > 28 GB → сжать рабочую память |
+| CPU | ≤ 70% avg | > 85% → снизить частоту тиков |
 | Потоки | 8–12 из 16 | оставить 4 потока для ОС |
 | Модели | ≤ 3 GB суммарно | > 5 GB → выгружать неактивные |
 
 ### Модели и их размеры
 
 | Модуль | Модель (основная) | Размер | Fallback |
-|--------|------------------|--------|---------|
+|--------|------------------|--------|----------|
 | Text Encoder | sentence-transformers large | ~1.3 GB | navec (~200 MB) |
 | Vision Encoder | CLIP ViT-B/32 | ~600 MB | ResNet-50 (~100 MB) |
 | Audio ASR | Whisper medium | ~1.5 GB | Whisper base (~150 MB) |
 | **Итого** | | **~3.4 GB** | **~450 MB** |
 
-> ⚠️ Модели загружаются автоматически при первом запуске.
+> ⚠️ Модели загружаются автоматически при первом запуске соответствующего энкодера.
 
 ---
 
@@ -88,48 +135,83 @@
 ```
 MULTIMODAL BRAIN
 │
-├─ 1. Perception Layer          ← Восприятие (аналог сенсорики)
-│   ├─ Text Ingestor            txt / md / pdf / docx / json
-│   ├─ Vision Ingestor          img / video frames + OCR
-│   ├─ Audio Ingestor           ASR + acoustic events
-│   └─ Metadata Extractor       source, timestamp, quality, language
+├─ 0. Autonomous Loop           ← Ствол мозга (always-on)
+│   ├─ Scheduler                clock-driven + event-driven тики
+│   ├─ EventBus                 publish/subscribe шина событий
+│   ├─ ResourceMonitor          CPU/RAM мониторинг, graceful degradation
+│   └─ AttentionController      бюджет вычислений по модальностям
 │
-├─ 2. Modality Encoders         ← Кодирование в векторы
-│   ├─ Text Encoder             sentence-transformers (768d/1024d)
-│   ├─ Vision Encoder           CLIP ViT-B/32 (512d)
-│   ├─ Audio Encoder            Whisper medium + MFCC
-│   └─ Temporal Encoder         позиционное кодирование (видео)
+├─ 1. Perception Layer          ← Таламус (маршрутизация входов)
+│   ├─ TextIngestor             txt / md / pdf / docx / json
+│   ├─ VisionIngestor           img / video frames + OCR
+│   ├─ AudioIngestor            ASR + acoustic events
+│   ├─ MetadataExtractor        source, timestamp, quality, language
+│   └─ InputRouter              маршрутизация по типу модальности
 │
-├─ 3. Cross-Modal Fusion        ← Слияние модальностей
-│   ├─ Shared Latent Space      единое пространство для всех модальностей
-│   ├─ Entity Linker            связывание сущностей из разных источников
-│   └─ Confidence Calibrator    оценка качества слияния
+├─ 2. Modality Encoders         ← Сенсорная кора (векторизация)
+│   ├─ TextEncoder              sentence-transformers (768d/1024d)
+│   ├─ VisionEncoder            CLIP ViT-B/32 (512d)
+│   ├─ AudioEncoder             Whisper medium + MFCC
+│   └─ TemporalEncoder          позиционное кодирование (видео)
 │
-├─ 4. Memory System             ← Многоуровневая память
-│   ├─ Working Memory           активный контекст (~7 элементов)
-│   ├─ Episodic Memory          события во времени + кросс-модальные записи
-│   ├─ Semantic Graph           граф понятий и связей
-│   ├─ Procedural Memory        стратегии и навыки
-│   └─ Source Memory            доверие к источникам + provenance
+├─ 3. Cross-Modal Fusion        ← Ассоциативная кора (слияние)
+│   ├─ SharedSpaceProjector     единое латентное пространство
+│   ├─ EntityLinker             связывание сущностей из разных источников
+│   ├─ ConfidenceCalibrator     оценка качества слияния
+│   └─ ContradictionDetector    обнаружение противоречий между модальностями
 │
-├─ 5. Cognitive Core            ← Когнитивное ядро
-│   ├─ Planner                  стек целей + декомпозиция
-│   ├─ Reasoner                 causal / associative / analogical
-│   ├─ Contradiction Detector   поиск конфликтующих фактов
-│   ├─ Uncertainty Monitor      оценка уверенности по гипотезам
-│   ├─ Salience Engine          оценка значимости входящих событий
-│   └─ Action Selector          выбор действия среди кандидатов
+├─ 4. Memory System ✅          ← Гиппокамп + Кора (память)
+│   ├─ WorkingMemory            активный контекст (sliding window, max=20)
+│   ├─ SemanticMemory           граф понятий и связей (BFS, JSON)
+│   ├─ EpisodicMemory           хронология событий (кросс-модальные записи)
+│   ├─ SourceMemory             доверие к источникам (trust score, blacklist)
+│   ├─ ProceduralMemory         навыки и стратегии (success rate tracking)
+│   ├─ ConsolidationEngine      WM → LTM (фоновый поток, RAM-aware)
+│   └─ MemoryManager            единый интерфейс store()/retrieve()
 │
-├─ 6. Learning Loop             ← Обучение из опыта
-│   ├─ Online Learner           обновление после каждого взаимодействия
-│   ├─ Replay Engine            периодическое воспроизведение эпизодов
-│   ├─ Self-Supervised          согласованность картинка ↔ текст ↔ аудио
-│   └─ Hypothesis Engine        генерация и проверка гипотез
+├─ 5. Cognitive Core            ← Префронтальная кора (мышление)
+│   ├─ GoalManager              управление целями (создание, приоритизация, завершение)
+│   ├─ Planner                  декомпозиция целей на шаги + выбор стратегии
+│   ├─ HypothesisEngine         генерация и оценка гипотез (causal/associative/analogical)
+│   ├─ Reasoner                 reasoning loop (retrieve → hypothesize → score → act)
+│   ├─ ContradictionDetector    поиск конфликтующих фактов
+│   ├─ UncertaintyMonitor       оценка уверенности по гипотезам
+│   ├─ SalienceEngine           оценка значимости (аналог Миндалины)
+│   └─ ActionSelector           выбор действия (аналог Базальных ганглий)
 │
-└─ 7. Output Layer              ← Вывод с объяснением
-    ├─ Dialogue Responder       текстовый ответ + объяснение + confidence
-    ├─ Action Proposer          предложение действий с обоснованием
-    └─ Trace Builder            полная цепочка причинности
+├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение)
+│   ├─ OnlineLearner            обновление после каждого взаимодействия
+│   ├─ ReplayEngine             периодическое воспроизведение эпизодов
+│   ├─ SelfSupervisedLearner    согласованность картинка ↔ текст ↔ аудио
+│   └─ HypothesisEngine         генерация и проверка гипотез
+│
+├─ 7. Output Layer              ← Речевые зоны (вывод)
+│   ├─ DialogueResponder        текстовый ответ + объяснение + confidence
+│   ├─ ActionProposer           предложение действий с обоснованием
+│   └─ TraceBuilder             полная цепочка причинности
+│
+├─ 8. Attention & Resources     ← Таламус + Гипоталамус
+│   ├─ AttentionController      goal-driven + salience-driven внимание
+│   ├─ ModalityRouter           маршрутизация по приоритету
+│   ├─ CognitiveLoadBalancer    балансировка нагрузки
+│   └─ DegradationPolicy        политика деградации при нехватке ресурсов
+│
+├─ 9. Logging & Observability   ← Метапознание
+│   ├─ BrainLogger              JSONL-логгер (одна строка = одно событие)
+│   ├─ DigestGenerator          human-readable сводка по циклу
+│   ├─ TraceBuilder             trace chain для каждого решения
+│   └─ MetricsCollector         KPI метрики в реальном времени
+│
+├─ 10. Safety & Boundaries      ← Иммунная система
+│   ├─ SourceTrust              оценка надёжности источников
+│   ├─ ConflictDetector         детектор конфликтов фактов
+│   ├─ BoundaryGuard            ограничения на действия системы
+│   └─ AuditLogger              аудит решений с высоким риском
+│
+└─ 11. Reward & Motivation      ← Средний мозг (дофаминовая система)
+    ├─ RewardEngine             5 типов вознаграждения + prediction error
+    ├─ MotivationEngine         накопление reward signals, decay мотивации
+    └─ CuriosityEngine          любопытство ∝ 1/knowledge_coverage
 ```
 
 ---
@@ -138,12 +220,17 @@ MULTIMODAL BRAIN
 
 | Отдел мозга | Функции | Аналог в системе |
 |-------------|---------|-----------------|
-| Префронтальная кора | Планирование, цели, решения | `Planner`, `GoalManager`, `ExecutiveController` |
-| Гиппокамп | Формирование эпизодических воспоминаний | `EpisodicMemory`, `ConsolidationEngine` |
-| Миндалина (amygdala) | Быстрая оценка значимости/угрозы | `SalienceEngine`, `PriorityScorer`, `RiskSignal` |
+| Ствол мозга | Базовые жизненные функции, автономный цикл | `Scheduler`, `EventBus`, `ResourceMonitor` |
+| Таламус | Маршрутизация и фильтрация сенсорных потоков | `InputRouter`, `ModalityRouter`, `AttentionController` |
+| Сенсорная кора | Обработка сигналов каждой модальности | `TextEncoder`, `VisionEncoder`, `AudioEncoder` |
+| Ассоциативная кора | Интеграция информации из разных источников | `CrossModalFusion`, `EntityLinker` |
+| Гиппокамп | Формирование и консолидация воспоминаний | `EpisodicMemory`, `ConsolidationEngine` |
+| Префронтальная кора | Планирование, цели, принятие решений | `Planner`, `Reasoner`, `ActionSelector` |
+| Миндалина | Быстрая оценка значимости и угрозы | `SalienceEngine`, `PriorityScorer` |
 | Базальные ганглии | Выбор действия среди конкурирующих | `ActionSelector`, `PolicyGate` |
-| Таламус | Маршрутизация и фильтрация потоков | `InputRouter`, `ModalityRouter` |
-| Мозжечок | Тонкая коррекция, автоматизация навыков | `FastErrorCorrector`, `SkillRefiner` |
+| Мозжечок | Тонкая коррекция, автоматизация навыков | `SkillRefiner`, `OnlineLearner` |
+| Гипоталамус | Регуляция ресурсов и гомеостаз | `ResourceMonitor`, `DegradationPolicy` |
+| Средний мозг | Дофаминовая система, мотивация | `RewardEngine`, `MotivationEngine`, `CuriosityEngine` |
 
 ---
 
@@ -152,50 +239,337 @@ MULTIMODAL BRAIN
 ```
 AI/
 │
-├── brain/                          # Основной пакет мозга
-│   ├── __init__.py                 # Корневой пакет (v0.1.0)
+├── brain/                              # Основной пакет мозга (v0.1.0)
+│   ├── __init__.py                     # Корневой пакет
 │   │
-│   ├── core/                       # Ядро автономного цикла
-│   │   └── __init__.py             # scheduler, event_bus, resource_monitor, attention_controller
+│   ├── core/                           # Ядро автономного цикла
+│   │   ├── __init__.py                 # ✅ Экспорты: 26 классов (events+contracts+bus+scheduler+monitor)
+│   │   ├── events.py                   # ✅ 6 типов событий + EventFactory
+│   │   ├── contracts.py                # ✅ Общие типы: Modality, Task, ResourceState,
+│   │   │                               #    EncodedPercept, FusedPercept, TraceChain,
+│   │   │                               #    CognitiveResult, BrainOutput (contracts.py)
+│   │   ├── event_bus.py                # ✅ EventBus — typed pub/sub шина событий
+│   │   ├── scheduler.py                # ✅ Scheduler — тик-планировщик (heapq, 4 приоритета, адаптивный tick)
+│   │   └── resource_monitor.py         # ✅ ResourceMonitor — CPU/RAM мониторинг, 4 политики деградации
 │   │
-│   ├── perception/                 # Слой восприятия
-│   │   └── __init__.py             # text/vision/audio ingestors, input_router
+│   ├── memory/                         # Система памяти ✅ РЕАЛИЗОВАНО
+│   │   ├── __init__.py                 # Экспорты 14 классов
+│   │   ├── working_memory.py           # ✅ WorkingMemory + MemoryItem
+│   │   ├── semantic_memory.py          # ✅ SemanticMemory + SemanticNode + Relation
+│   │   ├── episodic_memory.py          # ✅ EpisodicMemory + Episode + ModalEvidence
+│   │   ├── source_memory.py            # ✅ SourceMemory + SourceRecord
+│   │   ├── procedural_memory.py        # ✅ ProceduralMemory + Procedure + ProcedureStep
+│   │   ├── consolidation_engine.py     # ✅ ConsolidationEngine + ConsolidationConfig
+│   │   └── memory_manager.py           # ✅ MemoryManager + MemorySearchResult
 │   │
-│   ├── encoders/                   # Модальные энкодеры
-│   │   └── __init__.py             # text/vision/audio/temporal encoders
+│   ├── perception/                     # Слой восприятия ✅ РЕАЛИЗОВАНО (Этап D)
+│   │   ├── __init__.py                 # Экспорты: MetadataExtractor, TextIngestor, InputRouter
+│   │   ├── metadata_extractor.py       # ✅ MetadataExtractor — quality scoring, language detection
+│   │   ├── text_ingestor.py            # ✅ TextIngestor — .txt/.md/.pdf/.docx/.json/.csv
+│   │   └── input_router.py             # ✅ InputRouter — SHA256 dedup, quality policy, text-only MVP
 │   │
-│   ├── fusion/                     # Кросс-модальное слияние
-│   │   └── __init__.py             # cross_modal_fusion, entity_linker, confidence_calibrator
+│   ├── encoders/                       # Модальные энкодеры (Этап E — следующий)
+│   │   └── __init__.py
 │   │
-│   ├── memory/                     # Система памяти
-│   │   └── __init__.py             # working/episodic/semantic/procedural/source memory
+│   ├── fusion/                         # Кросс-модальное слияние (Фаза 5 — запланировано)
+│   │   └── __init__.py
 │   │
-│   ├── cognition/                  # Когнитивное ядро
-│   │   └── __init__.py             # planner, reasoner, contradiction, uncertainty, salience
+│   ├── cognition/                      # Когнитивное ядро (Этап F — запланировано)
+│   │   └── __init__.py
 │   │
-│   ├── learning/                   # Система обучения
-│   │   └── __init__.py             # online_learner, replay_engine, self_supervised, hypothesis
+│   ├── learning/                       # Система обучения (Этап I — запланировано)
+│   │   └── __init__.py
 │   │
-│   ├── logging/                    # Логирование и наблюдаемость
-│   │   └── __init__.py             # brain_logger, digest_generator, metrics_collector, dashboard
+│   ├── logging/                        # Логирование ✅ РЕАЛИЗОВАНО (Этап C)
+│   │   ├── __init__.py                 # Экспорты: BrainLogger, DigestGenerator, CycleInfo, TraceBuilder
+│   │   ├── brain_logger.py             # ✅ BrainLogger — JSONL, 5 уровней, категорийные файлы, индекс
+│   │   ├── digest_generator.py         # ✅ DigestGenerator + CycleInfo — human-readable сводки
+│   │   └── trace_builder.py            # ✅ TraceBuilder — trace chain, reconstruct_from_logger
 │   │
-│   ├── safety/                     # Безопасность и границы
-│   │   └── __init__.py             # source_trust, conflict_detector, boundary_guard
+│   ├── safety/                         # Безопасность (Фаза 11 — запланировано)
+│   │   └── __init__.py
 │   │
-│   ├── output/                     # Слой вывода
-│   │   └── __init__.py             # dialogue_responder, action_proposer, trace_builder
+│   ├── output/                         # Слой вывода (Фаза 10 — запланировано)
+│   │   └── __init__.py
 │   │
-│   └── data/                       # Постоянное хранилище
-│       ├── memory/                 # Файлы памяти
-│       ├── logs/                   # JSONL логи
-│       └── weights/                # Веса моделей
+│   └── data/                           # Постоянное хранилище
+│       └── memory/                     # JSON-файлы памяти (создаются автоматически)
+│           ├── semantic.json           # граф понятий (SemanticMemory)
+│           ├── episodes.json           # хронология событий (EpisodicMemory)
+│           ├── sources.json            # доверие к источникам (SourceMemory)
+│           └── procedures.json         # навыки и стратегии (ProceduralMemory)
 │
-├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
-├── TODO.md                         # План реализации (14 фаз, 35+ задач)
-├── requirements.txt                # Зависимости Python
-├── download_libraries.bat          # Скрипт установки (Windows)
-├── check_deps.py                   # Проверка зависимостей
-└── README.md                       # Этот файл
+├── docs/                               # Документация архитектуры
+│   └── layers/                         # Описание каждого слоя (12 файлов)
+│       ├── 00_autonomous_loop.md       # Ствол мозга — always-on цикл
+│       ├── 01_perception_layer.md      # Таламус — восприятие и маршрутизация
+│       ├── 02_modality_encoders.md     # Сенсорная кора — кодирование в векторы
+│       ├── 03_cross_modal_fusion.md    # Ассоциативная кора — слияние модальностей
+│       ├── 04_memory_system.md         # Memory System — 5 видов памяти + Гиппокамп
+│       ├── 05_cognitive_core.md        # Префронтальная кора — планирование
+│       ├── 06_learning_loop.md         # Мозжечок — обучение из опыта
+│       ├── 07_output_layer.md          # Речевые зоны — вывод с объяснением
+│       ├── 08_attention_resource.md    # Таламус+Гипоталамус — внимание и ресурсы
+│       ├── 09_logging_observability.md # Метапознание — JSONL логи, trace chain, KPI
+│       ├── 10_safety_boundaries.md     # Иммунная система — source trust, аудит
+│       └── 11_midbrain_reward.md       # Средний мозг — мотивация, вознаграждение
+│
+├── BRAIN.md                            # Архитектурная спецификация (15 разделов)
+├── TODO.md                             # План реализации (14 фаз, 35+ задач)
+├── test_memory.py                      # ✅ 101/101 тестов системы памяти
+├── test_scheduler.py                   # ✅ 11/11 тестов Scheduler (B.2)
+├── test_resource_monitor.py            # ✅ 13/13 тестов ResourceMonitor (B.3)
+├── test_logging.py                     # ✅ 25/25 тестов Logging & Observability (C.1–C.3)
+├── requirements.txt                    # Зависимости Python
+├── download_libraries.bat              # Автоустановка зависимостей (Windows)
+├── check_deps.py                       # Проверка установленных зависимостей
+├── chatgpt_dialog.txt                  # Диалог с ChatGPT — уточнения архитектуры
+└── README.md                           # Этот файл
+```
+
+---
+
+## ✅ Реализованные модули
+
+### `brain/core/events.py` — Типизированные события
+
+Все модули общаются через события — никаких прямых зависимостей между модулями.
+
+| Класс | Описание | Ключевые поля |
+|-------|---------|---------------|
+| `BaseEvent` | Базовый класс всех событий | `event_type`, `ts`, `trace_id`, `session_id`, `cycle_id` |
+| `PerceptEvent` | Входящий сигнал из внешнего мира | `source`, `modality`, `content`, `quality`, `language`, `metadata` |
+| `MemoryEvent` | Операция с памятью | `operation`, `memory_type`, `key`, `value`, `importance`, `confidence` |
+| `CognitiveEvent` | Шаг мышления/планирования | `goal`, `step`, `confidence`, `decision`, `reasoning`, `cpu_pct`, `ram_mb` |
+| `LearningEvent` | Изменение весов/оценок | `trigger`, `affected_module`, `delta`, `before`, `after` |
+| `SystemEvent` | Системные события (запуск, ошибки) | `level`, `module`, `message`, `cpu_pct`, `ram_mb`, `error` |
+| `EventFactory` | Фабричные методы создания событий | `percept()`, `memory_store()`, `memory_retrieve()`, `system_info()`, ... |
+
+```python
+from brain.core import PerceptEvent, EventFactory
+
+# Создание события восприятия
+ev = EventFactory.percept(
+    source="doc.pdf",
+    content="нейрон это клетка нервной системы",
+    modality="text",
+    quality=0.95,
+    language="ru",
+)
+
+# Сериализация в JSONL
+print(ev.to_json_line())
+```
+
+---
+
+### `brain/memory/` — Система памяти (101/101 тестов ✅)
+
+#### `WorkingMemory` — Рабочая память
+
+Активный контекст текущего цикла. Аналог кратковременной памяти (~7 чанков по Миллеру).
+
+| Параметр | Значение | Описание |
+|----------|---------|---------|
+| `max_size` | 20 | Максимальное количество элементов |
+| `IMPORTANCE_PROTECT_THRESHOLD` | 0.8 | Порог защиты от вытеснения |
+| `RAM_LIMIT_PCT` | 80% | При превышении — сжать окно до 50% |
+
+```python
+from brain.memory import WorkingMemory
+
+wm = WorkingMemory(max_size=20)
+
+# Добавить элемент
+item = wm.push("нейрон это клетка нервной системы", importance=0.7, tags=["биология"])
+
+# Поиск по содержимому
+results = wm.search("нейрон", top_n=5)
+
+# Получить текущий контекст
+context = wm.get_context(n=10)
+
+# Статус
+wm.display_status()
+```
+
+#### `SemanticMemory` — Семантическая память (граф понятий)
+
+Граф понятий и связей. Аналог долгосрочной декларативной памяти.
+
+```python
+from brain.memory import SemanticMemory
+
+sm = SemanticMemory(data_path="brain/data/memory/semantic.json")
+
+# Сохранить факт
+node = sm.store_fact("нейрон", "клетка нервной системы", tags=["биология"])
+
+# Добавить связь
+sm.add_relation("нейрон", "синапс", weight=0.8, rel_type="related")
+
+# Поиск
+results = sm.search("нейрон")
+
+# BFS-цепочка понятий
+chain = sm.get_concept_chain("нейрон", "мозг", max_depth=3)
+
+# Подтверждение/опровержение факта
+sm.confirm_fact("нейрон")
+sm.deny_fact("нейрон", delta=0.3)
+```
+
+#### `EpisodicMemory` — Эпизодическая память
+
+Хронология событий с кросс-модальными доказательствами.
+
+```python
+from brain.memory import EpisodicMemory, ModalEvidence
+
+em = EpisodicMemory(data_path="brain/data/memory/episodes.json")
+
+# Сохранить эпизод
+ep = em.store(
+    content="пользователь спросил про нейроны",
+    modality="text",
+    source="user_input",
+    importance=0.7,
+    concepts=["нейрон", "вопрос"],
+)
+
+# Добавить кросс-модальное доказательство
+evidence = ModalEvidence(modality="image", source="diagram.png", content_ref="регион 0,0,100,100")
+ep.add_evidence(evidence)
+
+# Поиск
+by_concept = em.retrieve_by_concept("нейрон")
+by_time    = em.retrieve_by_time(start_ts=time.time() - 3600)
+by_text    = em.search("нейрон")
+```
+
+#### `SourceMemory` — Память об источниках
+
+Trust score для каждого источника. Provenance для каждого факта.
+
+| Тип источника | Trust score по умолчанию |
+|--------------|------------------------|
+| `system` | 1.0 |
+| `user` | 0.8 |
+| `file` | 0.7 |
+| `url` | 0.5 |
+| неизвестный | 0.5 |
+| blacklisted | 0.0 |
+
+```python
+from brain.memory import SourceMemory
+
+src = SourceMemory(data_path="brain/data/memory/sources.json")
+
+rec = src.register("wikipedia.org", source_type="url")
+src.update_trust("wikipedia.org", confirmed=True)
+src.blacklist("spam_source", reason="спам")
+
+trust = src.get_trust("wikipedia.org")  # float 0.0–1.0
+```
+
+#### `ProceduralMemory` — Процедурная память
+
+Навыки и стратегии с отслеживанием успешности.
+
+```python
+from brain.memory import ProceduralMemory
+
+pm = ProceduralMemory(data_path="brain/data/memory/procedures.json")
+
+proc = pm.store(
+    name="ответить_на_вопрос",
+    steps=[
+        {"action": "parse_question", "params": {"lang": "ru"}},
+        {"action": "search_memory",  "params": {"top_n": 5}},
+        {"action": "generate_answer","params": {}},
+    ],
+    trigger_pattern="вопрос",
+    priority=0.8,
+)
+
+pm.record_result("ответить_на_вопрос", success=True, duration_ms=150.0)
+best = pm.get_best(top_n=3)
+```
+
+#### `ConsolidationEngine` — Движок консолидации (Гиппокамп)
+
+Фоновый daemon-поток, переносящий важные элементы из рабочей памяти в долгосрочную.
+
+| Параметр | Значение | Описание |
+|----------|---------|---------|
+| Интервал консолидации | 30 сек | WM → Episodic/Semantic |
+| Интервал decay | 5 мин | Затухание неважных фактов |
+| RAM-порог агрессивного забывания | 85% | Принудительная очистка |
+| Порог переноса в LTM | importance ≥ 0.4 | Минимальная важность |
+
+```python
+from brain.memory import ConsolidationEngine
+
+engine = ConsolidationEngine(
+    working=wm, episodic=em, semantic=sm, source=src, procedural=pm
+)
+
+# Принудительная консолидация
+stats = engine.force_consolidate()
+# stats = {"to_episodic": 3, "to_semantic": 2, "decayed": 1}
+
+# Принудительный decay
+engine.force_decay()
+
+# Подкрепление / ослабление факта
+engine.reinforce("нейрон", source_ref="user_input")
+engine.weaken("устаревший_факт")
+```
+
+#### `MemoryManager` — Единый интерфейс
+
+Агрегирует все 5 видов памяти + ConsolidationEngine. Главная точка входа.
+
+```python
+from brain.memory import MemoryManager
+
+mm = MemoryManager(
+    data_dir="brain/data/memory",
+    working_max_size=20,
+    semantic_max_nodes=10_000,
+    episodic_max=5_000,
+    auto_consolidate=True,
+)
+mm.start()
+
+# Сохранить (автоматически в working + episodic + semantic)
+result = mm.store(
+    "нейрон это клетка нервной системы",
+    importance=0.8,
+    source_ref="textbook.pdf",
+    tags=["биология"],
+)
+
+# Явное сохранение факта
+node = mm.store_fact("синапс", "связь между нейронами", importance=0.7)
+
+# Поиск по всем видам памяти
+search = mm.retrieve("нейрон", top_n=5)
+print(search.summary())
+# [Факт] нейрон: клетка нервной системы
+# [Эпизод] пользователь спросил про нейроны
+# [Контекст] нейрон это клетка нервной системы
+
+# Подтверждение / опровержение
+mm.confirm("нейрон", source_ref="textbook.pdf")
+mm.deny("устаревший_факт")
+
+# Сохранить всё на диск
+mm.save_all()
+mm.stop()
+
+# Полный статус
+mm.display_status()
 ```
 
 ---
@@ -207,14 +581,14 @@ AI/
 numpy>=1.26.0
 jsonlines>=4.0.0
 
-# PyTorch (CPU-only — устанавливается отдельно)
-torch>=2.2.0  # через download_libraries.bat
+# PyTorch (CPU-only — устанавливается отдельно через download_libraries.bat)
+torch>=2.2.0
 
 # Русский язык
 pymorphy3>=1.0.0
 razdel>=0.5.0
 nltk>=3.8.0
-navec>=0.10.0          # fallback text encoder (~200 MB)
+navec>=0.10.0              # fallback text encoder (~200 MB)
 
 # Text Encoder
 sentence-transformers>=2.7.0   # основной (~1.3 GB при первом запуске)
@@ -252,12 +626,15 @@ tqdm>=4.66.0
 download_libraries.bat
 ```
 
-Скрипт выполняет:
-1. Создание виртуального окружения `venv/`
-2. Обновление `pip`
-3. Установку PyTorch CPU-only build
-4. Установку всех зависимостей из `requirements.txt`
-5. Загрузку данных NLTK (`punkt`, `stopwords`)
+Скрипт выполняет 8 шагов:
+1. Проверка Python 3.10+
+2. Создание виртуального окружения `venv/`
+3. Активация `venv` и обновление `pip`
+4. Установка PyTorch CPU-only (`--index-url https://download.pytorch.org/whl/cpu`)
+5. Установка базовых зависимостей (numpy, psutil, pymorphy3, razdel, nltk, navec, pillow, pymupdf, python-docx)
+6. Установка `sentence-transformers` (Text Encoder)
+7. Установка `open-clip-torch` (Vision Encoder)
+8. Установка `openai-whisper` (Audio ASR) + загрузка NLTK данных
 
 ### Шаг 2 — Ручная установка
 
@@ -295,6 +672,7 @@ python check_deps.py
   open-clip-torch (CLIP)         v2.x.x
   openai-whisper                 v20231117
   pymorphy3                      v1.x.x
+  psutil                         v5.x.x
   ...
   Все зависимости установлены корректно!
 
@@ -308,122 +686,30 @@ python check_deps.py
 
 ---
 
-## ▶️ Запуск
-
-> ⚠️ **Примечание:** Основной цикл (`main.py`) находится в разработке (Фаза 0).  
-> Текущий статус: структура директорий и пакеты созданы.
+## ▶️ Запуск тестов
 
 ```bash
 # Активировать окружение
 venv\Scripts\activate
 
-# Запустить мозг (после реализации Фазы 0.3)
-python main.py
+# Запустить тесты системы памяти (101/101 ✅)
+python test_memory.py
 ```
 
----
+Тест охватывает 9 секций:
 
-## 🔧 Модули
-
-### `brain/core/` — Ядро автономного цикла
-
-| Файл | Описание |
-|------|---------|
-| `scheduler.py` | Тик-планировщик: clock-driven + event-driven тики, приоритетная очередь |
-| `event_bus.py` | Publish/subscribe шина событий для всех модулей |
-| `events.py` | Dataclasses: `PerceptEvent`, `CognitiveEvent`, `MemoryEvent`, `LearningEvent` |
-| `resource_monitor.py` | Мониторинг CPU/RAM, graceful degradation при перегрузке |
-| `attention_controller.py` | Бюджет вычислений по модальностям (goal-driven + salience-driven) |
-
-### `brain/perception/` — Слой восприятия
-
-| Файл | Описание |
-|------|---------|
-| `text_ingestor.py` | Парсинг txt/md/pdf/docx/json → `PerceptEvent` с provenance |
-| `vision_ingestor.py` | Загрузка изображений + OCR → `PerceptEvent` |
-| `audio_ingestor.py` | ASR + временные метки → `PerceptEvent` |
-| `metadata_extractor.py` | Извлечение source/timestamp/quality/language |
-| `input_router.py` | Маршрутизация входящих данных (аналог Таламуса) |
-
-### `brain/encoders/` — Модальные энкодеры
-
-| Файл | Описание |
-|------|---------|
-| `text_encoder.py` | sentence-transformers large (768d/1024d), fallback: navec |
-| `vision_encoder.py` | CLIP ViT-B/32 (512d), fallback: ResNet-50 |
-| `audio_encoder.py` | Whisper medium + MFCC, fallback: Whisper base |
-| `temporal_encoder.py` | Позиционное кодирование последовательностей (видео) |
-
-### `brain/fusion/` — Кросс-модальное слияние
-
-| Файл | Описание |
-|------|---------|
-| `cross_modal_fusion.py` | Объединение векторов разных модальностей |
-| `entity_linker.py` | Связывание одних и тех же сущностей из разных источников |
-| `confidence_calibrator.py` | Калибровка уверенности по согласованности модальностей |
-| `contradiction_detector.py` | Обнаружение противоречий между модальностями |
-
-### `brain/memory/` — Система памяти
-
-| Файл | Описание |
-|------|---------|
-| `working_memory.py` | Рабочая память (текущий контекст, sliding window) |
-| `episodic_memory.py` | Эпизодическая память с кросс-модальными записями |
-| `semantic_graph.py` | Граф понятий и связей, semantic search |
-| `procedural_memory.py` | Стратегии и навыки, кэширование паттернов |
-| `source_memory.py` | Trust score источников + provenance |
-| `consolidation_engine.py` | Перенос working → episodic → semantic (аналог Гиппокампа) |
-
-### `brain/cognition/` — Когнитивное ядро
-
-| Файл | Описание |
-|------|---------|
-| `planner.py` | Стек целей, декомпозиция, приоритизация (аналог Префронтальной коры) |
-| `reasoner.py` | Причинное / ассоциативное / аналогическое рассуждение |
-| `contradiction_resolver.py` | Разрешение конфликтов между фактами |
-| `uncertainty_monitor.py` | Оценка уверенности, сигнал «нужно больше данных» |
-| `salience_engine.py` | Быстрая оценка значимости (аналог Миндалины) |
-| `action_selector.py` | Выбор действия среди кандидатов (аналог Базальных ганглий) |
-| `self_reflector.py` | Периодический анализ качества мышления |
-| `skill_refiner.py` | Тонкая коррекция ошибок (аналог Мозжечка) |
-
-### `brain/learning/` — Система обучения
-
-| Файл | Описание |
-|------|---------|
-| `online_learner.py` | Обновление знаний из новых данных в реальном времени |
-| `replay_engine.py` | Периодическое воспроизведение эпизодов для закрепления |
-| `self_supervised.py` | Самообучение: согласованность картинка ↔ текст ↔ аудио |
-| `hypothesis_engine.py` | Генерация и проверка гипотез |
-| `forgetting_manager.py` | Управляемое забывание (кривая Эббингауза) |
-
-### `brain/logging/` — Логирование и наблюдаемость
-
-| Файл | Описание |
-|------|---------|
-| `brain_logger.py` | JSONL-логгер (одна строка = одно событие) |
-| `digest_generator.py` | Human-readable сводка по циклу |
-| `trace_builder.py` | Построение цепочки причинности (trace chain) |
-| `metrics_collector.py` | Сбор и обновление KPI метрик |
-| `dashboard.py` | Текстовый live-дашборд метрик в терминале |
-
-### `brain/safety/` — Безопасность
-
-| Файл | Описание |
-|------|---------|
-| `source_trust.py` | Оценка надёжности источников, blacklist/whitelist |
-| `conflict_detector.py` | Детектор конфликтов фактов из разных источников |
-| `boundary_guard.py` | Ограничения на действия и выводы системы |
-| `audit_logger.py` | Аудит-лог решений с высоким риском |
-
-### `brain/output/` — Слой вывода
-
-| Файл | Описание |
-|------|---------|
-| `dialogue_responder.py` | Текстовый ответ + объяснение + confidence |
-| `action_proposer.py` | Предложение действий с обоснованием |
-| `trace_builder.py` | Построение и экспорт trace chain |
-| `explanation_builder.py` | Человекочитаемые объяснения решений |
+| # | Секция | Тестов |
+|---|--------|--------|
+| 1 | Events (`brain/core/events.py`) | 7 |
+| 2 | WorkingMemory | 13 |
+| 3 | SemanticMemory | 14 |
+| 4 | EpisodicMemory | 14 |
+| 5 | SourceMemory | 13 |
+| 6 | ProceduralMemory | 10 |
+| 7 | MemoryManager (единый интерфейс) | 16 |
+| 8 | ConsolidationEngine (Гиппокамп) | 12 |
+| 9 | Импорт через `__init__.py` | 2 |
+| | **Итого** | **101** |
 
 ---
 
@@ -458,27 +744,15 @@ python main.py
 | `ERROR` | Сбои модулей / невозможность шага |
 | `CRITICAL` | Риск целостности системы или CPU > 85% |
 
-### Human Digest (пример)
-
-```
-Cycle 4521
-  Goal:         validate hypothesis H-17
-  Evidence:     doc_A, frame_33, audio_12
-  Contradiction: detected in source pair (doc_A vs audio_12)
-  Decision:     request additional evidence
-  Confidence:   0.81 → 0.66
-  CPU:          58% | RAM: 4.1 GB
-```
-
 ### Кросс-модальная запись памяти
 
 ```json
 {
   "concept": "нейрон",
   "modal_evidence": [
-    {"type": "text",  "source": "doc_A.md",      "span": "..."},
-    {"type": "image", "source": "img_12.png",     "region": [0, 0, 100, 100]},
-    {"type": "audio", "source": "lecture_3.wav",  "time": [12.2, 14.7]}
+    {"type": "text",  "source": "doc_A.md",     "span": "..."},
+    {"type": "image", "source": "img_12.png",    "region": [0, 0, 100, 100]},
+    {"type": "audio", "source": "lecture_3.wav", "time": [12.2, 14.7]}
   ],
   "confidence": 0.81,
   "last_verified": "2026-03-19T10:30:00Z"
@@ -504,48 +778,112 @@ Cycle 4521
 
 ---
 
-## 🗺️ Roadmap
+## 📚 Документация
 
-### Фаза A — Multimodal Perception
-- [ ] Text ingest pipeline (txt/md/pdf/docx/json)
-- [ ] Vision ingest (image parsing + OCR, CPU-only)
-- [ ] Audio ingest (Whisper tiny/base, CPU-only)
-- [ ] Унифицированный формат `PerceptEvent`
+Подробная документация по каждому слою архитектуры находится в [`docs/layers/`](docs/layers/):
 
-### Фаза B — Cross-Modal Fusion
-- [ ] Shared embedding space (лёгкие модели ≤ 500 MB)
-- [ ] Entity/link alignment между модальностями
-- [ ] Confidence calibration по источникам
+| Файл | Слой | Биологический аналог | Статус |
+|------|------|---------------------|--------|
+| [`00_autonomous_loop.md`](docs/layers/00_autonomous_loop.md) | Always-On Loop | Ствол мозга | ✅ Реализовано (Этап B) |
+| [`01_perception_layer.md`](docs/layers/01_perception_layer.md) | Perception Layer | Таламус | ✅ Реализовано (Этап D, text-only) |
+| [`02_modality_encoders.md`](docs/layers/02_modality_encoders.md) | Modality Encoders | Сенсорная кора | 📄 Спецификация (Этап E) |
+| [`03_cross_modal_fusion.md`](docs/layers/03_cross_modal_fusion.md) | Cross-Modal Fusion | Ассоциативная кора | 📄 Спецификация (Этап K) |
+| [`04_memory_system.md`](docs/layers/04_memory_system.md) | Memory System | Гиппокамп + Кора | ✅ Реализовано (101/101) |
+| [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | 📋 Детальная спецификация (Этап F) |
+| [`06_learning_loop.md`](docs/layers/06_learning_loop.md) | Learning Loop | Мозжечок + Гиппокамп | 📄 Спецификация (Этап I) |
+| [`07_output_layer.md`](docs/layers/07_output_layer.md) | Output Layer | Речевые зоны Брока/Вернике | 📄 Спецификация (Этап G) |
+| [`08_attention_resource.md`](docs/layers/08_attention_resource.md) | Attention & Resources | Таламус + Гипоталамус | 📄 Спецификация (Этап H) |
+| [`09_logging_observability.md`](docs/layers/09_logging_observability.md) | Logging & Observability | Метапознание | ✅ Реализовано (Этап C, 25/25) |
+| [`10_safety_boundaries.md`](docs/layers/10_safety_boundaries.md) | Safety & Boundaries | Иммунная система | 📄 Спецификация (Этап L) |
+| [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | 📄 Спецификация (Этап M) |
 
-### Фаза C — Memory Upgrade
-- [ ] Кросс-модальная эпизодическая память
-- [ ] Source memory (trust/provenance)
-- [ ] Temporal indexing + retrieval by evidence
-
-### Фаза D — Cognitive Control
-- [ ] Planner + Goal stack
-- [ ] Causal reasoner + contradiction checker
-- [ ] Resource-aware attention controller (CPU/RAM budget)
-
-### Фаза E — Self-Development
-- [ ] Автоматическое выявление пробелов знаний
-- [ ] Hypothesis-to-test pipeline
-- [ ] Reflection dashboard с метриками качества мышления
+Архитектурная спецификация: [`BRAIN.md`](BRAIN.md) (15 разделов)  
+План реализации: [`TODO.md`](TODO.md) (14 фаз, 35+ задач)  
+Диалог с уточнениями архитектуры: [`chatgpt_dialog.txt`](chatgpt_dialog.txt)
 
 ---
 
 ## ✅ Прогресс реализации
 
-| Фаза | Название | Статус |
-|------|----------|--------|
-| **0** | Foundation & Bootstrap | 🚧 В процессе |
-| 1 | Always-On Autonomous Loop | ⬜ Не начато |
-| 2 | Logging & Observability | ⬜ Не начато |
-| 3 | Perception Layer | ⬜ Не начато |
-| 4 | Modality Encoders | ⬜ Не начато |
-| 5 | Cross-Modal Fusion | ⬜ Не начато |
-| 6 | Memory System | ⬜ Не начато |
-| 7 | Cognitive Core | ⬜ Не начато |
-| 8 | Attention & Resource Control | ⬜ Не начато |
-| 9 | Learning Loop | ⬜ Не начато |
-| 10 | Explainability & Output | ⬜ Не нач
+| Фаза | Название | Статус | Тестов |
+|------|----------|--------|--------|
+| 0 | Foundation & Bootstrap | 🚧 В процессе | — |
+| 1 | Always-On Autonomous Loop | ✅ Этап B завершён (events ✅, contracts ✅, event_bus ✅, scheduler ✅, resource_monitor ✅) | 11+13 |
+| **2** | **Logging & Observability** | **✅ Завершено** | **25/25** |
+| **3** | **Perception Layer (text-only)** | **✅ Завершено (Этап D)** | **79/79** |
+| 4 | Modality Encoders | ⬜ Не начато | — |
+| 5 | Cross-Modal Fusion | ⬜ Не начато | — |
+| **6** | **Memory System** | **✅ Завершено** | **101/101** |
+| 7 | Cognitive Core | ⬜ Не начато | — |
+| 8 | Attention & Resource Control | ⬜ Не начато | — |
+| 9 | Learning Loop | ⬜ Не начато | — |
+| 10 | Explainability & Output | ⬜ Не начато | — |
+| 11 | Safety & Boundaries | ⬜ Не начато | — |
+| 12 | Self-Development & Reflection | ⬜ Не начато | — |
+| 13 | Metrics & KPI Dashboard | ⬜ Не начато | — |
+| 14 | Reward & Motivation System | ⬜ Не начато | — |
+
+### Что реализовано сейчас
+
+```
+brain/
+├── core/
+│   ├── events.py              ← BaseEvent, PerceptEvent, MemoryEvent,
+│   │                             CognitiveEvent, LearningEvent, SystemEvent,
+│   │                             EventFactory
+│   ├── contracts.py           ← Modality, TaskStatus, ResourceState, Task,
+│   │                             EncodedPercept, FusedPercept, TraceRef,
+│   │                             TraceStep, TraceChain, CognitiveResult,
+│   │                             BrainOutput (ContractMixin: to_dict/from_dict)
+│   ├── event_bus.py           ← EventBus (subscribe/unsubscribe/publish,
+│   │                             wildcard "*", error isolation, BusStats)
+│   ├── scheduler.py           ← Scheduler (heapq priority queue, adaptive tick
+│   │                             100/500/2000ms, TaskPriority CRITICAL→IDLE,
+│   │                             tick_start/tick_end/task_done/task_failed events)
+│   └── resource_monitor.py    ← ResourceMonitor (psutil, daemon thread,
+│                                 NORMAL/DEGRADED/CRITICAL/EMERGENCY policies,
+│                                 hysteresis soft_blocked/ring2_allowed,
+│                                 inject_state() для тестов)
+└── memory/
+    ├── working_memory.py       ← WorkingMemory + MemoryItem
+    ├── semantic_memory.py      ← SemanticMemory + SemanticNode + Relation
+    ├── episodic_memory.py      ← EpisodicMemory + Episode + ModalEvidence
+    ├── source_memory.py        ← SourceMemory + SourceRecord
+    ├── procedural_memory.py    ← ProceduralMemory + Procedure + ProcedureStep
+    ├── consolidation_engine.py ← ConsolidationEngine + ConsolidationConfig
+    ├── memory_manager.py       ← MemoryManager + MemorySearchResult
+    └── __init__.py             ← экспорты всех 14 классов
+
+brain/logging/
+├── brain_logger.py         ← BrainLogger (JSONL, 5 уровней, категорийные файлы,
+│                              in-memory индекс trace_id/session_id, ротация 100 MB)
+├── digest_generator.py     ← DigestGenerator + CycleInfo (cycle/session digests,
+│                              запись в digests/YYYY-MM-DD.txt)
+├── trace_builder.py        ← TraceBuilder (start/add_step/finish, reconstruct,
+│                              reconstruct_from_logger, to_human_readable)
+└── __init__.py             ← экспорты: BrainLogger, DigestGenerator, CycleInfo, TraceBuilder
+
+brain/perception/
+├── text_ingestor.py        ← TextIngestor (.txt/.md/.pdf/.docx/.json/.csv → PerceptEvent,
+│                              paragraph-aware chunking 1000–1500 chars, overlap 120)
+├── metadata_extractor.py   ← MetadataExtractor (language ru/en/mixed/unknown,
+│                              quality 0.0–1.0, quality_label, should_reject)
+├── input_router.py         ← InputRouter (SHA256 dedup, quality policy,
+│                              image/audio/video → warning+skip MVP)
+└── __init__.py             ← экспорты: TextIngestor, MetadataExtractor, InputRouter
+
+test_memory.py              ← 101/101 тестов ✅
+test_scheduler.py           ← 11/11 тестов ✅
+test_resource_monitor.py    ← 13/13 тестов ✅
+test_logging.py             ← 25/25 тестов ✅
+test_perception.py          ← 79/79 тестов ✅
+```
+
+### Следующий шаг: Этап E — Minimal Text Encoder
+
+```
+brain/encoders/
+├── text_encoder.py         ← TextEncoder (sentence-transformers → EncodedPercept,
+│                              fallback: navec при нехватке ресурсов)
+└── __init__.py             ← экспорты
+```

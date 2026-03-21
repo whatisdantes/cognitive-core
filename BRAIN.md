@@ -396,7 +396,201 @@ Cycle 4521
 
 ---
 
-## 15) Финальный принцип
+## 15) Система мотивации и вознаграждения (Средний мозг)
+
+Без системы вознаграждения мозг — **реактивная машина**. Он отвечает только когда спросят, не имеет внутренней мотивации и не знает, какие стратегии работают лучше.
+
+### 15.1 Что служит вознаграждением для цифрового мозга
+
+| Тип | Триггер | Значение |
+|-----|---------|----------|
+| **Epistemic** (познавательное) | Узнал новый факт, закрыл пробел в знаниях | +0.8 — самое сильное |
+| **Accuracy** (точность) | Пользователь подтвердил ответ | +1.0 — внешнее подтверждение |
+| **Coherence** (согласованность) | Разрешил противоречие | +0.6 — удовлетворение от порядка |
+| **Completion** (завершение) | Выполнил план/цель | +0.7 — достижение |
+| **Efficiency** (эффективность) | Быстрый ответ с высокой уверенностью | +0.3 — оптимизация |
+| **Penalty** | Пользователь исправил ошибку | −0.5 — ошибка предсказания |
+
+### 15.2 Биологический аналог
+
+| Структура | Функция | Аналог |
+|-----------|---------|--------|
+| Вентральная область покрышки (VTA) | Источник дофамина | `RewardEngine` |
+| Прилежащее ядро | Накопление дофамина | `MotivationEngine` |
+| Дофаминергические пути | Передача к Префронтальной коре | `RewardSignal` → `Planner` |
+| Система предсказания ошибки | Δ(ожидаемое − полученное) | `PredictionError` |
+
+**Ключевой принцип:** дофамин выделяется не при получении награды, а при **ошибке предсказания** — разнице между ожидаемым и реальным результатом.
+
+### 15.3 Компоненты
+
+```
+brain/motivation/
+  ├── reward_engine.py      ← RewardSignal, RewardEngine (5 типов + prediction error)
+  ├── motivation_engine.py  ← MotivationState, MotivationEngine (накопление, decay)
+  └── curiosity_engine.py   ← CuriosityEngine (внутренняя мотивация к исследованию)
+```
+
+### 15.4 Влияние на другие модули
+
+```
+MotivationState.epistemic_score > 0.7 (высокое любопытство):
+  → Planner: добавить цель "explore_unknown_concept"
+  → HypothesisEngine: генерировать больше гипотез
+  → AttentionController: увеличить бюджет на memory.retrieve()
+
+MotivationState.preferred_goal_types["answer_question"] = 0.9:
+  → Planner: приоритизировать answer_question цели
+
+MotivationState.is_frustrated = True:
+  → Planner: сменить стратегию рассуждения
+  → ReplayEngine: запустить replay успешных паттернов
+
+prediction_error > 0.2 ("лучше ожидаемого"):
+  → MotivationEngine.boost(action_type)
+  → ReplayEngine.mark_as_high_value(episode)
+```
+
+### 15.5 Любопытство (CuriosityEngine)
+
+Любопытство = вознаграждение за исследование **неизвестного**:
+- Чем меньше мозг знает о концепте X → тем выше `curiosity_score(X)`
+- Чем больше мозг знает о концепте X → тем ниже `curiosity_score(X)`
+
+Это создаёт естественную мотивацию заполнять пробелы в знаниях без внешних команд.
+
+---
+
+## 17) Алгоритмическая основа — от метафор к формулам
+
+> **Принцип:** каждый биологический модуль = конкретная функция с явными весами.  
+> Метафора задаёт *что* делать, формула задаёт *как* это измерить.
+
+### 17.1 Правило проектирования
+
+```
+❌ Плохо (метафора без алгоритма):
+    SalienceEngine.evaluate(input)  # "как миндалина"
+
+✅ Хорошо (метафора + явная формула):
+    salience = 0.25*novelty + 0.35*urgency + 0.25*threat + 0.15*goal_relevance
+```
+
+Каждый модуль должен иметь:
+1. **Входные данные** — что принимает (типы, диапазоны)
+2. **Формулу** — как вычисляет (веса, пороги)
+3. **Выходные данные** — что возвращает (структура, диапазон)
+4. **Trace** — почему получился именно этот результат
+
+### 17.2 Сводная таблица формул
+
+| Модуль | Биологический аналог | Формула |
+|--------|---------------------|---------|
+| `SalienceEngine` | Миндалина | `0.25*novelty + 0.35*urgency + 0.25*threat + 0.15*goal_relevance` |
+| `ActionSelector` | Базальные ганглии | `0.35*confidence + 0.30*goal_relevance + 0.20*feasibility + 0.15*success_rate` |
+| `HypothesisEngine` | Префронтальная кора | `0.40*evidence + 0.20*source_trust + 0.20*coherence − 0.20*contradiction` |
+| `UncertaintyMonitor` | Орбитофронтальная кора | Пороги: >0.85 HIGH, >0.60 MEDIUM, >0.40 LOW, <0.40 VERY_LOW |
+| `ConsolidationEngine` | Гиппокамп | `decay: confidence *= (1 − rate)`, rate адаптируется к RAM% |
+| `RewardEngine` | VTA (дофамин) | `prediction_error = actual_reward − expected_reward` |
+| `MotivationEngine` | Прилежащее ядро | `motivation = EMA(reward_signals)`, decay ×0.95 каждые 100 циклов |
+| `CuriosityEngine` | Исследовательское поведение | `curiosity(X) ∝ 1 / knowledge_coverage(X)` |
+
+### 17.3 Multi-stage Retrieval (алгоритм поиска в памяти)
+
+Вместо одного поиска — три последовательных слоя:
+
+```
+Stage 1 — BROAD SEARCH (широкий поиск):
+  semantic.search(query, top_n=20)
+  episodic.search(query, top_n=20)
+  working.search(query, top_n=10)
+  → pool из ~50 кандидатов
+
+Stage 2 — FILTER (фильтрация):
+  filter: source_trust >= 0.4          # отсеять ненадёжные источники
+  filter: confidence >= 0.3            # отсеять слабые факты
+  filter: modality == goal.modality    # если цель требует конкретную модальность
+  filter: age < max_age                # если цель time-sensitive
+  → pool из ~15–20 кандидатов
+
+Stage 3 — RERANK (переранжирование):
+  score(item) = (
+      0.40 * relevance_to_query    +   # семантическая близость к запросу
+      0.30 * source_trust          +   # доверие к источнику
+      0.20 * recency               +   # свежесть (1 / age_days)
+      0.10 * graph_distance_bonus      # близость в семантическом графе
+  )
+  → top-K результатов (обычно K=5–10)
+```
+
+**Query Expansion** (расширение запроса через семантический граф):
+```python
+# "нейрон" → ["нейрон", "нервная клетка", "синапс", "аксон", "мозг"]
+expanded = [query] + semantic_memory.get_related(query, top_n=4)
+results = [search(q) for q in expanded]
+deduplicated = deduplicate_by_concept(results)
+```
+
+**Evidence Bundling** (группировка доказательств):
+```python
+# Не просто список фактов, а структурированный пакет
+bundle = EvidenceBundle(
+    text_facts   = [f for f in results if f.modality == "text"],
+    episodes     = [e for e in results if isinstance(e, Episode)],
+    source_trust = mean(source_memory.get_trust(r.source_ref) for r in results),
+    confidence   = mean(r.confidence for r in results),
+    contradictions = contradiction_detector.check_all(results),
+)
+```
+
+### 17.4 Reasoning Loop (центральный алгоритм мышления)
+
+```
+retrieve_staged(query)          # Stage 1→2→3
+    ↓
+generate_hypotheses(facts)      # шаблоны: causal, associative, analogical
+    ↓
+score_hypotheses(hypotheses)    # 0.40*evidence + 0.20*trust + 0.20*coherence − 0.20*contradiction
+    ↓
+select_best(top_n=2)            # UncertaintyMonitor + ContradictionDetector
+    ↓
+score_actions(candidates)       # 0.35*confidence + 0.30*relevance + 0.20*feasibility + 0.15*history
+    ↓
+act(best_action)                # respond / clarify / gather / explore
+    ↓
+store_episode(result)           # обновить память + source trust
+```
+
+### 17.5 Гибридная интеграция LLM (опциональный компонент)
+
+Архитектура позволяет подключить LLM как **один из модулей**, не заменяя символическое ядро:
+
+```
+Пользователь
+    │
+    ▼
+[LLM — языковой интерфейс]          ← опциональный компонент
+  • понимает запрос на естественном языке
+  • превращает в PerceptEvent (JSON)
+  • форматирует CognitiveResult для человека
+    │
+    ▼
+[brain/ — символическое ядро]       ← детерминированное ядро
+  • memory/ — хранит факты и эпизоды
+  • cognition/ — планирует и рассуждает
+  • safety/ — верифицирует результат
+    │
+    ▼
+[LLM — языковой выход]              ← опциональный компонент
+  • объясняет решение человеку
+  • форматирует ответ
+```
+
+**Принцип:** LLM — переводчик между языком и структурой. Решения принимает `brain/`.
+
+---
+
+## 16) Финальный принцип
 
 Система становится «мозгом», когда:
 - живёт в состоянии и целях,

@@ -1,10 +1,22 @@
 """
-perception — Слой восприятия (аналог сенсорики).
+perception — Слой восприятия (аналог Таламуса).
 
-Модули:
-    text_ingestor.py    — парсинг txt/md/pdf/docx/json → PerceptEvent
+Реализовано (Этап D — Text-Only Perception):
+    text_ingestor.py      — парсинг txt/md/pdf/docx/json/csv → PerceptEvent
+    metadata_extractor.py — извлечение source/timestamp/quality/language
+    input_router.py       — маршрутизация входящих данных (text-only MVP)
+
+Запланировано (Этапы J+):
     vision_ingestor.py  — загрузка изображений + OCR → PerceptEvent
     audio_ingestor.py   — ASR + временные метки → PerceptEvent
-    metadata_extractor.py — извлечение source/timestamp/quality/language
-    input_router.py     — маршрутизация входящих данных (аналог Таламуса)
 """
+
+from brain.perception.metadata_extractor import MetadataExtractor
+from brain.perception.text_ingestor import TextIngestor
+from brain.perception.input_router import InputRouter
+
+__all__ = [
+    "MetadataExtractor",
+    "TextIngestor",
+    "InputRouter",
+]
