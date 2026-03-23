@@ -6,6 +6,7 @@ DoD: tick_start -> task_run -> tick_end видны в логе/событиях
 import logging
 import subprocess
 import sys
+import pytest
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 
@@ -16,17 +17,20 @@ from brain.core import (
 
 PASS = 0
 FAIL = 0
+_results = []
 
 
 def ok(msg: str) -> None:
     global PASS
     PASS += 1
+    _results.append((msg, True, ""))
     print(f"  ✓ {msg}")
 
 
 def fail(msg: str, detail: str = "") -> None:
     global FAIL
     FAIL += 1
+    _results.append((msg, False, detail))
     print(f"  ✗ {msg}" + (f": {detail}" if detail else ""))
 
 
@@ -211,4 +215,19 @@ if FAIL == 0:
     print("  ✅ Все тесты B.2 пройдены! Scheduler работает корректно.")
 else:
     print("  ❌ Есть провалы — см. выше.")
+
+# ═══════════════════════════════════════════════════════
+# PYTEST PARAMETRIZE — каждая проверка = отдельный тест
+# ═══════════════════════════════════════════════════════
+
+@pytest.mark.parametrize(
+    "name,condition,detail",
+    _results,
+    ids=[r[0] for r in _results],
+)
+def test_scheduler_check(name, condition, detail):
+    assert condition, f"{name}" + (f": {detail}" if detail else "")
+
+
+if __name__ == "__main__" and FAIL != 0:
     sys.exit(1)

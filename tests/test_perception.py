@@ -16,6 +16,7 @@ import sys
 import json
 import tempfile
 import textwrap
+import pytest
 
 # ─── Цвета для вывода ────────────────────────────────────────────────────────
 GREEN  = "\033[92m"
@@ -27,6 +28,7 @@ BOLD   = "\033[1m"
 passed = 0
 failed = 0
 _section = ""
+_results = []
 
 
 def section(name: str):
@@ -40,14 +42,16 @@ def section(name: str):
 def ok(msg: str):
     global passed
     passed += 1
+    _results.append((msg, True, ""))
     print(f"  {GREEN}✓{RESET} {msg}")
 
 
 def fail(msg: str, exc: Exception = None):
     global failed
     failed += 1
-    detail = f" — {exc}" if exc else ""
-    print(f"  {RED}✗{RESET} {msg}{detail}")
+    detail = str(exc) if exc else ""
+    _results.append((msg, False, detail))
+    print(f"  {RED}✗{RESET} {msg}" + (f" — {exc}" if exc else ""))
 
 
 def check(condition: bool, msg: str, exc: Exception = None):
@@ -412,11 +416,25 @@ except Exception as e:
 
 print(f"\n{'='*60}")
 total = passed + failed
-print(f"  Logging Tests: {passed}/{total} passed")
+print(f"  Perception Tests: {passed}/{total} passed")
 if failed == 0:
     print(f"  [OK] Vse testy proshli!")
 else:
     print(f"  {RED}FAILED: {failed} тестов провалено{RESET}")
 print(f"{'='*60}\n")
 
-sys.exit(0 if failed == 0 else 1)
+# ═══════════════════════════════════════════════════════
+# PYTEST PARAMETRIZE — каждая проверка = отдельный тест
+# ═══════════════════════════════════════════════════════
+
+@pytest.mark.parametrize(
+    "name,condition,detail",
+    _results,
+    ids=[r[0] for r in _results],
+)
+def test_perception_check(name, condition, detail):
+    assert condition, f"{name}" + (f" — {detail}" if detail else "")
+
+
+if __name__ == "__main__":
+    sys.exit(0 if failed == 0 else 1)

@@ -39,22 +39,19 @@
 ```bash
 # 1. Клонировать репозиторий
 git clone <repo_url>
-cd AI
+cd cognitive-core
 
 # 2. Установить зависимости (Windows — автоматически)
 download_libraries.bat
 
 # 3. Активировать окружение
-venv\Scripts\activate
+.venv\Scripts\activate
 
 # 4. Проверить установку
 python check_deps.py
 
-# 5. Запустить тесты (реализованные модули)
-python test_memory.py           # 101/101 ✅ Memory System
-python test_scheduler.py        # 11/11  ✅ Scheduler
-python test_resource_monitor.py # 13/13  ✅ ResourceMonitor
-python test_logging.py          # 25/25  ✅ Logging & Observability
+# 5. Запустить все тесты (229/229)
+python -m pytest tests/ -v
 
 # 6. Использовать Memory System в коде
 python -c "
@@ -68,8 +65,8 @@ mm.stop()
 "
 ```
 
-> 📖 Полная архитектурная спецификация: [`BRAIN.md`](BRAIN.md)  
-> 📋 План реализации (14 фаз): [`TODO.md`](TODO.md)  
+> 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
+> 📋 План реализации (14 фаз): [`TODO.md`](docs/TODO.md)  
 > 🗂️ Документация по слоям: [`docs/layers/`](docs/layers/)
 
 ---
@@ -237,9 +234,9 @@ MULTIMODAL BRAIN
 ## 📁 Структура проекта
 
 ```
-AI/
+cognitive-core/
 │
-├── brain/                              # Основной пакет мозга (v0.1.0)
+├── brain/                              # Основной пакет мозга (v0.3.0)
 │   ├── __init__.py                     # Корневой пакет
 │   │
 │   ├── core/                           # Ядро автономного цикла
@@ -299,7 +296,20 @@ AI/
 │           ├── sources.json            # доверие к источникам (SourceMemory)
 │           └── procedures.json         # навыки и стратегии (ProceduralMemory)
 │
-├── docs/                               # Документация архитектуры
+├── tests/                              # Тесты (pytest-совместимые, 229/229 ✅)
+│   ├── conftest.py                     # Общая конфигурация pytest + fixtures
+│   ├── test_logging.py                 # ✅ 25/25 тестов Logging & Observability (unittest)
+│   ├── test_memory.py                  # ✅ 101/101 тестов системы памяти
+│   ├── test_perception.py              # ✅ 79/79 тестов Perception Layer
+│   ├── test_resource_monitor.py        # ✅ 13/13 тестов ResourceMonitor
+│   └── test_scheduler.py              # ✅ 11/11 тестов Scheduler
+│
+├── docs/                               # Документация
+│   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
+│   ├── TODO.md                         # План реализации (14 фаз, 35+ задач)
+│   ├── ARCHITECTURE.md                 # Архитектурные решения
+│   ├── PLANS.md                        # Стратегический план
+│   ├── DAILY_REPORT_2026-03-21.md      # Дневной отчёт
 │   └── layers/                         # Описание каждого слоя (12 файлов)
 │       ├── 00_autonomous_loop.md       # Ствол мозга — always-on цикл
 │       ├── 01_perception_layer.md      # Таламус — восприятие и маршрутизация
@@ -314,16 +324,11 @@ AI/
 │       ├── 10_safety_boundaries.md     # Иммунная система — source trust, аудит
 │       └── 11_midbrain_reward.md       # Средний мозг — мотивация, вознаграждение
 │
-├── BRAIN.md                            # Архитектурная спецификация (15 разделов)
-├── TODO.md                             # План реализации (14 фаз, 35+ задач)
-├── test_memory.py                      # ✅ 101/101 тестов системы памяти
-├── test_scheduler.py                   # ✅ 11/11 тестов Scheduler (B.2)
-├── test_resource_monitor.py            # ✅ 13/13 тестов ResourceMonitor (B.3)
-├── test_logging.py                     # ✅ 25/25 тестов Logging & Observability (C.1–C.3)
+├── .gitignore                          # Git ignore rules
+├── pyproject.toml                      # Конфигурация проекта + pytest
 ├── requirements.txt                    # Зависимости Python
 ├── download_libraries.bat              # Автоустановка зависимостей (Windows)
 ├── check_deps.py                       # Проверка установленных зависимостей
-├── chatgpt_dialog.txt                  # Диалог с ChatGPT — уточнения архитектуры
 └── README.md                           # Этот файл
 ```
 
@@ -640,13 +645,13 @@ download_libraries.bat
 
 ```bash
 # Создать виртуальное окружение
-python -m venv venv
+python -m venv .venv
 
 # Активировать (Windows)
-venv\Scripts\activate
+.venv\Scripts\activate
 
 # Активировать (Linux/macOS)
-source venv/bin/activate
+source .venv/bin/activate
 
 # Установить PyTorch CPU-only
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
@@ -690,26 +695,25 @@ python check_deps.py
 
 ```bash
 # Активировать окружение
-venv\Scripts\activate
+.venv\Scripts\activate
 
-# Запустить тесты системы памяти (101/101 ✅)
-python test_memory.py
+# Запустить все тесты (229/229 ✅)
+python -m pytest tests/ -v
+
+# Или отдельный файл
+python -m pytest tests/test_memory.py -v
 ```
 
-Тест охватывает 9 секций:
+### Состав тестового набора (229 тестов)
 
-| # | Секция | Тестов |
-|---|--------|--------|
-| 1 | Events (`brain/core/events.py`) | 7 |
-| 2 | WorkingMemory | 13 |
-| 3 | SemanticMemory | 14 |
-| 4 | EpisodicMemory | 14 |
-| 5 | SourceMemory | 13 |
-| 6 | ProceduralMemory | 10 |
-| 7 | MemoryManager (единый интерфейс) | 16 |
-| 8 | ConsolidationEngine (Гиппокамп) | 12 |
-| 9 | Импорт через `__init__.py` | 2 |
-| | **Итого** | **101** |
+| Файл | Модуль | Тестов |
+|------|--------|--------|
+| `tests/test_logging.py` | Logging & Observability (BrainLogger, DigestGenerator, TraceBuilder) | 25 |
+| `tests/test_memory.py` | Memory System (Events, WM, SM, EM, Source, Procedural, Manager, Consolidation) | 101 |
+| `tests/test_perception.py` | Perception Layer (MetadataExtractor, TextIngestor, InputRouter) | 79 |
+| `tests/test_resource_monitor.py` | ResourceMonitor (policies, hysteresis, background thread) | 13 |
+| `tests/test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval, error handling) | 11 |
+| | **Итого** | **229** |
 
 ---
 
@@ -797,9 +801,8 @@ python test_memory.py
 | [`10_safety_boundaries.md`](docs/layers/10_safety_boundaries.md) | Safety & Boundaries | Иммунная система | 📄 Спецификация (Этап L) |
 | [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | 📄 Спецификация (Этап M) |
 
-Архитектурная спецификация: [`BRAIN.md`](BRAIN.md) (15 разделов)  
-План реализации: [`TODO.md`](TODO.md) (14 фаз, 35+ задач)  
-Диалог с уточнениями архитектуры: [`chatgpt_dialog.txt`](chatgpt_dialog.txt)
+Архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md) (15 разделов)  
+План реализации: [`TODO.md`](docs/TODO.md) (14 фаз, 35+ задач)
 
 ---
 

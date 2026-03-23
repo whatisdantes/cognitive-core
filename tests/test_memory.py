@@ -14,6 +14,7 @@ test_memory.py — Тест системы памяти мозга.
 import sys
 import os
 import time
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -27,10 +28,12 @@ BOLD   = "\033[1m"
 
 passed = 0
 failed = 0
+_results = []
 
 
-def test(name: str, condition: bool, detail: str = ""):
+def check_test(name: str, condition: bool, detail: str = ""):
     global passed, failed
+    _results.append((name, condition, detail))
     if condition:
         passed += 1
         print(f"  {GREEN}✓{RESET} {name}")
@@ -57,17 +60,17 @@ try:
     )
 
     ev = PerceptEvent(source="test", content="привет", modality="text", quality=0.9)
-    test("PerceptEvent создан", ev.event_type == "percept")
-    test("PerceptEvent имеет trace_id", len(ev.trace_id) > 0)
-    test("PerceptEvent сериализуется в dict", isinstance(ev.to_dict(), dict))
+    check_test("PerceptEvent создан", ev.event_type == "percept")
+    check_test("PerceptEvent имеет trace_id", len(ev.trace_id) > 0)
+    check_test("PerceptEvent сериализуется в dict", isinstance(ev.to_dict(), dict))
 
     mem_ev = EventFactory.memory_store("нейрон", "клетка нервной системы", memory_type="semantic")
-    test("MemoryEvent через фабрику", mem_ev.operation == "store")
-    test("MemoryEvent key корректен", mem_ev.key == "нейрон")
+    check_test("MemoryEvent через фабрику", mem_ev.operation == "store")
+    check_test("MemoryEvent key корректен", mem_ev.key == "нейрон")
 
     sys_ev = EventFactory.system_info("test_module", "всё работает", cpu_pct=15.0)
-    test("SystemEvent через фабрику", sys_ev.level == "INFO")
-    test("SystemEvent JSON-строка", len(sys_ev.to_json_line()) > 10)
+    check_test("SystemEvent через фабрику", sys_ev.level == "INFO")
+    check_test("SystemEvent JSON-строка", len(sys_ev.to_json_line()) > 10)
 
 except Exception as e:
     print(f"  {RED}ОШИБКА импорта events: {e}{RESET}")
@@ -89,41 +92,41 @@ try:
     item2 = wm.push("синапс это связь между нейронами", importance=0.6, tags=["биология"])
     item3 = wm.push("мозг это орган мышления", importance=0.9, source_ref="user_input")
 
-    test("push() добавляет элементы", wm.size >= 2)
-    test("MemoryItem создан корректно", item1.modality == "text")
-    test("Важный элемент защищён", item3 in wm._protected)
+    check_test("push() добавляет элементы", wm.size >= 2)
+    check_test("MemoryItem создан корректно", item1.modality == "text")
+    check_test("Важный элемент защищён", item3 in wm._protected)
 
     # Поиск
     results = wm.search("нейрон")
-    test("search() находит по тексту", len(results) > 0)
-    test("search() возвращает MemoryItem", isinstance(results[0], MemoryItem))
+    check_test("search() находит по тексту", len(results) > 0)
+    check_test("search() возвращает MemoryItem", isinstance(results[0], MemoryItem))
 
     # Контекст
     ctx = wm.get_context(5)
-    test("get_context() возвращает список", isinstance(ctx, list))
-    test("get_context() не пустой", len(ctx) > 0)
+    check_test("get_context() возвращает список", isinstance(ctx, list))
+    check_test("get_context() не пустой", len(ctx) > 0)
 
     # Вытеснение
     wm2 = WorkingMemory(max_size=3)
     for i in range(5):
         wm2.push(f"элемент {i}", importance=0.3)
-    test("Вытеснение работает (size <= max)", wm2.size <= 3 + len(wm2._protected))
-    test("Счётчик вытеснений > 0", wm2._evict_count > 0)
+    check_test("Вытеснение работает (size <= max)", wm2.size <= 3 + len(wm2._protected))
+    check_test("Счётчик вытеснений > 0", wm2._evict_count > 0)
 
     # Статус
     s = wm.status()
-    test("status() возвращает dict", isinstance(s, dict))
-    test("status() содержит size", "size" in s)
+    check_test("status() возвращает dict", isinstance(s, dict))
+    check_test("status() содержит size", "size" in s)
 
     # peek_last
     last = wm.peek_last()
-    test("peek_last() не None", last is not None)
+    check_test("peek_last() не None", last is not None)
 
     # clear
     wm_tmp = WorkingMemory(max_size=10)
     wm_tmp.push("тест", importance=0.3)
     wm_tmp.clear(keep_important=False)
-    test("clear() очищает память", wm_tmp.size == 0)
+    check_test("clear() очищает память", wm_tmp.size == 0)
 
 except Exception as e:
     print(f"  {RED}ОШИБКА WorkingMemory: {e}{RESET}")
@@ -148,51 +151,51 @@ try:
     node2 = sm.store_fact("синапс", "связь между нейронами", tags=["биология"])
     node3 = sm.store_fact("мозг", "орган центральной нервной системы", tags=["биология", "анатомия"])
 
-    test("store_fact() создаёт узел", isinstance(node1, SemanticNode))
-    test("Узел имеет concept", node1.concept == "нейрон")
-    test("Узел имеет description", "клетка" in node1.description)
-    test("len(sm) корректен", len(sm) >= 3)
+    check_test("store_fact() создаёт узел", isinstance(node1, SemanticNode))
+    check_test("Узел имеет concept", node1.concept == "нейрон")
+    check_test("Узел имеет description", "клетка" in node1.description)
+    check_test("len(sm) корректен", len(sm) >= 3)
 
     # Получение факта
     found = sm.get_fact("нейрон")
-    test("get_fact() находит узел", found is not None)
-    test("get_fact() увеличивает access_count", found.access_count > 0)
+    check_test("get_fact() находит узел", found is not None)
+    check_test("get_fact() увеличивает access_count", found.access_count > 0)
 
     # Связи
     sm.add_relation("нейрон", "синапс", weight=0.8, rel_type="related")
     sm.add_relation("нейрон", "мозг", weight=0.9, rel_type="part_of")
 
     related = sm.get_related("нейрон")
-    test("add_relation() создаёт связи", len(related) > 0)
-    test("get_related() возвращает список", isinstance(related, list))
+    check_test("add_relation() создаёт связи", len(related) > 0)
+    check_test("get_related() возвращает список", isinstance(related, list))
 
     # Поиск
     results = sm.search("нейрон")
-    test("search() находит по concept", len(results) > 0)
+    check_test("search() находит по concept", len(results) > 0)
 
     results2 = sm.search("клетка")
-    test("search() находит по description", len(results2) > 0)
+    check_test("search() находит по description", len(results2) > 0)
 
     # Подтверждение/опровержение
     old_conf = node1.confidence
     sm.confirm_fact("нейрон")
-    test("confirm_fact() повышает confidence", node1.confidence >= old_conf)
+    check_test("confirm_fact() повышает confidence", node1.confidence >= old_conf)
 
     sm.deny_fact("нейрон", delta=0.3)
-    test("deny_fact() снижает confidence", node1.confidence < 1.0)
+    check_test("deny_fact() снижает confidence", node1.confidence < 1.0)
 
     # Decay
     sm.apply_decay(rate=0.01)
-    test("apply_decay() работает без ошибок", True)
+    check_test("apply_decay() работает без ошибок", True)
 
     # Цепочка понятий
     chain = sm.get_concept_chain("нейрон", "мозг", max_depth=3)
-    test("get_concept_chain() находит путь", len(chain) >= 2)
+    check_test("get_concept_chain() находит путь", len(chain) >= 2)
 
     # Статус
     s = sm.status()
-    test("status() содержит node_count", "node_count" in s)
-    test("status() содержит total_relations", "total_relations" in s)
+    check_test("status() содержит node_count", "node_count" in s)
+    check_test("status() содержит total_relations", "total_relations" in s)
 
     # Очистка тестового файла
     if os.path.exists("brain/data/memory/test_semantic.json"):
@@ -239,43 +242,43 @@ try:
         tags=["важное"],
     )
 
-    test("store() создаёт эпизод", isinstance(ep1, Episode))
-    test("Episode имеет episode_id", len(ep1.episode_id) > 0)
-    test("len(em) корректен", len(em) >= 3)
+    check_test("store() создаёт эпизод", isinstance(ep1, Episode))
+    check_test("Episode имеет episode_id", len(ep1.episode_id) > 0)
+    check_test("len(em) корректен", len(em) >= 3)
 
     # Получение по ID
     found = em.get_by_id(ep1.episode_id)
-    test("get_by_id() находит эпизод", found is not None)
-    test("get_by_id() увеличивает access_count", found.access_count > 0)
+    check_test("get_by_id() находит эпизод", found is not None)
+    check_test("get_by_id() увеличивает access_count", found.access_count > 0)
 
     # Последние эпизоды
     recent = em.get_recent(5)
-    test("get_recent() возвращает список", isinstance(recent, list))
-    test("get_recent() не пустой", len(recent) > 0)
+    check_test("get_recent() возвращает список", isinstance(recent, list))
+    check_test("get_recent() не пустой", len(recent) > 0)
 
     # Поиск по концепту
     by_concept = em.retrieve_by_concept("нейрон")
-    test("retrieve_by_concept() находит эпизоды", len(by_concept) > 0)
+    check_test("retrieve_by_concept() находит эпизоды", len(by_concept) > 0)
 
     # Полнотекстовый поиск
     search_results = em.search("нейрон")
-    test("search() находит по тексту", len(search_results) > 0)
+    check_test("search() находит по тексту", len(search_results) > 0)
 
     # Поиск по времени
     start = time.time() - 10
     by_time = em.retrieve_by_time(start_ts=start)
-    test("retrieve_by_time() работает", len(by_time) > 0)
+    check_test("retrieve_by_time() работает", len(by_time) > 0)
 
     # Модальные доказательства
     evidence = ModalEvidence(modality="image", source="test.jpg", content_ref="регион 0,0,100,100")
     ep1.add_evidence(evidence)
-    test("add_evidence() добавляет доказательство", len(ep1.modal_evidence) > 0)
-    test("get_evidence_by_modality() работает", len(ep1.get_evidence_by_modality("image")) > 0)
+    check_test("add_evidence() добавляет доказательство", len(ep1.modal_evidence) > 0)
+    check_test("get_evidence_by_modality() работает", len(ep1.get_evidence_by_modality("image")) > 0)
 
     # Статус
     s = em.status()
-    test("status() содержит episode_count", "episode_count" in s)
-    test("status() содержит modality_breakdown", "modality_breakdown" in s)
+    check_test("status() содержит episode_count", "episode_count" in s)
+    check_test("status() содержит modality_breakdown", "modality_breakdown" in s)
 
     # Очистка
     if os.path.exists("brain/data/memory/test_episodes.json"):
@@ -304,43 +307,43 @@ try:
     rec2 = src.register("wikipedia.org", source_type="url")
     rec3 = src.register("system_kb", source_type="system")
 
-    test("register() создаёт запись", isinstance(rec1, SourceRecord))
-    test("user тип имеет высокое доверие", rec1.trust_score >= 0.7)
-    test("system тип имеет максимальное доверие", rec3.trust_score == 1.0)
-    test("url тип имеет умеренное доверие", rec2.trust_score <= 0.6)
+    check_test("register() создаёт запись", isinstance(rec1, SourceRecord))
+    check_test("user тип имеет высокое доверие", rec1.trust_score >= 0.7)
+    check_test("system тип имеет максимальное доверие", rec3.trust_score == 1.0)
+    check_test("url тип имеет умеренное доверие", rec2.trust_score <= 0.6)
 
     # Доверие
     trust = src.get_trust("user_input")
-    test("get_trust() возвращает float", isinstance(trust, float))
-    test("get_trust() для user >= 0.7", trust >= 0.7)
+    check_test("get_trust() возвращает float", isinstance(trust, float))
+    check_test("get_trust() для user >= 0.7", trust >= 0.7)
 
     # Обновление доверия
     src.update_trust("wikipedia.org", confirmed=True)
     src.update_trust("wikipedia.org", confirmed=True)
     src.update_trust("wikipedia.org", confirmed=False)
     rec2_updated = src.get_record("wikipedia.org")
-    test("update_trust() обновляет confirmations", rec2_updated.confirmations >= 2)
+    check_test("update_trust() обновляет confirmations", rec2_updated.confirmations >= 2)
 
     # Неизвестный источник
     unknown_trust = src.get_trust("unknown_source_xyz")
-    test("get_trust() для неизвестного = 0.5", unknown_trust == 0.5)
+    check_test("get_trust() для неизвестного = 0.5", unknown_trust == 0.5)
 
     # Чёрный список
     src.blacklist("spam_source", reason="спам")
-    test("blacklist() работает", src.is_blacklisted("spam_source"))
-    test("get_trust() для заблокированного = 0.0", src.get_trust("spam_source") == 0.0)
+    check_test("blacklist() работает", src.is_blacklisted("spam_source"))
+    check_test("get_trust() для заблокированного = 0.0", src.get_trust("spam_source") == 0.0)
 
     src.whitelist("spam_source")
-    test("whitelist() снимает блокировку", not src.is_blacklisted("spam_source"))
+    check_test("whitelist() снимает блокировку", not src.is_blacklisted("spam_source"))
 
     # Аналитика
     reliable = src.get_reliable_sources()
-    test("get_reliable_sources() возвращает список", isinstance(reliable, list))
+    check_test("get_reliable_sources() возвращает список", isinstance(reliable, list))
 
     # Статус
     s = src.status()
-    test("status() содержит source_count", "source_count" in s)
-    test("status() содержит avg_trust_score", "avg_trust_score" in s)
+    check_test("status() содержит source_count", "source_count" in s)
+    check_test("status() содержит avg_trust_score", "avg_trust_score" in s)
 
     # Очистка
     if os.path.exists("brain/data/memory/test_sources.json"):
@@ -389,17 +392,17 @@ try:
         tags=["обучение"],
     )
 
-    test("store() создаёт процедуру", isinstance(proc1, Procedure))
-    test("Процедура имеет шаги", len(proc1.steps) == 3)
-    test("len(pm) корректен", len(pm) >= 2)
+    check_test("store() создаёт процедуру", isinstance(proc1, Procedure))
+    check_test("Процедура имеет шаги", len(proc1.steps) == 3)
+    check_test("len(pm) корректен", len(pm) >= 2)
 
     # Получение
     found = pm.get("ответить_на_вопрос")
-    test("get() находит процедуру", found is not None)
+    check_test("get() находит процедуру", found is not None)
 
     # Поиск
     results = pm.retrieve("вопрос")
-    test("retrieve() находит по trigger_pattern", len(results) > 0)
+    check_test("retrieve() находит по trigger_pattern", len(results) > 0)
 
     # Запись результата
     pm.record_result("ответить_на_вопрос", success=True, duration_ms=150.0)
@@ -407,17 +410,17 @@ try:
     pm.record_result("ответить_на_вопрос", success=False, duration_ms=200.0)
 
     proc_updated = pm.get("ответить_на_вопрос")
-    test("record_result() обновляет use_count", proc_updated.use_count == 3)
-    test("record_result() обновляет success_rate", 0.0 < proc_updated.success_rate < 1.0)
-    test("record_result() обновляет avg_duration_ms", proc_updated.avg_duration_ms > 0)
+    check_test("record_result() обновляет use_count", proc_updated.use_count == 3)
+    check_test("record_result() обновляет success_rate", 0.0 < proc_updated.success_rate < 1.0)
+    check_test("record_result() обновляет avg_duration_ms", proc_updated.avg_duration_ms > 0)
 
     # Лучшие процедуры
     best = pm.get_best(top_n=2)
-    test("get_best() возвращает список", isinstance(best, list))
+    check_test("get_best() возвращает список", isinstance(best, list))
 
     # Статус
     s = pm.status()
-    test("status() содержит procedure_count", "procedure_count" in s)
+    check_test("status() содержит procedure_count", "procedure_count" in s)
 
     # Очистка
     if os.path.exists("brain/data/memory/test_procedures.json"):
@@ -451,50 +454,50 @@ try:
         source_ref="test_source",
         tags=["биология"],
     )
-    test("store() возвращает dict", isinstance(result, dict))
-    test("store() добавляет в working", "working" in result)
-    test("store() добавляет в episodic (importance >= 0.4)", "episodic" in result)
-    test("store() извлекает факт в semantic", "semantic" in result)
+    check_test("store() возвращает dict", isinstance(result, dict))
+    check_test("store() добавляет в working", "working" in result)
+    check_test("store() добавляет в episodic (importance >= 0.4)", "episodic" in result)
+    check_test("store() извлекает факт в semantic", "semantic" in result)
 
     # store_fact() — явное сохранение факта
     node = mm.store_fact("синапс", "связь между нейронами", importance=0.7)
-    test("store_fact() создаёт SemanticNode", node is not None)
+    check_test("store_fact() создаёт SemanticNode", node is not None)
 
     # store_episode() — явное сохранение эпизода
     ep = mm.store_episode("тестовый эпизод", importance=0.6, concepts=["тест"])
-    test("store_episode() создаёт Episode", ep is not None)
+    check_test("store_episode() создаёт Episode", ep is not None)
 
     # retrieve() — поиск по всем видам памяти
     search = mm.retrieve("нейрон")
-    test("retrieve() возвращает MemorySearchResult", isinstance(search, MemorySearchResult))
-    test("retrieve() находит в semantic", len(search.semantic) > 0)
-    test("retrieve() не пустой", not search.is_empty())
-    test("summary() работает", len(search.summary()) > 0)
+    check_test("retrieve() возвращает MemorySearchResult", isinstance(search, MemorySearchResult))
+    check_test("retrieve() находит в semantic", len(search.semantic) > 0)
+    check_test("retrieve() не пустой", not search.is_empty())
+    check_test("summary() работает", len(search.summary()) > 0)
 
     # get_fact()
     fact = mm.get_fact("нейрон")
-    test("get_fact() находит факт", fact is not None)
+    check_test("get_fact() находит факт", fact is not None)
 
     # get_context()
     ctx = mm.get_context(5)
-    test("get_context() возвращает список", isinstance(ctx, list))
+    check_test("get_context() возвращает список", isinstance(ctx, list))
 
     # get_recent_episodes()
     recent = mm.get_recent_episodes(5)
-    test("get_recent_episodes() возвращает список", isinstance(recent, list))
+    check_test("get_recent_episodes() возвращает список", isinstance(recent, list))
 
     # confirm/deny
     mm.confirm("нейрон", source_ref="test_source")
     mm.deny("синапс")
-    test("confirm() и deny() работают без ошибок", True)
+    check_test("confirm() и deny() работают без ошибок", True)
 
     # RAM статус
     ram = mm.ram_status()
-    test("ram_status() возвращает dict", isinstance(ram, dict))
+    check_test("ram_status() возвращает dict", isinstance(ram, dict))
 
     # Полный статус
     s = mm.status()
-    test("status() содержит все виды памяти", all(
+    check_test("status() содержит все виды памяти", all(
         k in s for k in ["working", "semantic", "episodic", "source", "procedural"]
     ))
 
@@ -542,28 +545,28 @@ try:
 
     # Принудительная консолидация
     stats = engine.force_consolidate()
-    test("force_consolidate() возвращает stats", isinstance(stats, dict))
-    test("stats содержит to_episodic", "to_episodic" in stats)
-    test("stats содержит to_semantic", "to_semantic" in stats)
-    test("Важные элементы перенесены в episodic", stats["to_episodic"] >= 2)
+    check_test("force_consolidate() возвращает stats", isinstance(stats, dict))
+    check_test("stats содержит to_episodic", "to_episodic" in stats)
+    check_test("stats содержит to_semantic", "to_semantic" in stats)
+    check_test("Важные элементы перенесены в episodic", stats["to_episodic"] >= 2)
 
     # Проверяем что факты появились в semantic
     fact = sm.get_fact("мозг")
-    test("Факт 'мозг' перенесён в semantic", fact is not None)
+    check_test("Факт 'мозг' перенесён в semantic", fact is not None)
 
     # Decay
     engine.force_decay()
-    test("force_decay() работает без ошибок", True)
+    check_test("force_decay() работает без ошибок", True)
 
     # Reinforce / Weaken
     engine.reinforce("мозг", source_ref="test")
     engine.weaken("нейрон")
-    test("reinforce() и weaken() работают", True)
+    check_test("reinforce() и weaken() работают", True)
 
     # Статус
     s = engine.status()
-    test("status() содержит consolidation_count", "consolidation_count" in s)
-    test("consolidation_count >= 1", s["consolidation_count"] >= 1)
+    check_test("status() содержит consolidation_count", "consolidation_count" in s)
+    check_test("consolidation_count >= 1", s["consolidation_count"] >= 1)
 
     # Очистка
     for f in ["test_cons_sem.json", "test_cons_ep.json", "test_cons_src.json", "test_cons_proc.json"]:
@@ -587,13 +590,13 @@ try:
         EpisodicMemory, SourceMemory, ProceduralMemory,
         ConsolidationEngine, MemorySearchResult,
     )
-    test("brain.memory импортирует все классы", True)
+    check_test("brain.memory импортирует все классы", True)
 
     from brain.core import (
         BaseEvent, PerceptEvent, MemoryEvent,
         CognitiveEvent, LearningEvent, SystemEvent, EventFactory,
     )
-    test("brain.core импортирует все события", True)
+    check_test("brain.core импортирует все события", True)
 
 except Exception as e:
     print(f"  {RED}ОШИБКА импорта через __init__.py: {e}{RESET}")
@@ -612,4 +615,18 @@ if failed == 0:
 else:
     print(f"{YELLOW}{BOLD}  ⚠ Есть провалившиеся тесты. Проверьте вывод выше.{RESET}\n")
 
-sys.exit(0 if failed == 0 else 1)
+# ═══════════════════════════════════════════════════════
+# PYTEST PARAMETRIZE — каждая проверка = отдельный тест
+# ═══════════════════════════════════════════════════════
+
+@pytest.mark.parametrize(
+    "name,condition,detail",
+    _results,
+    ids=[r[0] for r in _results],
+)
+def test_memory_check(name, condition, detail):
+    assert condition, f"{name}" + (f" — {detail}" if detail else "")
+
+
+if __name__ == "__main__":
+    sys.exit(0 if failed == 0 else 1)
