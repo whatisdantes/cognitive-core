@@ -197,7 +197,7 @@ else:
 env = os.environ.copy()
 env["PYTHONIOENCODING"] = "utf-8"
 r = subprocess.run(
-    [sys.executable, "test_memory.py"],
+    [sys.executable, "-m", "tests.test_memory"],
     capture_output=True, text=True, encoding="utf-8", env=env,
 )
 lines = [l for l in r.stdout.splitlines() if l.strip()]
