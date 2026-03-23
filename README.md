@@ -38,7 +38,7 @@
 
 ```bash
 # 1. Клонировать репозиторий
-git clone <repo_url>
+git clone https://github.com/whatisdantes/cognitive-core.git
 cd cognitive-core
 
 # 2. Установить зависимости (Windows — автоматически)
@@ -103,7 +103,7 @@ mm.stop()
 | RAM | DDR4 32 GB, 3200 MHz |
 | GPU | — (не используется, `USE_GPU=False`) |
 | ОС | Windows 10/11 (основная), Linux/macOS (совместимо) |
-| Python | 3.10+ |
+| Python | 3.11+ |
 
 ### Ресурсные лимиты
 
@@ -620,7 +620,7 @@ tqdm>=4.66.0
 
 ### Требования
 
-- Python 3.10+
+- Python 3.11+
 - Windows 10/11 (или Linux/macOS с адаптацией скрипта)
 - 32 GB RAM (рекомендуется)
 - ~5 GB свободного места на диске (для моделей)
@@ -875,11 +875,13 @@ brain/perception/
 │                              image/audio/video → warning+skip MVP)
 └── __init__.py             ← экспорты: TextIngestor, MetadataExtractor, InputRouter
 
-test_memory.py              ← 101/101 тестов ✅
-test_scheduler.py           ← 11/11 тестов ✅
-test_resource_monitor.py    ← 13/13 тестов ✅
-test_logging.py             ← 25/25 тестов ✅
-test_perception.py          ← 79/79 тестов ✅
+tests/
+├── conftest.py             ← pytest fixtures + sys.path
+├── test_memory.py          ← 101/101 тестов ✅
+├── test_scheduler.py       ← 11/11 тестов ✅
+├── test_resource_monitor.py← 13/13 тестов ✅
+├── test_logging.py         ← 25/25 тестов ✅
+└── test_perception.py      ← 79/79 тестов ✅
 ```
 
 ### Следующий шаг: Этап E — Minimal Text Encoder

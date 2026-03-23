@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-core"
@@ -8,7 +8,7 @@ version = "0.3.0"
 description = "Искусственный мультимодальный мозг — когнитивная система с памятью, восприятием и автономным циклом"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 authors = [
     {name = "cognitive-core contributors"},
 ]
