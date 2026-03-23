@@ -1,16 +1,96 @@
-# Виртуальное окружение
-venv/
-.venv/
-env/
-
-# Python кэш
+# Byte-compiled / optimized / cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
 *.pyd
 
-# Данные и модели (тяжёлые файлы)
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python / tool versions
+.python-version
+
+# Packaging / build
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+cover/
+
+# Type check / lint
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+logs/
+*.log
+*.jsonl
+
+# Local environment / secrets
+.env
+.envrc
+
+# Databases / local app state
+db.sqlite3
+db.sqlite3-journal
+instance/
+.webassets-cache
+.scrapy
+
+# Project-specific heavy data / models
 brain/data/memory/
 brain/data/logs/
 brain/data/weights/
@@ -20,32 +100,38 @@ brain/data/weights/
 *.bin
 *.safetensors
 
-# Логи
-logs/
-*.log
-*.jsonl
+# Docs build
+docs/_build/
+site/
 
-# IDE
+# IDE / editors
 .vscode/
 .idea/
 *.swp
 *.swo
+.spyderproject
+.spyproject
+.ropeproject
+.cursorignore
+.cursorindexingignore
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
-
-# Тесты / покрытие
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Дистрибутив
-dist/
-build/
-*.egg-info/
+# Misc
+target/
+cython_debug/
+.pdm-python
+.pdm-build/
+.pixi
+__pypackages__/
+celerybeat-schedule
+celerybeat.pid
+*.sage.py
+.pypirc
+.abstra/
+marimo/_static/
+marimo/_lsp/
+__marimo__/
