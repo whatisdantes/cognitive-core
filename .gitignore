@@ -135,3 +135,4 @@ celerybeat.pid
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+chatgpt_dialog.txt
