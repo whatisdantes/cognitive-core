@@ -38,7 +38,12 @@ from .goal_manager import Goal, GoalManager, GoalStatus
 from .planner import Planner
 from .hypothesis_engine import HypothesisEngine
 from .reasoner import Reasoner, ReasoningTrace
-from .retrieval_adapter import RetrievalAdapter, KeywordRetrievalBackend
+from .retrieval_adapter import (
+    RetrievalAdapter,
+    KeywordRetrievalBackend,
+    VectorRetrievalBackend,
+    HybridRetrievalBackend,
+)
 from .action_selector import ActionDecision, ActionSelector, ActionType
 from .uncertainty_monitor import UncertaintyMonitor
 
@@ -92,13 +97,21 @@ class CognitiveCore:
         self._uncertainty_monitor = UncertaintyMonitor()
 
         # RetrievalAdapter: создаём если memory_manager поддерживает retrieve()
+        # Используем HybridRetrievalBackend (keyword + vector) для связки
+        # TextEncoder → Memory → Retrieval
         self._retrieval_adapter: Optional[RetrievalAdapter] = None
+        self._vector_backend: Optional[VectorRetrievalBackend] = None
         if hasattr(self._memory, "retrieve"):
             try:
-                backend = KeywordRetrievalBackend(self._memory)
+                keyword_backend = KeywordRetrievalBackend(self._memory)
+                self._vector_backend = VectorRetrievalBackend()
+                hybrid_backend = HybridRetrievalBackend(
+                    keyword_backend=keyword_backend,
+                    vector_backend=self._vector_backend,
+                )
                 self._retrieval_adapter = RetrievalAdapter(
+                    backend=hybrid_backend,
                     memory_manager=self._memory,
-                    backend=backend,
                 )
             except Exception as e:
                 logger.warning(
@@ -161,15 +174,19 @@ class CognitiveCore:
         self._goal_manager.push(goal)
         context.active_goal = goal
 
-        # --- 5. Reasoning loop ---
+        # --- 5. Index vector from encoded_percept (if available) ---
+        query_vector = self._index_percept_vector(encoded_percept, query)
+
+        # --- 6. Reasoning loop ---
         trace = self._reasoner.reason(
             query=retrieval_query,
             goal=goal,
             policy=self._policy,
             resources=resources,
+            query_vector=query_vector,
         )
 
-        # --- 6. Выбор действия ---
+        # --- 7. Выбор действия ---
         decision = self._action_selector.select(
             trace=trace,
             goal_type=goal.goal_type,
@@ -177,17 +194,17 @@ class CognitiveCore:
             resources=resources,
         )
 
-        # --- 7. Выполнить действие (LEARN → store) ---
+        # --- 8. Выполнить действие (LEARN → store) ---
         self._execute_action(decision, query, trace)
 
-        # --- 8. Завершить цель ---
+        # --- 9. Завершить цель ---
         outcome = self._parse_outcome(trace.outcome)
         if outcome and outcome in FAILURE_OUTCOMES:
             self._goal_manager.fail(goal.goal_id, trace.stop_reason)
         else:
             self._goal_manager.complete(goal.goal_id)
 
-        # --- 9. Собрать CognitiveResult ---
+        # --- 10. Собрать CognitiveResult ---
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         result = self._build_cognitive_result(
             query=query,
@@ -198,7 +215,7 @@ class CognitiveCore:
             elapsed_ms=elapsed_ms,
         )
 
-        # --- 10. Публикация события ---
+        # --- 11. Публикация события ---
         self._publish_event("cognitive_cycle_complete", {
             "trace_id": context.trace_id,
             "cycle_id": context.cycle_id,
@@ -243,6 +260,40 @@ class CognitiveCore:
                     "[CognitiveCore] resource_monitor.snapshot() error: %s", e
                 )
         return {}
+
+    def _index_percept_vector(
+        self,
+        encoded_percept: Optional[EncodedPercept] = None,
+        query: str = "",
+    ) -> Optional[list]:
+        """
+        Index the vector from EncodedPercept into VectorRetrievalBackend
+        and return the query vector for hybrid search.
+
+        This bridges TextEncoder → Memory retrieval:
+          - EncodedPercept.vector is stored in the vector index
+          - The same vector is returned for use as query_vector in hybrid search
+        """
+        if encoded_percept is None:
+            return None
+
+        vector = getattr(encoded_percept, "vector", None)
+        if not vector or (isinstance(vector, list) and all(v == 0.0 for v in vector)):
+            return None
+
+        # Store in vector backend for future retrieval
+        if self._vector_backend is not None:
+            percept_id = getattr(encoded_percept, "percept_id", "") or f"enc_{id(encoded_percept)}"
+            text = getattr(encoded_percept, "text", query)
+            self._vector_backend.add(
+                evidence_id=f"ev_enc_{percept_id}",
+                content=text or query,
+                vector=list(vector),
+                memory_type="encoded_percept",
+                confidence=getattr(encoded_percept, "quality", 0.5),
+            )
+
+        return list(vector)
 
     def _build_retrieval_query(
         self,

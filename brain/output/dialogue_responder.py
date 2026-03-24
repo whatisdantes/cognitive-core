@@ -84,6 +84,19 @@ class DialogueResponder:
     Только рендерит шаблон по ActionType — не принимает решений.
     ActionSelector решает тип → DialogueResponder рендерит текст.
 
+    MVP Limitation:
+        Текущая реализация использует шаблонный рендеринг (template-based)
+        с фиксированными hedging phrases и fallback templates.
+        Ответы формируются из CognitiveResult.response + confidence-based hedging.
+        Нет генерации свободного текста — только подстановка шаблонов.
+
+    TODO (Stage H+): Добавить LLM Bridge для генерации естественного языка.
+        - Интеграция с внешним LLM API (OpenAI / local LLM) для свободной генерации
+        - DialogueResponder.generate() → LLMBridge.render() fallback → template
+        - Контроль hallucination через ResponseValidator
+        - Бюджет токенов через ResourceMonitor
+        См. docs/layers/07_output_layer.md для деталей архитектуры.
+
     Использование:
         responder = DialogueResponder()
         output = responder.generate(cognitive_result, validation, trace)

@@ -1,9 +1,10 @@
 # 🧠 Искусственный Мультимодальный Мозг
 
-> **Версия:** 0.6.0  
-> **Статус:** 🚧 В разработке — Этап G ✅, Этап F+ 🚧 (Steps 1-9 ✅, 10-12 ⬜) → Этап H в очереди  
+> **Версия:** 0.6.1  
+> **Статус:** 🚧 В разработке — Этап G ✅, Этап F+ ✅ (review fixes applied), CI/CD ✅ → Этап H в очереди  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
-> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`) · 80/80 ✅ (`test_text_encoder.py`) · 182/182 ✅ (`test_cognition.py`) · 7/7 ✅ (`test_cognition_integration.py`) · 106/106 ✅ (`test_output.py`) · 7/7 ✅ (`test_output_integration.py`)
+> **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest, ruff lint)  
+> **Тесты:** 611/611 ✅ — `test_memory.py` (101) · `test_scheduler.py` (11) · `test_resource_monitor.py` (13) · `test_logging.py` (25) · `test_perception.py` (79) · `test_text_encoder.py` (80) · `test_cognition.py` (182) · `test_cognition_integration.py` (7) · `test_output.py` (106) · `test_output_integration.py` (7)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -283,7 +284,8 @@ cognitive-core/
 │   │   ├── reasoner.py                 # ✅ ReasoningStep, ReasoningTrace, Reasoner
 │   │   ├── action_selector.py          # ✅ ActionType, ActionDecision, ActionSelector
 │   │   ├── cognitive_core.py           # ✅ CognitiveCore — orchestrator (run → CognitiveResult)
-│   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend (F+)
+│   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend,
+│   │   │                               #    VectorRetrievalBackend, HybridRetrievalBackend (F+)
 │   │   ├── contradiction_detector.py   # ✅ Contradiction, ContradictionDetector (F+)
 │   │   └── uncertainty_monitor.py      # ✅ UncertaintySnapshot, UncertaintyMonitor (F+)
 │   │
@@ -294,7 +296,8 @@ cognitive-core/
 │   │   ├── __init__.py                 # Экспорты: BrainLogger, DigestGenerator, CycleInfo, TraceBuilder
 │   │   ├── brain_logger.py             # ✅ BrainLogger — JSONL, 5 уровней, категорийные файлы, индекс
 │   │   ├── digest_generator.py         # ✅ DigestGenerator + CycleInfo — human-readable сводки
-│   │   └── trace_builder.py            # ✅ TraceBuilder — trace chain, reconstruct_from_logger
+│   │   └── reasoning_tracer.py         # ✅ TraceBuilder — trace chain, reconstruct_from_logger
+│   │                                   #    (renamed from trace_builder.py to avoid conflict with output/)
 │   │
 │   ├── safety/                         # Безопасность (Фаза 11 — запланировано)
 │   │   └── __init__.py
@@ -303,7 +306,7 @@ cognitive-core/
 │   │   ├── __init__.py                 # Экспорты: 13 классов
 │   │   ├── trace_builder.py            # ✅ ExplainabilityTrace, OutputTraceBuilder
 │   │   ├── response_validator.py       # ✅ ValidationIssue, ValidationResult, ResponseValidator
-│   │   └── dialogue_responder.py       # ✅ DialogueResponder, OutputPipeline
+│   │   └── dialogue_responder.py       # ✅ DialogueResponder (template MVP + LLM TODO), OutputPipeline
 │   │
 │   └── data/                           # Постоянное хранилище
 │       └── memory/                     # JSON-файлы памяти (создаются автоматически)
@@ -888,8 +891,9 @@ brain/logging/
 │                              in-memory индекс trace_id/session_id, ротация 100 MB)
 ├── digest_generator.py     ← DigestGenerator + CycleInfo (cycle/session digests,
 │                              запись в digests/YYYY-MM-DD.txt)
-├── trace_builder.py        ← TraceBuilder (start/add_step/finish, reconstruct,
+├── reasoning_tracer.py     ← TraceBuilder (start/add_step/finish, reconstruct,
 │                              reconstruct_from_logger, to_human_readable)
+│                              (renamed from trace_builder.py to avoid conflict with output/)
 └── __init__.py             ← экспорты: BrainLogger, DigestGenerator, CycleInfo, TraceBuilder
 
 brain/perception/
@@ -933,8 +937,9 @@ brain/cognition/
 ├── action_selector.py      ← ActionType (5 types), ActionDecision, ActionSelector
 │                              (RESPOND_DIRECT/HEDGED/ASK/REFUSE/LEARN)
 ├── cognitive_core.py       ← CognitiveCore — orchestrator (run → CognitiveResult,
-│                              goal detection, EventBus publish, trace chain)
-└── __init__.py             ← экспорты 22 классов
+│                              goal detection, EventBus publish, trace chain,
+│                              HybridRetrievalBackend vector bridge)
+└── __init__.py             ← экспорты 24 классов (22 + VectorRetrievalBackend, HybridRetrievalBackend)
 
 tests/
 ├── test_cognition.py           ← 182/182 unit тестов ✅
@@ -949,7 +954,8 @@ brain/output/
 │                              (empty check, hedge check, length check, language check,
 │                              FALLBACK_RESPONSE_RU/EN, HEDGE_MARKERS_RU/EN)
 ├── dialogue_responder.py   ← DialogueResponder (generate → BrainOutput, hedging phrases
-│                              5 confidence bands, fallback templates per ActionType),
+│                              5 confidence bands, fallback templates per ActionType,
+│                              MVP: template-only, TODO: LLM bridge Stage H+),
 │                              OutputPipeline (trace_builder → validator → responder)
 └── __init__.py             ← экспорты 13 классов
 

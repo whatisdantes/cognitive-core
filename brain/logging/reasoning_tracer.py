@@ -1,7 +1,8 @@
 """
-brain/logging/trace_builder.py
+brain/logging/reasoning_tracer.py
 
 TraceBuilder — построитель цепочки причинности (trace chain).
+Renamed from trace_builder.py to avoid conflict with brain/output/trace_builder.py.
 
 Каждое решение системы должно быть прослеживаемо:
   input → memory → hypotheses → reasoning → decision → output

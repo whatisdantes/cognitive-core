@@ -60,6 +60,8 @@ from .action_selector import (
 from .retrieval_adapter import (
     RetrievalAdapter,
     KeywordRetrievalBackend,
+    VectorRetrievalBackend,
+    HybridRetrievalBackend,
 )
 from .contradiction_detector import (
     Contradiction,
@@ -107,6 +109,8 @@ __all__ = [
     # retrieval_adapter (F+)
     "RetrievalAdapter",
     "KeywordRetrievalBackend",
+    "VectorRetrievalBackend",
+    "HybridRetrievalBackend",
     # contradiction_detector (F+)
     "Contradiction",
     "ContradictionDetector",

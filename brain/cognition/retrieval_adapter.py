@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import re
 import time
 import uuid
@@ -293,6 +294,305 @@ class KeywordRetrievalBackend:
 
 
 # ---------------------------------------------------------------------------
+# VectorRetrievalBackend — cosine-similarity vector search
+# ---------------------------------------------------------------------------
+
+class VectorRetrievalBackend:
+    """
+    Vector-based retrieval backend using cosine similarity.
+
+    Stores vectors alongside content in an in-memory index.
+    Searches by computing cosine similarity between query vector
+    and all stored vectors.
+
+    Usage:
+        backend = VectorRetrievalBackend()
+        backend.add("ev_1", content="нейрон это клетка", vector=[0.1, 0.2, ...],
+                     memory_type="semantic", confidence=0.9)
+        results = backend.search_by_vector(query_vector=[0.1, 0.2, ...], top_n=5)
+    """
+
+    def __init__(self) -> None:
+        # evidence_id → {content, vector, memory_type, confidence, ...}
+        self._index: Dict[str, Dict[str, Any]] = {}
+
+    def add(
+        self,
+        evidence_id: str,
+        content: str,
+        vector: List[float],
+        memory_type: str = "unknown",
+        confidence: float = 0.5,
+        concept_refs: Optional[List[str]] = None,
+        source_refs: Optional[List[str]] = None,
+        timestamp: Optional[str] = None,
+    ) -> None:
+        """Add a vector entry to the index."""
+        if not vector or all(v == 0.0 for v in vector):
+            return  # skip zero vectors
+        self._index[evidence_id] = {
+            "content": content,
+            "vector": vector,
+            "memory_type": memory_type,
+            "confidence": confidence,
+            "concept_refs": concept_refs or [],
+            "source_refs": source_refs or [],
+            "timestamp": timestamp,
+        }
+
+    def remove(self, evidence_id: str) -> None:
+        """Remove an entry from the index."""
+        self._index.pop(evidence_id, None)
+
+    def search(self, query: str, top_n: int = 10) -> List[EvidencePack]:
+        """
+        Keyword fallback: search by text overlap (same as KeywordRetrievalBackend).
+        For vector search, use search_by_vector().
+        """
+        if not self._index:
+            return []
+
+        results: List[EvidencePack] = []
+        for eid, entry in self._index.items():
+            relevance = self._compute_text_relevance(query, entry["content"])
+            if relevance > 0.0:
+                results.append(EvidencePack(
+                    evidence_id=eid,
+                    content=entry["content"],
+                    memory_type=entry["memory_type"],
+                    confidence=entry["confidence"],
+                    concept_refs=list(entry["concept_refs"]),
+                    source_refs=list(entry["source_refs"]),
+                    timestamp=entry["timestamp"],
+                    relevance_score=relevance,
+                    freshness_score=0.8,
+                    retrieval_stage=1,
+                ))
+
+        results.sort(key=lambda e: (-e.relevance_score, e.evidence_id))
+        return results[:top_n]
+
+    def search_by_vector(
+        self,
+        query_vector: List[float],
+        top_n: int = 10,
+        min_similarity: float = 0.0,
+    ) -> List[EvidencePack]:
+        """
+        Search by cosine similarity between query_vector and stored vectors.
+
+        Args:
+            query_vector:    vector to compare against
+            top_n:           max results
+            min_similarity:  minimum cosine similarity threshold [0..1]
+
+        Returns:
+            List[EvidencePack] sorted by relevance_score (cosine sim) desc.
+        """
+        if not self._index or not query_vector:
+            return []
+
+        scored: List[tuple] = []  # (similarity, evidence_id, entry)
+
+        for eid, entry in self._index.items():
+            sim = self._cosine_similarity(query_vector, entry["vector"])
+            if sim >= min_similarity:
+                scored.append((sim, eid, entry))
+
+        # Sort by similarity desc, stable
+        scored.sort(key=lambda x: (-x[0], x[1]))
+
+        results: List[EvidencePack] = []
+        for sim, eid, entry in scored[:top_n]:
+            results.append(EvidencePack(
+                evidence_id=eid,
+                content=entry["content"],
+                memory_type=entry["memory_type"],
+                confidence=entry["confidence"],
+                concept_refs=list(entry["concept_refs"]),
+                source_refs=list(entry["source_refs"]),
+                timestamp=entry["timestamp"],
+                relevance_score=round(sim, 6),
+                freshness_score=0.8,
+                retrieval_stage=1,
+                supports_hypotheses=[],
+                metadata={"vector_similarity": round(sim, 6)},
+            ))
+
+        return results
+
+    @property
+    def size(self) -> int:
+        """Number of entries in the index."""
+        return len(self._index)
+
+    def clear(self) -> None:
+        """Clear the entire index."""
+        self._index.clear()
+
+    @staticmethod
+    def _cosine_similarity(a: List[float], b: List[float]) -> float:
+        """Compute cosine similarity between two vectors."""
+        if len(a) != len(b) or not a:
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        norm_a = math.sqrt(sum(x * x for x in a))
+        norm_b = math.sqrt(sum(x * x for x in b))
+        if norm_a < 1e-12 or norm_b < 1e-12:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    @staticmethod
+    def _compute_text_relevance(query: str, content: str) -> float:
+        """Keyword overlap relevance (fallback for text-only search)."""
+        if not query or not content:
+            return 0.0
+        query_words = set(re.findall(r'\w+', query.lower()))
+        content_words = set(re.findall(r'\w+', content.lower()))
+        if not query_words:
+            return 0.0
+        return len(query_words & content_words) / len(query_words)
+
+
+# ---------------------------------------------------------------------------
+# HybridRetrievalBackend — keyword + vector combined search
+# ---------------------------------------------------------------------------
+
+class HybridRetrievalBackend:
+    """
+    Hybrid retrieval backend: combines keyword search and vector search.
+
+    Strategy:
+      1. Run keyword search via KeywordRetrievalBackend → keyword_results
+      2. Run vector search via VectorRetrievalBackend → vector_results
+      3. Merge results using reciprocal rank fusion (RRF)
+      4. Return top_n merged results
+
+    If vector_backend has no entries or query_vector is None,
+    falls back to keyword-only search.
+
+    Usage:
+        keyword_backend = KeywordRetrievalBackend(memory_manager)
+        vector_backend = VectorRetrievalBackend()
+        hybrid = HybridRetrievalBackend(keyword_backend, vector_backend)
+        results = hybrid.search("нейрон", top_n=10)
+        results = hybrid.search_hybrid("нейрон", query_vector=[...], top_n=10)
+    """
+
+    # Weight for keyword vs vector results in RRF
+    KEYWORD_WEIGHT: float = 0.4
+    VECTOR_WEIGHT: float = 0.6
+    RRF_K: int = 60  # RRF constant
+
+    def __init__(
+        self,
+        keyword_backend: KeywordRetrievalBackend,
+        vector_backend: VectorRetrievalBackend,
+    ) -> None:
+        self._keyword = keyword_backend
+        self._vector = vector_backend
+
+    @property
+    def vector_backend(self) -> VectorRetrievalBackend:
+        """Access to the vector backend for adding entries."""
+        return self._vector
+
+    @property
+    def keyword_backend(self) -> KeywordRetrievalBackend:
+        """Access to the keyword backend."""
+        return self._keyword
+
+    def search(self, query: str, top_n: int = 10) -> List[EvidencePack]:
+        """
+        Keyword-only search (satisfies RetrievalBackend Protocol).
+        For hybrid search with vectors, use search_hybrid().
+        """
+        return self._keyword.search(query, top_n=top_n)
+
+    def search_hybrid(
+        self,
+        query: str,
+        query_vector: Optional[List[float]] = None,
+        top_n: int = 10,
+    ) -> List[EvidencePack]:
+        """
+        Hybrid search: keyword + vector with reciprocal rank fusion.
+
+        If query_vector is None or vector_backend is empty,
+        falls back to keyword-only search.
+        """
+        # Keyword results
+        keyword_results = self._keyword.search(query, top_n=top_n * 2)
+
+        # Vector results (if available)
+        vector_results: List[EvidencePack] = []
+        if (
+            query_vector is not None
+            and self._vector.size > 0
+            and any(v != 0.0 for v in query_vector)
+        ):
+            vector_results = self._vector.search_by_vector(
+                query_vector, top_n=top_n * 2,
+            )
+
+        # If no vector results, return keyword only
+        if not vector_results:
+            return keyword_results[:top_n]
+
+        # Reciprocal Rank Fusion
+        merged = self._rrf_merge(keyword_results, vector_results, top_n)
+        return merged
+
+    def _rrf_merge(
+        self,
+        keyword_results: List[EvidencePack],
+        vector_results: List[EvidencePack],
+        top_n: int,
+    ) -> List[EvidencePack]:
+        """
+        Merge two ranked lists using Reciprocal Rank Fusion (RRF).
+
+        RRF score = Σ weight / (k + rank)
+        where k = RRF_K constant, rank = 1-based position.
+        """
+        scores: Dict[str, float] = {}
+        evidence_map: Dict[str, EvidencePack] = {}
+
+        # Score keyword results
+        for rank, ev in enumerate(keyword_results, start=1):
+            eid = ev.evidence_id
+            rrf_score = self.KEYWORD_WEIGHT / (self.RRF_K + rank)
+            scores[eid] = scores.get(eid, 0.0) + rrf_score
+            if eid not in evidence_map:
+                evidence_map[eid] = ev
+
+        # Score vector results
+        for rank, ev in enumerate(vector_results, start=1):
+            eid = ev.evidence_id
+            rrf_score = self.VECTOR_WEIGHT / (self.RRF_K + rank)
+            scores[eid] = scores.get(eid, 0.0) + rrf_score
+            if eid not in evidence_map:
+                evidence_map[eid] = ev
+            else:
+                # Merge: keep higher relevance_score and add vector_similarity
+                existing = evidence_map[eid]
+                if ev.relevance_score > existing.relevance_score:
+                    evidence_map[eid] = ev
+
+        # Sort by RRF score desc
+        ranked_ids = sorted(scores.keys(), key=lambda eid: -scores[eid])
+
+        results: List[EvidencePack] = []
+        for eid in ranked_ids[:top_n]:
+            ev = evidence_map[eid]
+            # Update relevance_score to RRF score for downstream use
+            ev.relevance_score = round(scores[eid], 6)
+            results.append(ev)
+
+        return results
+
+
+# ---------------------------------------------------------------------------
 # RetrievalAdapter — facade с metadata enrichment
 # ---------------------------------------------------------------------------
 
@@ -304,27 +604,44 @@ class RetrievalAdapter:
       - Все 11 канонических полей EvidencePack заполнены
       - metadata содержит retrieval_backend и retrieved_at
       - Результат отсортирован по relevance_score (desc)
+
+    Supports:
+      - keyword-only search via retrieve(query)
+      - hybrid search via retrieve(query, query_vector=...)
+        when backend is HybridRetrievalBackend
     """
 
-    def __init__(self, backend: RetrievalBackend):
+    def __init__(
+        self,
+        backend: RetrievalBackend,
+        memory_manager: Any = None,
+    ):
         """
         Args:
-            backend: реализация RetrievalBackend (KeywordRetrievalBackend и т.д.)
+            backend:         реализация RetrievalBackend
+            memory_manager:  опциональная ссылка на MemoryManager (для совместимости)
         """
         self._backend = backend
+        self._memory = memory_manager
 
     @property
     def backend_name(self) -> str:
         """Имя текущего backend'а."""
         return type(self._backend).__name__
 
-    def retrieve(self, query: str, top_n: int = 10) -> List[EvidencePack]:
+    def retrieve(
+        self,
+        query: str,
+        top_n: int = 10,
+        query_vector: Optional[List[float]] = None,
+    ) -> List[EvidencePack]:
         """
         Извлечь evidence через backend с metadata enrichment.
 
         Args:
-            query:  текстовый запрос
-            top_n:  максимальное количество результатов
+            query:         текстовый запрос
+            top_n:         максимальное количество результатов
+            query_vector:  вектор запроса для гибридного поиска (optional)
 
         Returns:
             Список EvidencePack с гарантированными каноническими полями
@@ -333,7 +650,16 @@ class RetrievalAdapter:
             return []
 
         try:
-            evidence = self._backend.search(query, top_n=top_n)
+            # Use hybrid search if backend supports it and vector is provided
+            if (
+                query_vector is not None
+                and isinstance(self._backend, HybridRetrievalBackend)
+            ):
+                evidence = self._backend.search_hybrid(
+                    query, query_vector=query_vector, top_n=top_n,
+                )
+            else:
+                evidence = self._backend.search(query, top_n=top_n)
         except Exception as e:
             logger.error(
                 "[RetrievalAdapter] backend.search() failed: %s", e

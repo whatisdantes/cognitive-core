@@ -1,0 +1,68 @@
+# GitHub Actions CI/CD for cognitive-core
+# Runs on every push and pull request to main
+# Python 3.11+ / CPU-only / pytest
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ -q --tb=short --strict-markers
+
+      - name: Check imports (smoke test)
+        run: |
+          python -c "from brain.cognition import CognitiveCore; print('CognitiveCore OK')"
+          python -c "from brain.encoders import TextEncoder; print('TextEncoder OK')"
+          python -c "from brain.perception import TextIngestor; print('TextIngestor OK')"
+          python -c "from brain.memory import MemoryManager; print('MemoryManager OK')"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff (linter)
+        run: |
+          pip install ruff
+          ruff check brain/ tests/ --select E,F,W --ignore E501
+        continue-on-error: true

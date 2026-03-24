@@ -169,6 +169,7 @@ class Reasoner:
         goal: Goal,
         policy: Optional[PolicyConstraints] = None,
         resources: Optional[Dict[str, Any]] = None,
+        query_vector: Optional[List[float]] = None,
     ) -> ReasoningTrace:
         """
         Выполнить reasoning loop для запроса.
@@ -205,7 +206,7 @@ class Reasoner:
             state.iteration += 1
 
             # 1. Retrieve evidence (via adapter if available)
-            evidence = self._retrieve_evidence(query, state, trace)
+            evidence = self._retrieve_evidence(query, state, trace, query_vector)
 
             if not evidence:
                 trace.outcome = CognitiveOutcome.RETRIEVAL_FAILED.value
@@ -297,12 +298,14 @@ class Reasoner:
         query: str,
         state: ReasoningState,
         trace: ReasoningTrace,
+        query_vector: Optional[List[float]] = None,
     ) -> List[EvidencePack]:
         """
         Извлечь доказательства из памяти.
 
         Приоритет:
           1. RetrievalAdapter (если доступен) — структурированный retrieval
+             с поддержкой гибридного поиска (keyword + vector)
           2. Fallback: прямой memory_manager.search()
         """
         step_start = time.perf_counter()
@@ -310,9 +313,11 @@ class Reasoner:
         evidence: List[EvidencePack] = []
 
         try:
-            # Приоритет 1: RetrievalAdapter
+            # Приоритет 1: RetrievalAdapter (with optional vector)
             if self._retrieval_adapter is not None:
-                evidence = self._retrieval_adapter.retrieve(query, top_n=10)
+                evidence = self._retrieval_adapter.retrieve(
+                    query, top_n=10, query_vector=query_vector,
+                )
             # Fallback: прямой memory_manager.search()
             elif hasattr(self._memory, "search"):
                 results = self._memory.search(query, top_k=10)

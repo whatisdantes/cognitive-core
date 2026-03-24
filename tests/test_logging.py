@@ -18,7 +18,7 @@ from pathlib import Path
 
 from brain.logging.brain_logger import BrainLogger
 from brain.logging.digest_generator import CycleInfo, DigestGenerator
-from brain.logging.trace_builder import TraceBuilder
+from brain.logging.reasoning_tracer import TraceBuilder
 from brain.core.contracts import TraceRef, TraceStep
 
 
