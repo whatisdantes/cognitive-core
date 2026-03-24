@@ -90,7 +90,7 @@
 
 ### Шаг 6: ✅ Финальная проверка
 - [x] `pytest tests/ -v` — 309/309 passed (4.04s)
-- [ ] Коммит + push
+- [x] Коммит + push (commit d061e70, pushed to origin/main)
 
 ---
 
