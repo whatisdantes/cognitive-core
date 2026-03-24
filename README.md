@@ -1,9 +1,9 @@
 # 🧠 Искусственный Мультимодальный Мозг
 
-> **Версия:** 0.3.0  
-> **Статус:** 🚧 В разработке — Этап D (Perception) ✅ завершён → Этап E (Text Encoder) в очереди  
+> **Версия:** 0.4.0  
+> **Статус:** 🚧 В разработке — Этап E (Text Encoder) ✅ завершён → Этап F (Cognitive Core) в очереди  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
-> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`)
+> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`) · 80/80 ✅ (`test_text_encoder.py`)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -50,7 +50,7 @@ download_libraries.bat
 # 4. Проверить установку
 python check_deps.py
 
-# 5. Запустить все тесты (229/229)
+# 5. Запустить все тесты (309/309)
 python -m pytest tests/ -v
 
 # 6. Использовать Memory System в коде
@@ -236,7 +236,7 @@ MULTIMODAL BRAIN
 ```
 cognitive-core/
 │
-├── brain/                              # Основной пакет мозга (v0.3.0)
+├── brain/                              # Основной пакет мозга (v0.4.0)
 │   ├── __init__.py                     # Корневой пакет
 │   │
 │   ├── core/                           # Ядро автономного цикла
@@ -265,8 +265,9 @@ cognitive-core/
 │   │   ├── text_ingestor.py            # ✅ TextIngestor — .txt/.md/.pdf/.docx/.json/.csv
 │   │   └── input_router.py             # ✅ InputRouter — SHA256 dedup, quality policy, text-only MVP
 │   │
-│   ├── encoders/                       # Модальные энкодеры (Этап E — следующий)
-│   │   └── __init__.py
+│   ├── encoders/                       # Модальные энкодеры ✅ РЕАЛИЗОВАНО (Этап E, text-only)
+│   │   ├── __init__.py                 # Экспорты: TextEncoder
+│   │   └── text_encoder.py             # ✅ TextEncoder — sentence-transformers 768d / navec 300d fallback
 │   │
 │   ├── fusion/                         # Кросс-модальное слияние (Фаза 5 — запланировано)
 │   │   └── __init__.py
@@ -296,13 +297,14 @@ cognitive-core/
 │           ├── sources.json            # доверие к источникам (SourceMemory)
 │           └── procedures.json         # навыки и стратегии (ProceduralMemory)
 │
-├── tests/                              # Тесты (pytest-совместимые, 229/229 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 309/309 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_logging.py                 # ✅ 25/25 тестов Logging & Observability (unittest)
 │   ├── test_memory.py                  # ✅ 101/101 тестов системы памяти
 │   ├── test_perception.py              # ✅ 79/79 тестов Perception Layer
 │   ├── test_resource_monitor.py        # ✅ 13/13 тестов ResourceMonitor
-│   └── test_scheduler.py              # ✅ 11/11 тестов Scheduler
+│   ├── test_scheduler.py              # ✅ 11/11 тестов Scheduler
+│   └── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
@@ -697,14 +699,14 @@ python check_deps.py
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (229/229 ✅)
+# Запустить все тесты (309/309 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
 python -m pytest tests/test_memory.py -v
 ```
 
-### Состав тестового набора (229 тестов)
+### Состав тестового набора (309 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -713,7 +715,8 @@ python -m pytest tests/test_memory.py -v
 | `tests/test_perception.py` | Perception Layer (MetadataExtractor, TextIngestor, InputRouter) | 79 |
 | `tests/test_resource_monitor.py` | ResourceMonitor (policies, hysteresis, background thread) | 13 |
 | `tests/test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval, error handling) | 11 |
-| | **Итого** | **229** |
+| `tests/test_text_encoder.py` | Text Encoder (primary/fallback/failed modes, semantic checks, batch, cache) | 80 |
+| | **Итого** | **309** |
 
 ---
 
@@ -790,7 +793,7 @@ python -m pytest tests/test_memory.py -v
 |------|------|---------------------|--------|
 | [`00_autonomous_loop.md`](docs/layers/00_autonomous_loop.md) | Always-On Loop | Ствол мозга | ✅ Реализовано (Этап B) |
 | [`01_perception_layer.md`](docs/layers/01_perception_layer.md) | Perception Layer | Таламус | ✅ Реализовано (Этап D, text-only) |
-| [`02_modality_encoders.md`](docs/layers/02_modality_encoders.md) | Modality Encoders | Сенсорная кора | 📄 Спецификация (Этап E) |
+| [`02_modality_encoders.md`](docs/layers/02_modality_encoders.md) | Modality Encoders | Сенсорная кора | ✅ Реализовано (Этап E, text-only, 80/80) |
 | [`03_cross_modal_fusion.md`](docs/layers/03_cross_modal_fusion.md) | Cross-Modal Fusion | Ассоциативная кора | 📄 Спецификация (Этап K) |
 | [`04_memory_system.md`](docs/layers/04_memory_system.md) | Memory System | Гиппокамп + Кора | ✅ Реализовано (101/101) |
 | [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | 📋 Детальная спецификация (Этап F) |
@@ -814,7 +817,7 @@ python -m pytest tests/test_memory.py -v
 | 1 | Always-On Autonomous Loop | ✅ Этап B завершён (events ✅, contracts ✅, event_bus ✅, scheduler ✅, resource_monitor ✅) | 11+13 |
 | **2** | **Logging & Observability** | **✅ Завершено** | **25/25** |
 | **3** | **Perception Layer (text-only)** | **✅ Завершено (Этап D)** | **79/79** |
-| 4 | Modality Encoders | ⬜ Не начато | — |
+| **4** | **Modality Encoders (text-only)** | **✅ Завершено (Этап E)** | **80/80** |
 | 5 | Cross-Modal Fusion | ⬜ Не начато | — |
 | **6** | **Memory System** | **✅ Завершено** | **101/101** |
 | 7 | Cognitive Core | ⬜ Не начато | — |
@@ -875,20 +878,29 @@ brain/perception/
 │                              image/audio/video → warning+skip MVP)
 └── __init__.py             ← экспорты: TextIngestor, MetadataExtractor, InputRouter
 
+brain/encoders/
+├── text_encoder.py         ← TextEncoder (sentence-transformers 768d / navec 300d,
+│                              encode_event/encode/encode_batch, L2 norm,
+│                              SHA256 cache, language/message_type/keywords,
+│                              graceful degradation: ok/fallback/degraded/failed)
+└── __init__.py             ← экспорты: TextEncoder
+
 tests/
 ├── conftest.py             ← pytest fixtures + sys.path
 ├── test_memory.py          ← 101/101 тестов ✅
 ├── test_scheduler.py       ← 11/11 тестов ✅
 ├── test_resource_monitor.py← 13/13 тестов ✅
 ├── test_logging.py         ← 25/25 тестов ✅
-└── test_perception.py      ← 79/79 тестов ✅
+├── test_perception.py      ← 79/79 тестов ✅
+└── test_text_encoder.py    ← 80/80 тестов ✅
 ```
 
-### Следующий шаг: Этап E — Minimal Text Encoder
+### Следующий шаг: Этап F — Cognitive Core (Minimal)
 
 ```
-brain/encoders/
-├── text_encoder.py         ← TextEncoder (sentence-transformers → EncodedPercept,
-│                              fallback: navec при нехватке ресурсов)
+brain/cognition/
+├── context_builder.py      ← ContextBuilder (encode → retrieve → build context)
+├── goal_manager.py         ← GoalManager (создание, приоритизация, завершение целей)
+├── planner.py              ← Planner (декомпозиция целей на шаги)
 └── __init__.py             ← экспорты
 ```

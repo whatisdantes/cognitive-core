@@ -108,6 +108,9 @@ class Task(ContractMixin):
 class EncodedPercept(ContractMixin):
     """
     Результат кодирования единичного перцепта одной модальности.
+
+    Top-level поля — только стабильные, используемые downstream-слоями.
+    Всё остальное (keywords, encoding_time_ms, warnings, sentiment) → metadata.
     """
     percept_id: str
     modality: Modality
@@ -115,6 +118,10 @@ class EncodedPercept(ContractMixin):
     text: str = ""
     quality: float = 0.0
     source: str = ""
+    language: str = ""
+    message_type: str = "unknown"
+    encoder_model: str = ""
+    vector_dim: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
     trace_id: str = ""
     session_id: str = ""
