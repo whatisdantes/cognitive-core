@@ -1,9 +1,9 @@
 # 🧠 Искусственный Мультимодальный Мозг
 
-> **Версия:** 0.5.0  
-> **Статус:** 🚧 В разработке — Этап F (Cognitive Core) ✅ завершён → Этап G (Output Layer) в очереди  
+> **Версия:** 0.6.0  
+> **Статус:** 🚧 В разработке — Этап G ✅, Этап F+ 🚧 (Steps 1-9 ✅, 10-12 ⬜) → Этап H в очереди  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
-> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`) · 80/80 ✅ (`test_text_encoder.py`) · 182/182 ✅ (`test_cognition.py`) · 7/7 ✅ (`test_cognition_integration.py`)
+> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`) · 80/80 ✅ (`test_text_encoder.py`) · 182/182 ✅ (`test_cognition.py`) · 7/7 ✅ (`test_cognition_integration.py`) · 106/106 ✅ (`test_output.py`) · 7/7 ✅ (`test_output_integration.py`)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -50,7 +50,7 @@ download_libraries.bat
 # 4. Проверить установку
 python check_deps.py
 
-# 5. Запустить все тесты (~498)
+# 5. Запустить все тесты (~611)
 python -m pytest tests/ -v
 
 # 6. Использовать Memory System в коде
@@ -272,16 +272,20 @@ cognitive-core/
 │   ├── fusion/                         # Кросс-модальное слияние (Фаза 5 — запланировано)
 │   │   └── __init__.py
 │   │
-│   ├── cognition/                      # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F)
-│   │   ├── __init__.py                 # Экспорты: 22 класса
+│   ├── cognition/                      # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F + F+)
+│   │   ├── __init__.py                 # Экспорты: 30 классов (22 Stage F + 8 Stage F+)
 │   │   ├── context.py                  # ✅ CognitiveContext, CognitiveOutcome, EvidencePack,
-│   │   │                               #    GoalTypeLimits, PolicyConstraints, ReasoningState
+│   │   │                               #    GoalTypeLimits, PolicyConstraints, ReasoningState,
+│   │   │                               #    UncertaintyTrend, ReplanStrategy
 │   │   ├── goal_manager.py             # ✅ GoalStatus, Goal, GoalManager
-│   │   ├── planner.py                  # ✅ PlanStep, ExecutionPlan, Planner
-│   │   ├── hypothesis_engine.py        # ✅ Hypothesis, HypothesisEngine (associative+deductive)
+│   │   ├── planner.py                  # ✅ PlanStep, ExecutionPlan, Planner (5 replan strategies)
+│   │   ├── hypothesis_engine.py        # ✅ Hypothesis, HypothesisEngine (assoc+deduct+causal+analog)
 │   │   ├── reasoner.py                 # ✅ ReasoningStep, ReasoningTrace, Reasoner
 │   │   ├── action_selector.py          # ✅ ActionType, ActionDecision, ActionSelector
-│   │   └── cognitive_core.py           # ✅ CognitiveCore — orchestrator (run → CognitiveResult)
+│   │   ├── cognitive_core.py           # ✅ CognitiveCore — orchestrator (run → CognitiveResult)
+│   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend (F+)
+│   │   ├── contradiction_detector.py   # ✅ Contradiction, ContradictionDetector (F+)
+│   │   └── uncertainty_monitor.py      # ✅ UncertaintySnapshot, UncertaintyMonitor (F+)
 │   │
 │   ├── learning/                       # Система обучения (Этап I — запланировано)
 │   │   └── __init__.py
@@ -295,8 +299,11 @@ cognitive-core/
 │   ├── safety/                         # Безопасность (Фаза 11 — запланировано)
 │   │   └── __init__.py
 │   │
-│   ├── output/                         # Слой вывода (Фаза 10 — запланировано)
-│   │   └── __init__.py
+│   ├── output/                         # Слой вывода ✅ РЕАЛИЗОВАНО (Этап G)
+│   │   ├── __init__.py                 # Экспорты: 13 классов
+│   │   ├── trace_builder.py            # ✅ ExplainabilityTrace, OutputTraceBuilder
+│   │   ├── response_validator.py       # ✅ ValidationIssue, ValidationResult, ResponseValidator
+│   │   └── dialogue_responder.py       # ✅ DialogueResponder, OutputPipeline
 │   │
 │   └── data/                           # Постоянное хранилище
 │       └── memory/                     # JSON-файлы памяти (создаются автоматически)
@@ -305,7 +312,7 @@ cognitive-core/
 │           ├── sources.json            # доверие к источникам (SourceMemory)
 │           └── procedures.json         # навыки и стратегии (ProceduralMemory)
 │
-├── tests/                              # Тесты (pytest-совместимые, ~498 ✅)
+├── tests/                              # Тесты (pytest-совместимые, ~611 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_logging.py                 # ✅ 25/25 тестов Logging & Observability (unittest)
 │   ├── test_memory.py                  # ✅ 101/101 тестов системы памяти
@@ -314,7 +321,9 @@ cognitive-core/
 │   ├── test_scheduler.py              # ✅ 11/11 тестов Scheduler
 │   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
 │   ├── test_cognition.py             # ✅ 182/182 тестов Cognitive Core (unit)
-│   └── test_cognition_integration.py  # ✅ 7/7 тестов Cognitive Core (integration)
+│   ├── test_cognition_integration.py  # ✅ 7/7 тестов Cognitive Core (integration)
+│   ├── test_output.py                 # ✅ 106/106 тестов Output Layer (unit)
+│   └── test_output_integration.py     # ✅ 7/7 тестов Output Layer (integration)
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
@@ -709,14 +718,14 @@ python check_deps.py
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (~498 ✅)
+# Запустить все тесты (~611 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
 python -m pytest tests/test_memory.py -v
 ```
 
-### Состав тестового набора (~498 тестов)
+### Состав тестового набора (~611 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -728,7 +737,9 @@ python -m pytest tests/test_memory.py -v
 | `tests/test_text_encoder.py` | Text Encoder (primary/fallback/failed modes, semantic checks, batch, cache) | 80 |
 | `tests/test_cognition.py` | Cognitive Core (Context, Goals, Planner, Hypotheses, Reasoner, Actions, Core) | 182 |
 | `tests/test_cognition_integration.py` | Cognitive Core Integration (smoke tests with real MemoryManager) | 7 |
-| | **Итого** | **~498** |
+| `tests/test_output.py` | Output Layer (ExplainabilityTrace, OutputTraceBuilder, Validator, Responder, Pipeline) | 106 |
+| `tests/test_output_integration.py` | Output Layer Integration (CognitiveCore → OutputPipeline → BrainOutput) | 7 |
+| | **Итого** | **~611** |
 
 ---
 
@@ -833,9 +844,9 @@ python -m pytest tests/test_memory.py -v
 | 5 | Cross-Modal Fusion | ⬜ Не начато | — |
 | **6** | **Memory System** | **✅ Завершено** | **101/101** |
 | **7** | **Cognitive Core** | **✅ Завершено (Этап F)** | **182+7** |
-| 8 | Attention & Resource Control | ⬜ Не начато | — |
-| 9 | Learning Loop | ⬜ Не начато | — |
-| 10 | Explainability & Output | ⬜ Не начато | — |
+| **8** | **Explainability & Output** | **✅ Завершено (Этап G)** | **106+7** |
+| 9 | Attention & Resource Control | ⬜ Не начато | — |
+| 10 | Learning Loop | ⬜ Не начато | — |
 | 11 | Safety & Boundaries | ⬜ Не начато | — |
 | 12 | Self-Development & Reflection | ⬜ Не начато | — |
 | 13 | Metrics & KPI Dashboard | ⬜ Не начато | — |
@@ -930,12 +941,31 @@ tests/
 └── test_cognition_integration.py ← 7/7 integration smoke тестов ✅
 ```
 
-### Следующий шаг: Этап G — Output Layer
+brain/output/
+├── trace_builder.py        ← ExplainabilityTrace (dataclass, ContractMixin),
+│                              OutputTraceBuilder (build → trace, to_digest, to_json,
+│                              uncertainty levels: very_low/low/medium/high/very_high)
+├── response_validator.py   ← ValidationIssue, ValidationResult, ResponseValidator
+│                              (empty check, hedge check, length check, language check,
+│                              FALLBACK_RESPONSE_RU/EN, HEDGE_MARKERS_RU/EN)
+├── dialogue_responder.py   ← DialogueResponder (generate → BrainOutput, hedging phrases
+│                              5 confidence bands, fallback templates per ActionType),
+│                              OutputPipeline (trace_builder → validator → responder)
+└── __init__.py             ← экспорты 13 классов
+
+tests/
+├── test_output.py              ← 106/106 unit тестов ✅
+└── test_output_integration.py  ← 7/7 integration smoke тестов ✅
+```
+
+### Следующий шаг: завершение F+ (тесты) → Этап H — Attention & Resource Control
+
+**F+ осталось:** Steps 10-12 — ~90 unit тестов, ~5 integration тестов, bump v0.7.0
 
 ```
-brain/output/
-├── dialogue_responder.py   ← DialogueResponder (текстовый ответ + объяснение)
-├── action_proposer.py      ← ActionProposer (предложение действий)
-├── trace_builder.py        ← TraceBuilder (полная цепочка причинности)
+brain/attention/
+├── attention_controller.py ← AttentionController (goal-driven + salience-driven)
+├── modality_router.py      ← ModalityRouter (маршрутизация по приоритету)
+├── load_balancer.py        ← CognitiveLoadBalancer (балансировка нагрузки)
 └── __init__.py             ← экспорты
 ```

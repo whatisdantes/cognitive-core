@@ -10,8 +10,10 @@ brain/cognition/planner.py
 
 Аналог: дорсолатеральная префронтальная кора — декомпозиция и планирование.
 
-MVP: 4 шаблона декомпозиции (answer_question, learn_fact, verify_claim,
-explore_topic). replan() = retry only (без умного replanning).
+4 шаблона декомпозиции (answer_question, learn_fact, verify_claim,
+explore_topic). 5 стратегий replan: RETRY, NARROW_SCOPE, BROADEN_SCOPE,
+DECOMPOSE, ESCALATE. Защита от циклов: max_total_replans=3,
+used_strategies set, DECOMPOSE depth=1.
 """
 
 from __future__ import annotations
@@ -19,13 +21,14 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from brain.core.contracts import ContractMixin
 from .context import (
     CognitiveOutcome,
     GoalTypeLimits,
     ReasoningState,
+    ReplanStrategy,
 )
 from .goal_manager import Goal
 
@@ -283,7 +286,59 @@ class Planner:
         return None
 
     # ------------------------------------------------------------------
-    # Replan (MVP: retry only)
+    # Strategy selection
+    # ------------------------------------------------------------------
+
+    # Mapping: failure → preferred strategy
+    _FAILURE_STRATEGY_MAP: Dict[CognitiveOutcome, ReplanStrategy] = {
+        CognitiveOutcome.RETRIEVAL_FAILED: ReplanStrategy.BROADEN_SCOPE,
+        CognitiveOutcome.NO_HYPOTHESIS_GENERATED: ReplanStrategy.DECOMPOSE,
+        CognitiveOutcome.INSUFFICIENT_CONFIDENCE: ReplanStrategy.NARROW_SCOPE,
+        CognitiveOutcome.RESOURCE_BLOCKED: ReplanStrategy.ESCALATE,
+    }
+
+    def _select_strategy(
+        self,
+        failure: CognitiveOutcome,
+        used_strategies: Set[ReplanStrategy],
+    ) -> Optional[ReplanStrategy]:
+        """
+        Выбрать стратегию перепланирования на основе типа сбоя.
+
+        Порядок:
+          1. Preferred strategy для данного failure
+          2. RETRY как fallback
+          3. Skip already used strategies
+          4. None если все стратегии исчерпаны
+
+        Args:
+            failure:          тип сбоя
+            used_strategies:  уже использованные стратегии
+
+        Returns:
+            ReplanStrategy или None (все исчерпаны)
+        """
+        # Preferred strategy
+        preferred = self._FAILURE_STRATEGY_MAP.get(failure, ReplanStrategy.RETRY)
+
+        if preferred not in used_strategies:
+            return preferred
+
+        # Fallback: RETRY
+        if ReplanStrategy.RETRY not in used_strategies:
+            return ReplanStrategy.RETRY
+
+        # Try remaining strategies in order
+        for strategy in ReplanStrategy:
+            if strategy == ReplanStrategy.ESCALATE:
+                continue  # ESCALATE = give up, not a real retry
+            if strategy not in used_strategies:
+                return strategy
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Replan (5 strategies + cycle protection)
     # ------------------------------------------------------------------
 
     def replan(
@@ -293,29 +348,163 @@ class Planner:
         failure: CognitiveOutcome,
         current_retry: int = 0,
         max_retries: int = 2,
+        max_total_replans: int = 3,
+        used_strategies: Optional[Set[ReplanStrategy]] = None,
+        decompose_depth: int = 0,
     ) -> Optional[ExecutionPlan]:
         """
         Попытка перепланирования после сбоя.
 
-        MVP: единственная стратегия — retry (повторить тот же план).
-        Если current_retry >= max_retries → None (отказ).
+        5 стратегий:
+          RETRY:         повторить тот же план
+          NARROW_SCOPE:  убрать explore шаги
+          BROADEN_SCOPE: добавить дополнительный retrieve
+          DECOMPOSE:     разбить на 2 подплана (depth limit=1)
+          ESCALATE:      return None (отказ)
 
-        Возвращает новый ExecutionPlan или None.
+        Защита от циклов:
+          - max_total_replans=3 (глобальный ceiling)
+          - used_strategies: запрет повтора стратегии
+          - DECOMPOSE depth limit=1
+
+        Args:
+            failed_step:       шаг, на котором произошёл сбой
+            goal:              цель
+            failure:           тип сбоя
+            current_retry:     текущий номер повтора
+            max_retries:       максимум повторов (legacy, respected)
+            max_total_replans: глобальный лимит перепланирований
+            used_strategies:   уже использованные стратегии
+            decompose_depth:   текущая глубина DECOMPOSE
+
+        Returns:
+            Новый ExecutionPlan или None (отказ)
         """
+        if used_strategies is None:
+            used_strategies = set()
+
+        # Global ceiling
+        if current_retry >= max_total_replans:
+            logger.info(
+                "[Planner] replan: max_total_replans reached (%d/%d) for goal %s",
+                current_retry, max_total_replans, goal.goal_id,
+            )
+            return None
+
+        # Legacy max_retries check
         if current_retry >= max_retries:
             logger.info(
-                "[Planner] replan: max retries reached (%d/%d) for goal %s",
+                "[Planner] replan: max_retries reached (%d/%d) for goal %s",
                 current_retry, max_retries, goal.goal_id,
             )
             return None
 
+        # Select strategy
+        strategy = self._select_strategy(failure, used_strategies)
+        if strategy is None or strategy == ReplanStrategy.ESCALATE:
+            logger.info(
+                "[Planner] replan: escalate/no strategy for goal %s (failure=%s)",
+                goal.goal_id, failure.value,
+            )
+            return None
+
+        # Mark strategy as used
+        used_strategies.add(strategy)
+
         logger.info(
-            "[Planner] replan: retry %d/%d for goal %s (failure=%s)",
-            current_retry + 1, max_retries, goal.goal_id, failure.value,
+            "[Planner] replan: strategy=%s retry=%d/%d for goal %s (failure=%s)",
+            strategy.value, current_retry + 1, max_total_replans,
+            goal.goal_id, failure.value,
         )
 
-        # Создаём новый план (тот же шаблон, новые step_id)
+        # Execute strategy
+        plan: Optional[ExecutionPlan] = None
+
+        if strategy == ReplanStrategy.RETRY:
+            plan = self._replan_retry(goal, current_retry)
+
+        elif strategy == ReplanStrategy.NARROW_SCOPE:
+            plan = self._replan_narrow_scope(goal, current_retry)
+
+        elif strategy == ReplanStrategy.BROADEN_SCOPE:
+            plan = self._replan_broaden_scope(goal, current_retry)
+
+        elif strategy == ReplanStrategy.DECOMPOSE:
+            if decompose_depth >= 1:
+                logger.info(
+                    "[Planner] replan: DECOMPOSE depth limit reached (depth=%d)",
+                    decompose_depth,
+                )
+                return None
+            plan = self._replan_decompose(goal, current_retry)
+
+        if plan is not None:
+            plan.is_retry = True
+            plan.retry_count = current_retry + 1
+
+        return plan
+
+    # ------------------------------------------------------------------
+    # Strategy implementations
+    # ------------------------------------------------------------------
+
+    def _replan_retry(self, goal: Goal, current_retry: int) -> ExecutionPlan:
+        """RETRY: повторить тот же план (новые step_id)."""
+        return self.decompose(goal)
+
+    def _replan_narrow_scope(self, goal: Goal, current_retry: int) -> ExecutionPlan:
+        """NARROW_SCOPE: убрать explore-подобные шаги, оставить core."""
         plan = self.decompose(goal)
-        plan.is_retry = True
-        plan.retry_count = current_retry + 1
+
+        # Убираем шаги, которые не являются core reasoning
+        # Core: retrieve, hypothesize, score, select, act, store
+        # Remove: explore-like steps (в текущих шаблонах их нет,
+        # но если goal_type=explore_topic — сокращаем до 3 шагов)
+        if goal.goal_type == "explore_topic" and len(plan.steps) > 3:
+            # Оставляем: retrieve, select, act
+            core_types = {"retrieve", "select", "act"}
+            plan.steps = [s for s in plan.steps if s.step_type in core_types]
+            if not plan.steps:
+                plan.steps = [PlanStep(step_type="act", description="Сформировать ответ")]
+
+        return plan
+
+    def _replan_broaden_scope(self, goal: Goal, current_retry: int) -> ExecutionPlan:
+        """BROADEN_SCOPE: добавить дополнительный retrieve шаг в начало."""
+        plan = self.decompose(goal)
+
+        # Добавляем дополнительный retrieve в начало
+        extra_retrieve = PlanStep(
+            step_type="retrieve",
+            description="Расширенный поиск: дополнительные источники",
+            params={"broadened": True},
+        )
+        plan.steps.insert(0, extra_retrieve)
+
+        return plan
+
+    def _replan_decompose(self, goal: Goal, current_retry: int) -> ExecutionPlan:
+        """
+        DECOMPOSE: разбить на 2 подплана (retrieve+hypothesize, score+select+act).
+        Depth limit=1 (проверяется в replan()).
+        """
+        # Подплан 1: retrieve + hypothesize
+        sub_steps_1 = [
+            PlanStep(step_type="retrieve", description="Подплан 1: извлечь факты"),
+            PlanStep(step_type="hypothesize", description="Подплан 1: сгенерировать гипотезы"),
+        ]
+
+        # Подплан 2: score + select + act
+        sub_steps_2 = [
+            PlanStep(step_type="score", description="Подплан 2: оценить гипотезы"),
+            PlanStep(step_type="select", description="Подплан 2: выбрать лучшую"),
+            PlanStep(step_type="act", description="Подплан 2: сформировать ответ"),
+        ]
+
+        # Объединяем в один план
+        plan = ExecutionPlan(
+            goal_id=goal.goal_id,
+            steps=sub_steps_1 + sub_steps_2,
+        )
+
         return plan

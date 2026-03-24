@@ -10,8 +10,8 @@ brain/cognition/reasoner.py
 
 Аналог: префронтальная кора — рабочая память + рассуждение.
 
-Ring 1 (MVP): retrieve → hypothesize → score → select.
-Ring 2 (deep reasoning) → Stage F.2.
+Ring 1: retrieve → detect contradictions → hypothesize → score → select.
+Integrates: RetrievalAdapter, ContradictionDetector, UncertaintyMonitor.
 """
 
 from __future__ import annotations
@@ -30,9 +30,12 @@ from .context import (
     PolicyConstraints,
     ReasoningState,
 )
+from .contradiction_detector import ContradictionDetector
 from .goal_manager import Goal
 from .hypothesis_engine import Hypothesis, HypothesisEngine
 from .planner import Planner
+from .retrieval_adapter import RetrievalAdapter
+from .uncertainty_monitor import UncertaintyMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -115,12 +118,16 @@ class ReasoningTrace(ContractMixin):
 
 class Reasoner:
     """
-    Ring 1 reasoning loop: retrieve → hypothesize → score → select.
+    Ring 1 reasoning loop:
+      retrieve → detect contradictions → hypothesize → score → select.
 
     Зависимости (инъекция через конструктор):
-      - memory_manager: для извлечения фактов
-      - hypothesis_engine: для генерации и оценки гипотез
-      - planner: для check_stop_conditions
+      - memory_manager:         для извлечения фактов
+      - hypothesis_engine:      для генерации и оценки гипотез
+      - planner:                для check_stop_conditions
+      - retrieval_adapter:      для структурированного retrieval (optional)
+      - contradiction_detector: для обнаружения противоречий (optional)
+      - uncertainty_monitor:    для мониторинга тренда confidence (optional)
 
     Использование:
         reasoner = Reasoner(
@@ -141,10 +148,16 @@ class Reasoner:
         memory_manager: Any,
         hypothesis_engine: Optional[HypothesisEngine] = None,
         planner: Optional[Planner] = None,
+        retrieval_adapter: Optional[RetrievalAdapter] = None,
+        contradiction_detector: Optional[ContradictionDetector] = None,
+        uncertainty_monitor: Optional[UncertaintyMonitor] = None,
     ) -> None:
         self._memory = memory_manager
         self._hypothesis_engine = hypothesis_engine or HypothesisEngine()
         self._planner = planner or Planner()
+        self._retrieval_adapter = retrieval_adapter
+        self._contradiction_detector = contradiction_detector or ContradictionDetector()
+        self._uncertainty_monitor = uncertainty_monitor or UncertaintyMonitor()
 
     # ------------------------------------------------------------------
     # Основной метод
@@ -184,17 +197,23 @@ class Reasoner:
 
         state = ReasoningState()
 
+        # Reset uncertainty monitor for this run
+        self._uncertainty_monitor.reset()
+
         # --- Reasoning loop ---
         while True:
             state.iteration += 1
 
-            # 1. Retrieve evidence
+            # 1. Retrieve evidence (via adapter if available)
             evidence = self._retrieve_evidence(query, state, trace)
 
             if not evidence:
                 trace.outcome = CognitiveOutcome.RETRIEVAL_FAILED.value
                 trace.stop_reason = "Не удалось извлечь доказательства из памяти"
                 break
+
+            # 1b. Detect contradictions & flag evidence
+            evidence = self._detect_contradictions(evidence, state, trace)
 
             state.retrieved_evidence = evidence
 
@@ -226,6 +245,19 @@ class Reasoner:
                     set(eid for h in scored for eid in h.evidence_ids)
                 )
                 trace.final_confidence = best.confidence
+
+            # 4b. Update uncertainty monitor
+            uncertainty = self._uncertainty_monitor.update(state)
+            trace.metadata["uncertainty_trend"] = uncertainty.trend
+            trace.metadata["uncertainty_delta"] = uncertainty.delta
+
+            if uncertainty.should_stop:
+                trace.outcome = CognitiveOutcome.INSUFFICIENT_CONFIDENCE.value
+                trace.stop_reason = (
+                    f"Stagnation detected: confidence={state.current_confidence:.3f} "
+                    f"trend={uncertainty.trend}"
+                )
+                break
 
             # 5. Check stop conditions
             outcome = self._planner.check_stop_conditions(
@@ -269,19 +301,23 @@ class Reasoner:
         """
         Извлечь доказательства из памяти.
 
-        MVP: текстовый поиск через memory_manager.search().
+        Приоритет:
+          1. RetrievalAdapter (если доступен) — структурированный retrieval
+          2. Fallback: прямой memory_manager.search()
         """
         step_start = time.perf_counter()
 
         evidence: List[EvidencePack] = []
 
         try:
-            # Используем memory_manager.search() если доступен
-            if hasattr(self._memory, "search"):
+            # Приоритет 1: RetrievalAdapter
+            if self._retrieval_adapter is not None:
+                evidence = self._retrieval_adapter.retrieve(query, top_n=10)
+            # Fallback: прямой memory_manager.search()
+            elif hasattr(self._memory, "search"):
                 results = self._memory.search(query, top_k=10)
 
                 for i, result in enumerate(results):
-                    # result может быть MemorySearchResult или dict
                     if hasattr(result, "content"):
                         content = result.content
                         score = getattr(result, "score", 0.5)
@@ -321,10 +357,57 @@ class Reasoner:
             duration_ms=round(step_duration, 2),
             input_summary=f"query='{query[:80]}'",
             output_summary=f"{len(evidence)} evidence packs",
-            metadata={"evidence_count": len(evidence)},
+            metadata={
+                "evidence_count": len(evidence),
+                "used_adapter": self._retrieval_adapter is not None,
+            },
         ))
 
         return evidence
+
+    def _detect_contradictions(
+        self,
+        evidence: List[EvidencePack],
+        state: ReasoningState,
+        trace: ReasoningTrace,
+    ) -> List[EvidencePack]:
+        """
+        Обнаружить противоречия и пометить evidence.
+
+        Copy-on-write: возвращает новые EvidencePack.
+        """
+        step_start = time.perf_counter()
+
+        contradictions = self._contradiction_detector.detect(evidence)
+        flagged = self._contradiction_detector.flag_evidence(
+            evidence, contradictions,
+        )
+
+        # Update state
+        state.contradiction_flags = [
+            f"{c.type}:{c.shared_subject}" for c in contradictions
+        ]
+
+        step_duration = (time.perf_counter() - step_start) * 1000
+
+        if contradictions:
+            trace.add_step(ReasoningStep(
+                step_type="contradiction_check",
+                description=(
+                    f"Обнаружено {len(contradictions)} противоречий"
+                ),
+                duration_ms=round(step_duration, 2),
+                input_summary=f"{len(evidence)} evidence",
+                output_summary=", ".join(
+                    f"{c.type}:{c.shared_subject}" for c in contradictions
+                ),
+                metadata={
+                    "contradiction_count": len(contradictions),
+                    "types": [c.type for c in contradictions],
+                },
+            ))
+
+        return flagged
 
     def _generate_hypotheses(
         self,

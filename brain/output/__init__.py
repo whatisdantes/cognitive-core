@@ -1,9 +1,52 @@
 """
-output — Слой вывода (формирование ответов и действий).
+output — Слой вывода (формирование ответов и объяснений).
 
 Модули:
-    dialogue_responder.py — генерация текстовых ответов с объяснением
-    action_proposer.py    — предложение действий на основе целей и контекста
-    trace_builder.py      — построение и экспорт trace chain для объяснимости
-    explanation_builder.py — формирование человекочитаемых объяснений решений
+    trace_builder.py       — ExplainabilityTrace + OutputTraceBuilder
+    response_validator.py  — ValidationIssue + ValidationResult + ResponseValidator
+    dialogue_responder.py  — DialogueResponder + OutputPipeline + hedging phrases
+
+Использование:
+    from brain.output import OutputPipeline
+    pipeline = OutputPipeline()
+    brain_output = pipeline.process(cognitive_result)
 """
+
+from .trace_builder import (
+    ExplainabilityTrace,
+    OutputTraceBuilder,
+)
+from .response_validator import (
+    ValidationIssue,
+    ValidationResult,
+    ResponseValidator,
+    FALLBACK_RESPONSE_RU,
+    FALLBACK_RESPONSE_EN,
+)
+from .dialogue_responder import (
+    DialogueResponder,
+    OutputPipeline,
+    HEDGING_PHRASES_RU,
+    HEDGING_PHRASES_EN,
+    FALLBACK_TEMPLATES_RU,
+    FALLBACK_TEMPLATES_EN,
+)
+
+__all__ = [
+    # trace_builder
+    "ExplainabilityTrace",
+    "OutputTraceBuilder",
+    # response_validator
+    "ValidationIssue",
+    "ValidationResult",
+    "ResponseValidator",
+    "FALLBACK_RESPONSE_RU",
+    "FALLBACK_RESPONSE_EN",
+    # dialogue_responder
+    "DialogueResponder",
+    "OutputPipeline",
+    "HEDGING_PHRASES_RU",
+    "HEDGING_PHRASES_EN",
+    "FALLBACK_TEMPLATES_RU",
+    "FALLBACK_TEMPLATES_EN",
+]

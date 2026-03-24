@@ -53,6 +53,47 @@ class CognitiveOutcome(str, Enum):
 # Обратная совместимость (псевдоним):
 CognitiveFailure = CognitiveOutcome
 
+
+# ---------------------------------------------------------------------------
+# UncertaintyTrend — тренд неопределённости в reasoning loop
+# ---------------------------------------------------------------------------
+
+class UncertaintyTrend(str, Enum):
+    """
+    Тренд неопределённости (confidence) в reasoning loop.
+
+    Используется UncertaintyMonitor для определения динамики:
+      RISING  — confidence растёт (хорошо)
+      FALLING — confidence падает (плохо, возможна эскалация)
+      STABLE  — confidence стабильна (delta < threshold)
+      UNKNOWN — недостаточно данных (< 2 точки)
+    """
+    RISING  = "rising"
+    FALLING = "falling"
+    STABLE  = "stable"
+    UNKNOWN = "unknown"
+
+
+# ---------------------------------------------------------------------------
+# ReplanStrategy — стратегии перепланирования
+# ---------------------------------------------------------------------------
+
+class ReplanStrategy(str, Enum):
+    """
+    Стратегии перепланирования после сбоя в reasoning loop.
+
+    RETRY:          повторить тот же план (MVP baseline)
+    NARROW_SCOPE:   сузить фокус (убрать explore шаги)
+    BROADEN_SCOPE:  расширить запрос (добавить retrieve шаг)
+    DECOMPOSE:      разбить на подцели (depth limit = 1)
+    ESCALATE:       отказ, передать выше (return None)
+    """
+    RETRY          = "retry"
+    NARROW_SCOPE   = "narrow_scope"
+    BROADEN_SCOPE  = "broaden_scope"
+    DECOMPOSE      = "decompose"
+    ESCALATE       = "escalate"
+
 # Helper-наборы для быстрой проверки:
 NORMAL_OUTCOMES = frozenset({
     CognitiveOutcome.STOP_CONDITION_MET,
@@ -184,6 +225,7 @@ class EvidencePack(ContractMixin):
     freshness_score: float = 1.0
     retrieval_stage: int = 1
     supports_hypotheses: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

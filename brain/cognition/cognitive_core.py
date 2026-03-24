@@ -33,11 +33,14 @@ from .context import (
     GOAL_TYPE_LIMITS,
     PolicyConstraints,
 )
+from .contradiction_detector import ContradictionDetector
 from .goal_manager import Goal, GoalManager, GoalStatus
 from .planner import Planner
 from .hypothesis_engine import HypothesisEngine
 from .reasoner import Reasoner, ReasoningTrace
+from .retrieval_adapter import RetrievalAdapter, KeywordRetrievalBackend
 from .action_selector import ActionDecision, ActionSelector, ActionType
+from .uncertainty_monitor import UncertaintyMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +50,14 @@ class CognitiveCore:
     Orchestrator когнитивного ядра.
 
     Координирует:
-      - GoalManager       — управление целями
-      - Planner           — декомпозиция целей
-      - HypothesisEngine  — генерация гипотез
-      - Reasoner          — reasoning loop (Ring 1)
-      - ActionSelector    — выбор действия
+      - GoalManager            — управление целями
+      - Planner                — декомпозиция целей
+      - HypothesisEngine       — генерация гипотез
+      - Reasoner               — reasoning loop (Ring 1)
+      - ActionSelector         — выбор действия
+      - RetrievalAdapter       — структурированный retrieval
+      - ContradictionDetector  — обнаружение противоречий
+      - UncertaintyMonitor     — мониторинг тренда confidence
 
     Зависимости (инъекция через конструктор):
       - memory_manager:   для извлечения/сохранения фактов
@@ -82,10 +88,30 @@ class CognitiveCore:
         self._goal_manager = GoalManager()
         self._planner = Planner()
         self._hypothesis_engine = HypothesisEngine()
+        self._contradiction_detector = ContradictionDetector()
+        self._uncertainty_monitor = UncertaintyMonitor()
+
+        # RetrievalAdapter: создаём если memory_manager поддерживает retrieve()
+        self._retrieval_adapter: Optional[RetrievalAdapter] = None
+        if hasattr(self._memory, "retrieve"):
+            try:
+                backend = KeywordRetrievalBackend(self._memory)
+                self._retrieval_adapter = RetrievalAdapter(
+                    memory_manager=self._memory,
+                    backend=backend,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[CognitiveCore] Failed to create RetrievalAdapter: %s", e
+                )
+
         self._reasoner = Reasoner(
             memory_manager=self._memory,
             hypothesis_engine=self._hypothesis_engine,
             planner=self._planner,
+            retrieval_adapter=self._retrieval_adapter,
+            contradiction_detector=self._contradiction_detector,
+            uncertainty_monitor=self._uncertainty_monitor,
         )
         self._action_selector = ActionSelector()
 
@@ -479,5 +505,8 @@ class CognitiveCore:
             "has_encoder": self._encoder is not None,
             "has_event_bus": self._event_bus is not None,
             "has_resource_monitor": self._resource_monitor is not None,
+            "has_retrieval_adapter": self._retrieval_adapter is not None,
+            "has_contradiction_detector": True,
+            "has_uncertainty_monitor": True,
             "policy": self._policy.to_dict(),
         }

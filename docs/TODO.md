@@ -165,125 +165,233 @@
 
 ---
 
-## ЭТАП E — Minimal Text Encoder (дешёвый и стабильный путь)
+## ЭТАП E — Minimal Text Encoder (дешёвый и стабильный путь) ✅
 
-- [ ] **E.1** Реализовать `brain/encoders/text_encoder.py`:
+- [x] **E.1** Реализовать `brain/encoders/text_encoder.py`:
   - базовый рабочий энкодер (sentence-transformers),
-  - fallback при нехватке ресурсов.
-  **DoD:** `PerceptEvent -> EncodedPercept` стабильно.
+  - fallback при нехватке ресурсов (navec 300d).
+  - primary mode (768d), fallback mode (300d), degraded mode, failed mode.
+  - language detection (ru/en/mixed/unknown), message_type detection, keyword extraction.
+  - L2 normalization, caching, batch encoding.
+  **DoD:** `PerceptEvent -> EncodedPercept` стабильно. ✅ (80/80 тестов)
   → depends on: D.3, B.3
 
-- [ ] **E.2** Добавить lightweight режим:
+- [x] **E.2** Добавить lightweight режим:
   - переключение на fallback по флагу resource monitor.
-  **DoD:** при high load путь не падает, а деградирует предсказуемо.
+  - 4 режима: primary → fallback → degraded → failed.
+  - graceful degradation при отсутствии моделей.
+  **DoD:** при high load путь не падает, а деградирует предсказуемо. ✅
   → depends on: E.1, B.3
 
 ---
 
-## ЭТАП F — Cognitive MVP поверх готовой памяти
+## ЭТАП F — Cognitive MVP поверх готовой памяти ✅
 
 > Центральный контур: `retrieve -> hypotheses -> score -> select -> act`.
 
-### F1 — Context + Goal Set
-- [ ] **F.1** Реализовать `brain/cognition/context.py`:
-  - сбор рабочего контекста из MemoryManager,
-  - ограничение по объёму/важности.
-  **DoD:** контекст формируется детерминированно и логируется.
+### F1 — Context + Goal Set ✅
+- [x] **F.1** Реализовать `brain/cognition/context.py`:
+  - CognitiveContext, CognitiveOutcome (7 значений), EvidencePack, ReasoningState,
+  - PolicyConstraints, GoalTypeLimits, GOAL_TYPE_LIMITS (4 типа),
+  - NORMAL_OUTCOMES / FAILURE_OUTCOMES helper-наборы.
+  - Все dataclass через ContractMixin (to_dict/from_dict).
+  **DoD:** контекст формируется детерминированно и логируется. ✅
   → depends on: E.1, C.1
 
-- [ ] **F.2** Реализовать `brain/cognition/goal_manager.py` + `planner.py` (MVP):
-  - цели: `answer_question`, `verify_claim`.
-  **DoD:** цель ставится и декомпозируется в 1–3 шага.
+- [x] **F.2** Реализовать `brain/cognition/goal_manager.py` + `planner.py` (MVP):
+  - GoalStatus enum (PENDING/ACTIVE/DONE/FAILED/INTERRUPTED/CANCELLED),
+  - Goal dataclass (12 полей), GoalManager (priority queue + interrupted stack),
+  - PlanStep, ExecutionPlan, Planner (4 шаблона: answer_question, learn_fact, verify_claim, explore_topic),
+  - check_stop_conditions(), replan() (retry only MVP).
+  **DoD:** цель ставится и декомпозируется в 1–3 шага. ✅
   → depends on: F.1
 
-### F2 — Hypotheses + Score
-- [ ] **F.3** Реализовать `brain/cognition/hypothesis_engine.py` (template-based):
-  - генерация 1–3 гипотез,
-  - scoring на базе evidence/trust/coherence/contradiction.
-  **DoD:** на один запрос создаётся набор гипотез с числовым score.
+### F2 — Hypotheses + Score ✅
+- [x] **F.3** Реализовать `brain/cognition/hypothesis_engine.py` (template-based):
+  - Hypothesis dataclass (support_score, risk_score, final_score),
+  - HypothesisEngine: 2 стратегии (associative + deductive), max 3 гипотезы,
+  - score(), score_all(), rank() (stable sort, deterministic order).
+  **DoD:** на один запрос создаётся набор гипотез с числовым score. ✅
   → depends on: F.1, F.2
 
-- [ ] **F.4** Реализовать `brain/cognition/reasoner.py` (Ring 1 only):
-  - retrieve + ранжирование + выбор лучшей гипотезы.
-  **DoD:** выдаёт `CognitiveResult` со structured reasoning trace.
+- [x] **F.4** Реализовать `brain/cognition/reasoner.py` (Ring 1 only):
+  - ReasoningStep, ReasoningTrace (best_hypothesis_id, outcome, stop_reason),
+  - Reasoner: полный loop retrieve→hypothesize→score→select→check_stop.
+  **DoD:** выдаёт `CognitiveResult` со structured reasoning trace. ✅
   → depends on: F.3
 
-### F3 — Uncertainty + Action
-- [ ] **F.5** Реализовать `brain/cognition/uncertainty_monitor.py` + `action_selector.py`:
-  - ветки: ответить / ответить с оговоркой / запросить уточнение.
-  **DoD:** поведение меняется от confidence и contradiction flags.
+### F3 — Uncertainty + Action ✅
+- [x] **F.5** Реализовать `brain/cognition/action_selector.py`:
+  - ActionType enum (RESPOND_DIRECT, RESPOND_HEDGED, ASK_CLARIFICATION, REFUSE, LEARN),
+  - ActionDecision dataclass, ActionSelector (6 стратегий выбора).
+  - Ветки: ответить / ответить с оговоркой / запросить уточнение / отказать / запомнить.
+  **DoD:** поведение меняется от confidence и contradiction flags. ✅
   → depends on: F.4
 
+### F4 — Orchestrator ✅
+- [x] **F.6** Реализовать `brain/cognition/cognitive_core.py`:
+  - CognitiveCore.run() — единая точка входа (10-шаговая цепочка),
+  - _build_retrieval_query(), _create_goal(), _build_cognitive_result(),
+  - Публикация событий через EventBus.
+  **DoD:** CognitiveCore.run(query) → CognitiveResult с trace. ✅
+  → depends on: F.5
+
+### Тесты Stage F ✅
+- [x] 182 unit тестов в `tests/test_cognition.py` (182/182 passed)
+- [x] 7 integration smoke тестов в `tests/test_cognition_integration.py` (7/7 passed)
+- [x] `brain/cognition/__init__.py` — 22 публичных экспорта
+
 ---
 
-## ЭТАП F.5 — Retrieval Integration (стык памяти и reasoning)
+## ЭТАП G — Output MVP (объяснимый ответ наружу) ✅
 
-> Явный интеграционный этап между encoder и cognition, чтобы не прятать критичный стык внутри reasoner.
-
-- [ ] **F.6** Реализовать `MemoryManager.retrieve() -> reasoning input` адаптер:
-  - нормализация формата результатов retrieve,
-  - ранжирование кандидатов для hypothesis engine,
-  - contradiction-first сигнал в reasoning context.
-  **DoD:** reasoner получает единый и стабильный вход из memory retrieval без ad-hoc преобразований.
-  → depends on: F.2, C.3
-
----
-
-## ЭТАП G — Output MVP (объяснимый ответ наружу)
-
-- [ ] **G.1** Реализовать `brain/output/trace_builder.py`:
-  - превращает внутренний trace в читаемую структуру.
-  **DoD:** trace прикладывается к каждому ответу.
+- [x] **G.1** Реализовать `brain/output/trace_builder.py`:
+  - ExplainabilityTrace dataclass (ContractMixin), OutputTraceBuilder,
+  - uncertainty levels: very_low/low/medium/high/very_high,
+  - build(), to_digest(), to_json().
+  **DoD:** trace прикладывается к каждому ответу. ✅
   → depends on: C.3, F.4
 
-- [ ] **G.2** Реализовать `brain/output/dialogue_responder.py`:
-  - формирует `BrainOutput(text, confidence, trace_ref, digest)`.
-  **DoD:** пользователь получает текст + confidence + trace.
+- [x] **G.2** Реализовать `brain/output/dialogue_responder.py`:
+  - DialogueResponder (generate → BrainOutput), hedging phrases (5 confidence bands),
+  - fallback templates per ActionType (RU/EN),
+  - OutputPipeline (trace_builder → validator → responder).
+  **DoD:** пользователь получает текст + confidence + trace. ✅
   → depends on: G.1, F.5
 
-- [ ] **G.3** Реализовать `brain/output/response_validator.py` (минимум, MVP Safety):
-  - фильтр пустых/невалидных/опасных ответов на MVP-уровне.
-  **DoD:** невалидный output блокируется и логируется.
+- [x] **G.3** Реализовать `brain/output/response_validator.py` (минимум, MVP Safety):
+  - ValidationIssue, ValidationResult, ResponseValidator (max_length=2000),
+  - 4 проверки: empty→CRITICAL+fallback, low_confidence_no_hedge→WARNING+hedge,
+    too_long→WARNING+truncate, language_mismatch→INFO.
+  **DoD:** невалидный output блокируется и логируется. ✅
   → depends on: G.2
 
+### Тесты Stage G ✅
+- [x] 106 unit тестов в `tests/test_output.py` (106/106 passed)
+- [x] 7 integration smoke тестов в `tests/test_output_integration.py` (7/7 passed)
+- [x] `brain/output/__init__.py` — 13 публичных экспортов
+
 ---
 
-## ЭТАП H — Attention & Resource integration (после e2e)
+## ЭТАП F+ — Cognitive Extensions (расширение когнитивного ядра)
 
-> Подключаем только когда text-only цикл уже живой.
+> Отложенные из Stage F пункты + retrieval integration.
+> Три подгруппы: Retrieval, Reasoning, Planning.
 
-- [ ] **H.1** Реализовать `brain/core/attention_controller.py`:
-  - приоритизация задач по goal/salience.
+### F+.1 — Retrieval Integration (стык памяти и reasoning)
+
+- [x] **F+.1a** Реализовать `brain/cognition/retrieval_adapter.py`:
+  - `MemoryManager.retrieve() → List[EvidencePack]` адаптер,
+  - нормализация формата результатов retrieve в unified evidence format,
+  - ранжирование кандидатов для hypothesis engine,
+  - contradiction-first сигнал в reasoning context.
+  **DoD:** reasoner получает единый и стабильный вход из memory retrieval без ad-hoc преобразований. ✅
+  → depends on: F.6, C.3
+
+- [x] **F+.1b** Vector retrieval hook/interface:
+  - абстракция для подключения vector DB (FAISS/ChromaDB) в будущем,
+  - fallback на текущий keyword-based retrieval.
+  **DoD:** интерфейс готов, текущий retrieval работает через него. ✅ (RetrievalBackend Protocol)
+  → depends on: F+.1a, E.1
+
+### F+.2 — Reasoning Extensions (обогащение рассуждений)
+
+- [x] **F+.2a** Реализовать `brain/cognition/contradiction_detector.py` (text-only):
+  - обнаружение противоречий между evidence packs,
+  - contradiction score для гипотез,
+  - интеграция с ReasoningState.contradiction_flags.
+  **DoD:** противоречия обнаруживаются и влияют на scoring гипотез. ✅
+  → depends on: F.6, F+.1a
+
+- [x] **F+.2b** Реализовать `brain/cognition/uncertainty_monitor.py`:
+  - мониторинг уверенности на каждой итерации reasoning loop,
+  - uncertainty trend (растёт/падает/стабильна),
+  - сигнал для early stop или escalation.
+  **DoD:** uncertainty отслеживается и доступна в trace. ✅
+  → depends on: F.6
+
+- [x] **F+.2c** Causal reasoning стратегия для HypothesisEngine:
+  - новая стратегия генерации: причинно-следственные связи,
+  - `strategy="causal"` в Hypothesis.
+  **DoD:** HypothesisEngine генерирует causal гипотезы при наличии temporal/causal evidence. ✅
+  → depends on: F+.2a
+
+- [x] **F+.2d** Analogical reasoning стратегия для HypothesisEngine:
+  - новая стратегия генерации: аналогии между доменами,
+  - `strategy="analogical"` в Hypothesis.
+  **DoD:** HypothesisEngine генерирует analogical гипотезы при наличии cross-domain evidence. ✅
+  → depends on: F+.2a
+
+### F+.3 — Planning Extensions (умное перепланирование)
+
+- [x] **F+.3a** Реализовать `Planner.replan()` с полными стратегиями:
+  - стратегии: retry, narrow_scope, broaden_scope, decompose, escalate,
+  - выбор стратегии на основе типа failure и истории попыток,
+  - интеграция с ProceduralMemory (успешность стратегий).
+  **DoD:** replan() выбирает оптимальную стратегию, а не только retry. ✅ (ProceduralMemory integration → Stage I)
+  → depends on: F.6, F+.2b
+
+---
+
+## ЭТАП H — Attention & Resource Control (расширен)
+
+> Подключаем когда text-only цикл уже живой.
+> Включает SalienceEngine и Ring 2 (deep reasoning).
+
+- [ ] **H.1** Реализовать `brain/cognition/salience_engine.py`:
+  - оценка значимости (salience) входящих percepts и evidence,
+  - факторы: novelty, relevance to active goal, emotional weight, recency,
+  - salience score [0..1] для приоритизации.
+  **DoD:** каждый percept/evidence получает salience score.
+  → depends on: F+.1a, B.3
+
+- [ ] **H.2** Реализовать `brain/core/attention_controller.py`:
+  - goal-driven attention (фокус на активной цели),
+  - salience-driven attention (переключение на значимые стимулы),
+  - attention budget (ограничение параллельных потоков обработки),
+  - приоритизация задач по goal + salience.
   **DoD:** при нагрузке система сохраняет качество critical-path.
-  → depends on: G.2, B.3
+  → depends on: H.1, G.2, B.3
 
-- [ ] **H.2** Реализовать policy деградации:
-  - отключение тяжёлых веток reasoning при high load.
+- [ ] **H.3** Реализовать policy деградации:
+  - отключение тяжёлых веток reasoning при high load,
+  - graceful degradation: Ring 2 → Ring 1 → minimal response,
+  - интеграция с ResourceMonitor policies.
   **DoD:** деградация предсказуема, без падений.
-  → depends on: H.1
+  → depends on: H.2
+
+- [ ] **H.4** Ring 2 — Deep Reasoning (при наличии ресурсов):
+  - расширенный reasoning loop с multi-iteration refinement,
+  - использование contradiction signals и uncertainty trends,
+  - активируется только при достаточных ресурсах (ResourceMonitor.NORMAL/DEGRADED).
+  **DoD:** Ring 2 улучшает качество ответов при наличии ресурсов, не блокирует при их отсутствии.
+  → depends on: **F+ + H.3** (требует и когнитивные расширения, и ресурсный контроль)
 
 ---
 
-## ЭТАП I — Learning Loop (урезанный и поздний старт)
+## ЭТАП I — Learning Loop
 
 - [ ] **I.1** Реализовать `brain/learning/online_learner.py` (MVP):
-  - обновление confidence по результатам ответа/фидбэка.
+  - обновление confidence по результатам ответа/фидбэка,
+  - запись успешных/неуспешных reasoning traces в ProceduralMemory.
   **DoD:** feedback влияет на последующие ответы.
-  → depends on: G.2
+  → depends on: H, G
 
 - [ ] **I.2** Реализовать `brain/learning/knowledge_gap_detector.py`:
-  - фиксирует пробелы и создаёт обучающие подцели.
+  - фиксирует пробелы и создаёт обучающие подцели,
+  - анализ INSUFFICIENT_CONFIDENCE и RETRIEVAL_FAILED outcomes.
   **DoD:** при низком покрытии знаний создаётся gap-goal.
   → depends on: I.1
 
 - [ ] **I.3** Реализовать `brain/learning/replay_engine.py`:
-  - replay важных эпизодов в idle.
+  - replay важных эпизодов в idle,
+  - приоритизация по salience и recency.
   **DoD:** replay запускается без деградации realtime-ответов.
-  → depends on: I.1, H.2
+  → depends on: I.1, H.3
 
 ---
 
-## ЭТАП J — Расширение мультимодальности (позже)
+## ЭТАП J — Расширение мультимодальности
 
 - [ ] **J.1** Vision encoder path (ingest + encode)
 - [ ] **J.2** Audio encoder path (ingest + encode)
@@ -293,33 +401,70 @@
 
 ---
 
-## ЭТАП K — Cross-Modal Fusion (почти в конце)
+## ЭТАП K — Cross-Modal Fusion
 
 - [ ] **K.1** `brain/fusion/shared_space_projector.py`
 - [ ] **K.2** `brain/fusion/entity_linker.py`
 - [ ] **K.3** `brain/fusion/confidence_calibrator.py`
-- [ ] **K.4** `brain/fusion/contradiction_detector.py`
-  **DoD:** факты из разных модальностей связываются в единое представление.
-  → depends on: J.1, J.2, J.3
+- [ ] **K.4** `brain/fusion/contradiction_detector.py` (полная кросс-модальная версия):
+  - расширение text-only ContradictionDetector (F+.2a) на все модальности,
+  - shared multimodal evidence model.
+  **DoD:** факты из разных модальностей связываются в единое представление, противоречия обнаруживаются кросс-модально.
+  → depends on: J.1, J.2, J.3, F+.2a
 
 ---
 
-## ЭТАП L — Safety & Boundaries (Expanded Safety, до Reward)
+## ЭТАП L — Safety & Boundaries
 
-- [ ] **L.1** `brain/safety/source_trust.py`
-- [ ] **L.2** `brain/safety/conflict_detector.py`
-- [ ] **L.3** `brain/safety/boundary_guard.py`
-- [ ] **L.4** `brain/safety/audit_logger.py`
-  **DoD:** high-risk решения блокируются/аудируются.
+- [ ] **L.1** `brain/safety/source_trust.py`:
+  - оценка доверия к источникам информации.
+- [ ] **L.2** `brain/safety/conflict_detector.py`:
+  - обнаружение конфликтов между решениями и ограничениями.
+- [ ] **L.3** `brain/safety/boundary_guard.py`:
+  - жёсткие границы допустимых действий.
+- [ ] **L.4** `brain/safety/audit_logger.py`:
+  - аудит-лог всех safety-значимых решений.
+- [ ] **L.5** `brain/safety/policy_layer.py` — Decision Policy:
+  - ограничения на допустимые действия (action constraints),
+  - confidence gates (минимальный порог для действий),
+  - escalation rules (когда передавать решение выше),
+  - external tool/use policies (ограничения на внешние вызовы).
+  **Примечание:** PolicyLayer — это именно decision policy, а не дублирование
+  output validator (G.3) или degradation policy (H.3) или action selector (F.5).
+  **DoD:** high-risk решения блокируются/аудируются, policy gates работают.
   → depends on: G.3, K.4
+
+---
+
+## ЭТАП N — LLM Bridge (внешний LLM как расширение)
+
+> Подключение внешнего LLM после того, как safety boundaries установлены.
+> LLM Bridge зависит от output layer + cognition + safety, НЕ от reward.
+
+- [ ] **N.1** Реализовать `brain/bridges/llm_bridge.py`:
+  - абстракция для подключения внешнего LLM (OpenAI/Anthropic/local),
+  - request/response format adapter,
+  - rate limiting и cost tracking.
+- [ ] **N.2** Интеграция LLM в reasoning pipeline:
+  - LLM как optional hypothesis generator,
+  - LLM как optional response enhancer,
+  - fallback на local reasoning при недоступности LLM.
+- [ ] **N.3** Safety wrapper для LLM:
+  - фильтрация input/output через PolicyLayer,
+  - audit logging всех LLM вызовов.
+  **DoD:** LLM подключается как optional extension, система работает и без него.
+  → depends on: L, G.2
 
 ---
 
 ## ЭТАП M — Reward & Motivation (последним)
 
-- [ ] **M.1** `brain/motivation/reward_engine.py`
-- [ ] **M.2** `brain/motivation/motivation_engine.py`
-- [ ] **M.3** `brain/motivation/curiosity_engine.py`
+- [ ] **M.1** `brain/motivation/reward_engine.py`:
+  - reward signal на основе feedback и outcome quality.
+- [ ] **M.2** `brain/motivation/motivation_engine.py`:
+  - влияние reward на приоритет целей.
+- [ ] **M.3** `brain/motivation/curiosity_engine.py`:
+  - intrinsic motivation для exploration.
   **DoD:** reward сигнал влияет на приоритет целей и learning.
   → depends on: I.3, L.3
 
@@ -327,100 +472,89 @@
 
 ## 🧪 Тестовый план по этапам
 
-- [ ] **T.1 Contracts tests** (serialization, backward-compatibility)  
-- [ ] **T.2 Runtime tests** (event bus + scheduler + resource flags)  
-- [ ] **T.3 Text-only e2e tests** (input -> memory -> reason -> output -> trace/log)  
-- [ ] **T.4 Regression memory tests** (`python test_memory.py`, должно остаться 101/101)  
-- [ ] **T.5 Load/degradation tests** (CPU/RAM pressure сценарии)
+- [x] **T.1 Contracts tests** (serialization, backward-compatibility) — ✅ покрыто в test_cognition.py + test_output.py
+- [x] **T.2 Runtime tests** (event bus + scheduler + resource flags) — ✅ 24/24 (scheduler:11 + resource_monitor:13)
+- [ ] **T.3 Text-only e2e tests** (input → memory → reason → output → trace/log) — частично покрыто integration tests
+- [x] **T.4 Regression memory tests** — ✅ 101/101 (`test_memory.py`)
+- [ ] **T.5 Load/degradation tests** (CPU/RAM pressure сценарии) — ожидает Этап H
+
+**Текущее покрытие:** 611 тестов, 0 failures
+| Файл | Тестов | Статус |
+|------|--------|--------|
+| test_memory.py | 101 | ✅ |
+| test_cognition.py | 182 | ✅ |
+| test_cognition_integration.py | 7 | ✅ |
+| test_output.py | 106 | ✅ |
+| test_output_integration.py | 7 | ✅ |
+| test_text_encoder.py | 80 | ✅ |
+| test_perception.py | 79 | ✅ |
+| test_logging.py | 25 | ✅ |
+| test_resource_monitor.py | 13 | ✅ |
+| test_scheduler.py | 11 | ✅ |
+| **Итого** | **611** | **✅** |
 
 ---
 
-## 📅 План на 1 неделю по файлам (первая реализация)
+## 📅 Статус реализации (актуальный)
 
-### День 1 — Contracts + skeleton runtime ✅ (почти завершён)
-- [x] `brain/core/contracts.py` — реализовано
-- [x] `brain/core/event_bus.py` — реализовано (полный, не skeleton)
-- [x] `brain/core/scheduler.py` — реализовано (полный, 11/11 тестов)
-- [x] `brain/core/resource_monitor.py` — реализовано (полный, 13/13 тестов)
+### Завершено (Дни 1–7+) ✅
+- [x] День 1: Contracts + Runtime (A + B) — contracts.py, event_bus.py, scheduler.py, resource_monitor.py
+- [x] День 2: Logging (C) — brain_logger.py, digest_generator.py, trace_builder.py
+- [x] День 3: Text Perception (D) — text_ingestor.py, metadata_extractor.py, input_router.py
+- [x] День 4: Text Encoder (E) — text_encoder.py (primary + fallback + degraded modes)
+- [x] День 5–6: Cognitive Core (F) — 7 файлов cognition/, 182+7 тестов
+- [x] День 7: Output MVP (G) — 3 файла output/, 106+7 тестов
 
-### День 2 — Logging first ✅ ЗАВЕРШЕНО
-- [x] `brain/logging/brain_logger.py`   — BrainLogger (25/25 тестов)
-- [x] `brain/logging/digest_generator.py` — DigestGenerator + CycleInfo
-- [x] `brain/logging/trace_builder.py`  — TraceBuilder + reconstruct_from_logger
-
-### День 3 — Text ingestion MVP ✅ ЗАВЕРШЕНО
-- [x] `brain/perception/text_ingestor.py`   — TextIngestor (79/79 тестов)
-- [x] `brain/perception/metadata_extractor.py` — MetadataExtractor
-- [x] `brain/perception/input_router.py`    — InputRouter (text-only MVP)
-
-### День 4 — Text encoder MVP
-- `brain/encoders/text_encoder.py`
-- fallback logic + интеграция с resource monitor
-
-### День 5 — Cognitive core MVP (part 1)
-- `brain/cognition/context.py`
-- `brain/cognition/goal_manager.py`
-- `brain/cognition/planner.py`
-- `brain/cognition/hypothesis_engine.py`
-
-### День 6 — Cognitive core MVP (part 2)
-- `brain/cognition/reasoner.py`
-- `brain/cognition/uncertainty_monitor.py`
-- `brain/cognition/action_selector.py`
-- Retrieval integration (`F.6`) и фиксация формата reasoning input
-
-### День 7 — Output MVP + validation
-- `brain/output/trace_builder.py`
-- `brain/output/dialogue_responder.py`
-- `brain/output/response_validator.py` (MVP safety)
-
-### День 8–9 — E2E stabilization + tests
-- e2e test scripts for text-only loop
-- `python test_memory.py` regression
-- фиксы по trace/log/digest
-- минимальная документация новых модулей
-
-**Итог первой итерации (реалистичный горизонт 8–9 дней):**
-- живой text-only e2e цикл,
-- ответы с trace и confidence,
-- стабильный runtime без падений на базовой нагрузке.
+### Следующие этапы
+- [~] **F+** — Cognitive Extensions: retrieval adapter ✅, contradiction detector ✅, uncertainty monitor ✅, causal/analogical reasoning ✅, full replan ✅. Осталось: тесты (~90 unit + ~5 integration), финализация v0.7.0
+- [ ] **H** — Attention & Resource Control (~10–14 часов): salience engine, attention controller, degradation policy, Ring 2
+- [ ] **I** — Learning Loop (~8–10 часов): online learner, knowledge gap detector, replay engine
+- [ ] **J** — Multimodal Expansion (~16–20 часов): vision, audio, temporal encoders
+- [ ] **K** — Cross-Modal Fusion (~12–16 часов): shared space, entity linker, calibrator, full contradiction detector
+- [ ] **L** — Safety & Boundaries (~10–12 часов): source trust, conflict detector, boundary guard, audit, policy layer
+- [ ] **N** — LLM Bridge (~8–10 часов): LLM abstraction, reasoning integration, safety wrapper
+- [ ] **M** — Reward & Motivation (~10–12 часов): reward, motivation, curiosity engines
 
 ---
 
 ## 📌 Порядок реализации (коротко)
 
 ```text
-A Contracts
-→ B Runtime
-→ C Logging
-→ D Text Perception
-→ E Text Encoder
-→ F Cognitive MVP
-→ G Output MVP
-→ H Attention/Degradation
-→ I Learning (light)
-→ J Multimodal encoders
-→ K Cross-modal fusion
-→ L Safety
-→ M Reward/Motivation
+A Contracts           ✅
+→ B Runtime           ✅
+→ C Logging           ✅
+→ D Text Perception   ✅
+→ E Text Encoder      ✅
+→ F Cognitive MVP     ✅
+→ G Output MVP        ✅
+→ F+ Cognitive Extensions
+→ H Attention & Resource Control
+→ I Learning Loop
+→ J Multimodal Expansion
+→ K Cross-Modal Fusion
+→ L Safety & Boundaries
+→ N LLM Bridge
+→ M Reward & Motivation
 ```
 
 ---
 
-## 📊 Прогресс (новый формат)
+## 📊 Прогресс
 
-| Этап | Название | Статус | Риск/Сложность |
-|------|----------|--------|----------------|
-| A | Shared Contracts | [x] A.1 ✅, A.2 ✅ | Средний |
-| B | Minimal Runtime | [x] B.1 ✅, B.2 ✅, B.3 ✅ | Средний |
-| C | Logging & Observability (early) | [x] C.1 ✅, C.2 ✅, C.3 ✅ | Низкий |
-| D | Text-Only Perception | [x] D.1 ✅, D.2 ✅, D.3 ✅ | Средний |
-| E | Minimal Text Encoder | [ ] | Средний |
-| F | Cognitive MVP | [ ] | Высокий |
-| G | Output MVP | [ ] | Средний |
-| H | Attention & Degradation | [ ] | Средний |
-| I | Learning (light) | [ ] | Средний |
-| J | Multimodal Expansion | [ ] | Высокий |
-| K | Cross-Modal Fusion | [ ] | Высокий |
-| L | Safety & Boundaries (Expanded) | [ ] | Средний |
-| M | Reward & Motivation | [ ] | Высокий |
+| Этап | Название | Статус | Тесты | Риск/Сложность |
+|------|----------|--------|-------|----------------|
+| A | Shared Contracts | ✅ A.1, A.2 | — | Средний |
+| B | Minimal Runtime | ✅ B.1, B.2, B.3 | 24 | Средний |
+| C | Logging & Observability | ✅ C.1, C.2, C.3 | 25 | Низкий |
+| D | Text-Only Perception | ✅ D.1, D.2, D.3 | 79 | Средний |
+| E | Minimal Text Encoder | ✅ E.1, E.2 | 80 | Средний |
+| F | Cognitive MVP | ✅ F.1–F.6 | 189 | Высокий |
+| G | Output MVP | ✅ G.1–G.3 | 113 | Средний |
+| **F+** | **Cognitive Extensions** | **[~] В ПРОЦЕССЕ** (Steps 1-9 ✅, 10-12 ⬜) | — | **Высокий** |
+| H | Attention & Resource Control | [ ] | — | Средний |
+| I | Learning Loop | [ ] | — | Средний |
+| J | Multimodal Expansion | [ ] | — | Высокий |
+| K | Cross-Modal Fusion | [ ] | — | Высокий |
+| L | Safety & Boundaries | [ ] | — | Средний |
+| N | LLM Bridge | [ ] | — | Средний |
+| M | Reward & Motivation | [ ] | — | Высокий |

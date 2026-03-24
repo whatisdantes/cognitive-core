@@ -25,102 +25,102 @@
 
 ## Шаги реализации
 
-### Шаг 1: [ ] `brain/cognition/context.py` — Контексты и перечисления
-- [ ] CognitiveContext dataclass (session_id, cycle_id, trace_id, active_goal, goal_chain)
-- [ ] GoalTypeLimits dataclass (step_limit, time_limit_ms, confidence_threshold, stability_window)
-- [ ] GOAL_TYPE_LIMITS dict (answer_question, verify_claim, explore_topic, learn_fact)
-- [ ] PolicyConstraints dataclass (min_confidence=0.4, max_retries=2, goal_limits)
-- [ ] CognitiveOutcome enum (7 значений)
-- [ ] CognitiveFailure = CognitiveOutcome (alias)
-- [ ] NORMAL_OUTCOMES / FAILURE_OUTCOMES sets
-- [ ] EvidencePack dataclass
-- [ ] ReasoningState dataclass
-- [ ] Все через ContractMixin (to_dict/from_dict)
-- [ ] 309 старых тестов не сломаны
+### Шаг 1: [x] `brain/cognition/context.py` — Контексты и перечисления
+- [x] CognitiveContext dataclass (session_id, cycle_id, trace_id, active_goal, goal_chain)
+- [x] GoalTypeLimits dataclass (step_limit, time_limit_ms, confidence_threshold, stability_window)
+- [x] GOAL_TYPE_LIMITS dict (answer_question, verify_claim, explore_topic, learn_fact)
+- [x] PolicyConstraints dataclass (min_confidence=0.4, max_retries=2, goal_limits)
+- [x] CognitiveOutcome enum (7 значений)
+- [x] CognitiveFailure = CognitiveOutcome (alias)
+- [x] NORMAL_OUTCOMES / FAILURE_OUTCOMES sets
+- [x] EvidencePack dataclass
+- [x] ReasoningState dataclass
+- [x] Все через ContractMixin (to_dict/from_dict)
+- [x] 309 старых тестов не сломаны
 
-### Шаг 2: [ ] `brain/cognition/goal_manager.py` — Цели и управление
-- [ ] GoalStatus enum (PENDING, ACTIVE, DONE, FAILED, INTERRUPTED, CANCELLED)
-- [ ] Goal dataclass (goal_id, description, goal_type, priority, status, ...)
-- [ ] GoalManager class:
-  - [ ] push(goal) → None
-  - [ ] complete(goal_id) → None
-  - [ ] fail(goal_id, reason) → None
-  - [ ] peek() → Optional[Goal]
-  - [ ] get_active_chain() → List[Goal]
-  - [ ] interrupt(urgent_goal) → None
-  - [ ] resume_interrupted() → Optional[Goal]
-  - [ ] status() → Dict
+### Шаг 2: [x] `brain/cognition/goal_manager.py` — Цели и управление
+- [x] GoalStatus enum (PENDING, ACTIVE, DONE, FAILED, INTERRUPTED, CANCELLED)
+- [x] Goal dataclass (goal_id, description, goal_type, priority, status, ...)
+- [x] GoalManager class:
+  - [x] push(goal) → None
+  - [x] complete(goal_id) → None
+  - [x] fail(goal_id, reason) → None
+  - [x] peek() → Optional[Goal]
+  - [x] get_active_chain() → List[Goal]
+  - [x] interrupt(urgent_goal) → None
+  - [x] resume_interrupted() → Optional[Goal]
+  - [x] status() → Dict
 
-### Шаг 3: [ ] `brain/cognition/planner.py` — Планирование
-- [ ] PlanStep dataclass
-- [ ] ExecutionPlan dataclass
-- [ ] Planner class:
-  - [ ] decompose(goal) → ExecutionPlan (4 шаблона: answer_question, learn_fact, verify_claim, explore_topic)
-  - [ ] check_stop_conditions(state, limits, resources) → Optional[CognitiveOutcome]
-  - [ ] replan(failed_step, context, failure) → Optional[ExecutionPlan] (retry only)
+### Шаг 3: [x] `brain/cognition/planner.py` — Планирование
+- [x] PlanStep dataclass
+- [x] ExecutionPlan dataclass
+- [x] Planner class:
+  - [x] decompose(goal) → ExecutionPlan (4 шаблона: answer_question, learn_fact, verify_claim, explore_topic)
+  - [x] check_stop_conditions(state, limits, resources) → Optional[CognitiveOutcome]
+  - [x] replan(failed_step, context, failure) → Optional[ExecutionPlan] (retry only)
 
-### Шаг 4: [ ] `brain/cognition/hypothesis_engine.py` — Гипотезы
-- [ ] Hypothesis dataclass (с support_score, risk_score)
-- [ ] HypothesisEngine class:
-  - [ ] generate(query, facts) → List[Hypothesis] (max 3, associative + deductive)
-  - [ ] score(hypothesis, memory_manager) → float (support - risk formula)
-  - [ ] rank(hypotheses) → List[Hypothesis] (sorted, stable)
+### Шаг 4: [x] `brain/cognition/hypothesis_engine.py` — Гипотезы
+- [x] Hypothesis dataclass (с support_score, risk_score)
+- [x] HypothesisEngine class:
+  - [x] generate(query, facts) → List[Hypothesis] (max 3, associative + deductive)
+  - [x] score(hypothesis, memory_manager) → float (support - risk formula)
+  - [x] rank(hypotheses) → List[Hypothesis] (sorted, stable)
 
-### Шаг 5: [ ] `brain/cognition/reasoner.py` — Рассуждатель (Ring 1)
-- [ ] ReasoningStep dataclass
-- [ ] ReasoningTrace dataclass (+best_hypothesis_id, outcome, stop_reason)
-- [ ] Reasoner class:
-  - [ ] reason(query, context, resources) → ReasoningTrace
-  - [ ] _retrieve_evidence(query) → List[EvidencePack]
-  - [ ] _generate_hypotheses(query, facts) → List[Hypothesis]
-  - [ ] _score_and_select(hypotheses) → Hypothesis
-  - [ ] _build_trace(...) → ReasoningTrace
+### Шаг 5: [x] `brain/cognition/reasoner.py` — Рассуждатель (Ring 1)
+- [x] ReasoningStep dataclass
+- [x] ReasoningTrace dataclass (+best_hypothesis_id, outcome, stop_reason)
+- [x] Reasoner class:
+  - [x] reason(query, context, resources) → ReasoningTrace
+  - [x] _retrieve_evidence(query) → List[EvidencePack]
+  - [x] _generate_hypotheses(query, facts) → List[Hypothesis]
+  - [x] _score_and_select(hypotheses) → Hypothesis
+  - [x] _build_trace(...) → ReasoningTrace
 
-### Шаг 6: [ ] `brain/cognition/action_selector.py` — Выбор действия
-- [ ] ActionType enum (RESPOND_DIRECT, RESPOND_HEDGED, ASK_CLARIFICATION, REFUSE, LEARN)
-- [ ] ActionDecision dataclass
-- [ ] ActionSelector class:
-  - [ ] select(reasoning_trace, context, resources) → ActionDecision
-  - [ ] _score_action(action, trace, context, resources) → float
+### Шаг 6: [x] `brain/cognition/action_selector.py` — Выбор действия
+- [x] ActionType enum (RESPOND_DIRECT, RESPOND_HEDGED, ASK_CLARIFICATION, REFUSE, LEARN)
+- [x] ActionDecision dataclass
+- [x] ActionSelector class:
+  - [x] select(reasoning_trace, context, resources) → ActionDecision
+  - [x] _score_action(action, trace, context, resources) → float
 
-### Шаг 7: [ ] `brain/cognition/cognitive_core.py` — Orchestrator
-- [ ] CognitiveCore class:
-  - [ ] __init__(memory_manager, text_encoder, event_bus, resource_monitor)
-  - [ ] run(query, encoded_percept, resources) → CognitiveResult
-  - [ ] _build_retrieval_query(encoded) → str
-  - [ ] _create_goal(query, encoded) → Goal
-  - [ ] _build_cognitive_result(...) → CognitiveResult
-- [ ] Публикация событий через EventBus
+### Шаг 7: [x] `brain/cognition/cognitive_core.py` — Orchestrator
+- [x] CognitiveCore class:
+  - [x] __init__(memory_manager, text_encoder, event_bus, resource_monitor)
+  - [x] run(query, encoded_percept, resources) → CognitiveResult
+  - [x] _build_retrieval_query(encoded) → str
+  - [x] _create_goal(query, encoded) → Goal
+  - [x] _build_cognitive_result(...) → CognitiveResult
+- [x] Публикация событий через EventBus
 
-### Шаг 8: [ ] `brain/cognition/__init__.py` — Экспорты
-- [ ] Экспорт всех публичных классов через __all__
+### Шаг 8: [x] `brain/cognition/__init__.py` — Экспорты
+- [x] Экспорт всех публичных классов через __all__
 
-### Шаг 9: [ ] `tests/test_cognition.py` — Unit тесты (~130)
-- [ ] TestCognitiveContext (~10)
-- [ ] TestCognitiveOutcome (~8)
-- [ ] TestGoalTypeLimits (~6)
-- [ ] TestGoal (~8)
-- [ ] TestGoalManager (~22)
-- [ ] TestPlanStep (~8)
-- [ ] TestPlanner (~22)
-- [ ] TestHypothesis (~6)
-- [ ] TestHypothesisEngine (~20)
-- [ ] TestReasoningTrace (~6)
-- [ ] TestReasoner (~20)
-- [ ] TestActionType (~4)
-- [ ] TestActionSelector (~16)
-- [ ] TestImports (~4)
+### Шаг 9: [x] `tests/test_cognition.py` — Unit тесты (~130)
+- [x] TestCognitiveContext (~10)
+- [x] TestCognitiveOutcome (~8)
+- [x] TestGoalTypeLimits (~6)
+- [x] TestGoal (~8)
+- [x] TestGoalManager (~22)
+- [x] TestPlanStep (~8)
+- [x] TestPlanner (~22)
+- [x] TestHypothesis (~6)
+- [x] TestHypothesisEngine (~20)
+- [x] TestReasoningTrace (~6)
+- [x] TestReasoner (~20)
+- [x] TestActionType (~4)
+- [x] TestActionSelector (~16)
+- [x] TestImports (~4)
 
-### Шаг 10: [ ] `tests/test_cognition_integration.py` — Integration smoke tests (~7)
-- [ ] Реальный MemoryManager(auto_consolidate=False) + несколько фактов
-- [ ] CognitiveCore.run() → CognitiveResult с правильными полями
-- [ ] Trace содержит memory_refs
-- [ ] ActionDecision.action корректен для разных типов запросов
+### Шаг 10: [x] `tests/test_cognition_integration.py` — Integration smoke tests (~7)
+- [x] Реальный MemoryManager(auto_consolidate=False) + несколько фактов
+- [x] CognitiveCore.run() → CognitiveResult с правильными полями
+- [x] Trace содержит memory_refs
+- [x] ActionDecision.action корректен для разных типов запросов
 
-### Шаг 11: [ ] Финальная проверка и коммит
-- [ ] `pytest tests/ -v` — все тесты (~440 total)
-- [ ] README.md обновлён (v0.5.0, тесты, дерево, прогресс)
-- [ ] pyproject.toml → v0.5.0
+### Шаг 11: [x] Финальная проверка и коммит
+- [x] `pytest tests/ -v` — все тесты (611 total, план ~440)
+- [x] README.md обновлён (v0.6.0, тесты, дерево, прогресс)
+- [x] pyproject.toml → v0.6.0
 - [ ] Коммит + push
 
 ---

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cognitive-core"
-version = "0.5.0"
+version = "0.6.0"
 description = "Искусственный мультимодальный мозг — когнитивная система с памятью, восприятием и автономным циклом"
 readme = "README.md"
 requires-python = ">=3.11"
