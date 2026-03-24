@@ -1,9 +1,9 @@
 # 🧠 Искусственный Мультимодальный Мозг
 
-> **Версия:** 0.4.0  
-> **Статус:** 🚧 В разработке — Этап E (Text Encoder) ✅ завершён → Этап F (Cognitive Core) в очереди  
+> **Версия:** 0.5.0  
+> **Статус:** 🚧 В разработке — Этап F (Cognitive Core) ✅ завершён → Этап G (Output Layer) в очереди  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
-> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`) · 80/80 ✅ (`test_text_encoder.py`)
+> **Тесты:** 101/101 ✅ (`test_memory.py`) · 11/11 ✅ (`test_scheduler.py`) · 13/13 ✅ (`test_resource_monitor.py`) · 25/25 ✅ (`test_logging.py`) · 79/79 ✅ (`test_perception.py`) · 80/80 ✅ (`test_text_encoder.py`) · 182/182 ✅ (`test_cognition.py`) · 7/7 ✅ (`test_cognition_integration.py`)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -50,7 +50,7 @@ download_libraries.bat
 # 4. Проверить установку
 python check_deps.py
 
-# 5. Запустить все тесты (309/309)
+# 5. Запустить все тесты (~498)
 python -m pytest tests/ -v
 
 # 6. Использовать Memory System в коде
@@ -272,8 +272,16 @@ cognitive-core/
 │   ├── fusion/                         # Кросс-модальное слияние (Фаза 5 — запланировано)
 │   │   └── __init__.py
 │   │
-│   ├── cognition/                      # Когнитивное ядро (Этап F — запланировано)
-│   │   └── __init__.py
+│   ├── cognition/                      # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F)
+│   │   ├── __init__.py                 # Экспорты: 22 класса
+│   │   ├── context.py                  # ✅ CognitiveContext, CognitiveOutcome, EvidencePack,
+│   │   │                               #    GoalTypeLimits, PolicyConstraints, ReasoningState
+│   │   ├── goal_manager.py             # ✅ GoalStatus, Goal, GoalManager
+│   │   ├── planner.py                  # ✅ PlanStep, ExecutionPlan, Planner
+│   │   ├── hypothesis_engine.py        # ✅ Hypothesis, HypothesisEngine (associative+deductive)
+│   │   ├── reasoner.py                 # ✅ ReasoningStep, ReasoningTrace, Reasoner
+│   │   ├── action_selector.py          # ✅ ActionType, ActionDecision, ActionSelector
+│   │   └── cognitive_core.py           # ✅ CognitiveCore — orchestrator (run → CognitiveResult)
 │   │
 │   ├── learning/                       # Система обучения (Этап I — запланировано)
 │   │   └── __init__.py
@@ -297,14 +305,16 @@ cognitive-core/
 │           ├── sources.json            # доверие к источникам (SourceMemory)
 │           └── procedures.json         # навыки и стратегии (ProceduralMemory)
 │
-├── tests/                              # Тесты (pytest-совместимые, 309/309 ✅)
+├── tests/                              # Тесты (pytest-совместимые, ~498 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_logging.py                 # ✅ 25/25 тестов Logging & Observability (unittest)
 │   ├── test_memory.py                  # ✅ 101/101 тестов системы памяти
 │   ├── test_perception.py              # ✅ 79/79 тестов Perception Layer
 │   ├── test_resource_monitor.py        # ✅ 13/13 тестов ResourceMonitor
 │   ├── test_scheduler.py              # ✅ 11/11 тестов Scheduler
-│   └── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
+│   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
+│   ├── test_cognition.py             # ✅ 182/182 тестов Cognitive Core (unit)
+│   └── test_cognition_integration.py  # ✅ 7/7 тестов Cognitive Core (integration)
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
@@ -699,14 +709,14 @@ python check_deps.py
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (309/309 ✅)
+# Запустить все тесты (~498 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
 python -m pytest tests/test_memory.py -v
 ```
 
-### Состав тестового набора (309 тестов)
+### Состав тестового набора (~498 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -716,7 +726,9 @@ python -m pytest tests/test_memory.py -v
 | `tests/test_resource_monitor.py` | ResourceMonitor (policies, hysteresis, background thread) | 13 |
 | `tests/test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval, error handling) | 11 |
 | `tests/test_text_encoder.py` | Text Encoder (primary/fallback/failed modes, semantic checks, batch, cache) | 80 |
-| | **Итого** | **309** |
+| `tests/test_cognition.py` | Cognitive Core (Context, Goals, Planner, Hypotheses, Reasoner, Actions, Core) | 182 |
+| `tests/test_cognition_integration.py` | Cognitive Core Integration (smoke tests with real MemoryManager) | 7 |
+| | **Итого** | **~498** |
 
 ---
 
@@ -820,7 +832,7 @@ python -m pytest tests/test_memory.py -v
 | **4** | **Modality Encoders (text-only)** | **✅ Завершено (Этап E)** | **80/80** |
 | 5 | Cross-Modal Fusion | ⬜ Не начато | — |
 | **6** | **Memory System** | **✅ Завершено** | **101/101** |
-| 7 | Cognitive Core | ⬜ Не начато | — |
+| **7** | **Cognitive Core** | **✅ Завершено (Этап F)** | **182+7** |
 | 8 | Attention & Resource Control | ⬜ Не начато | — |
 | 9 | Learning Loop | ⬜ Не начато | — |
 | 10 | Explainability & Output | ⬜ Не начато | — |
@@ -895,12 +907,35 @@ tests/
 └── test_text_encoder.py    ← 80/80 тестов ✅
 ```
 
-### Следующий шаг: Этап F — Cognitive Core (Minimal)
+brain/cognition/
+├── context.py              ← CognitiveContext, CognitiveOutcome, EvidencePack,
+│                              GoalTypeLimits, PolicyConstraints, ReasoningState,
+│                              GOAL_TYPE_LIMITS, NORMAL_OUTCOMES, FAILURE_OUTCOMES
+├── goal_manager.py         ← GoalStatus, Goal, GoalManager (push/complete/fail/
+│                              cancel/interrupt/resume, priority queue + tree)
+├── planner.py              ← PlanStep, ExecutionPlan, Planner (decompose 4 templates,
+│                              check_stop_conditions, replan retry-only MVP)
+├── hypothesis_engine.py    ← Hypothesis, HypothesisEngine (associative + deductive,
+│                              max 3, deterministic, stable sort, score/rank)
+├── reasoner.py             ← ReasoningStep, ReasoningTrace, Reasoner
+│                              (retrieve → hypothesize → score → select loop)
+├── action_selector.py      ← ActionType (5 types), ActionDecision, ActionSelector
+│                              (RESPOND_DIRECT/HEDGED/ASK/REFUSE/LEARN)
+├── cognitive_core.py       ← CognitiveCore — orchestrator (run → CognitiveResult,
+│                              goal detection, EventBus publish, trace chain)
+└── __init__.py             ← экспорты 22 классов
+
+tests/
+├── test_cognition.py           ← 182/182 unit тестов ✅
+└── test_cognition_integration.py ← 7/7 integration smoke тестов ✅
+```
+
+### Следующий шаг: Этап G — Output Layer
 
 ```
-brain/cognition/
-├── context_builder.py      ← ContextBuilder (encode → retrieve → build context)
-├── goal_manager.py         ← GoalManager (создание, приоритизация, завершение целей)
-├── planner.py              ← Planner (декомпозиция целей на шаги)
+brain/output/
+├── dialogue_responder.py   ← DialogueResponder (текстовый ответ + объяснение)
+├── action_proposer.py      ← ActionProposer (предложение действий)
+├── trace_builder.py        ← TraceBuilder (полная цепочка причинности)
 └── __init__.py             ← экспорты
 ```
