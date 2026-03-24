@@ -308,13 +308,15 @@ router2.reset_dedup()
 ev4 = router2.route_text(text_sample, source="dedup_test")
 check(len(ev4) > 0, "reset_dedup: после сброса дедупликация работает заново")
 
-# route_file — .txt
+# route_file — .txt (используем свежий роутер, чтобы избежать dedup-коллизии
+# с предыдущим route_text на тех же данных — на Linux file bytes == text bytes)
+router_file = InputRouter()
 with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", encoding="utf-8", delete=False) as f:
     f.write(text_sample)
     tmp_route_txt = f.name
 
 try:
-    events_rf = router.route_file(tmp_route_txt)
+    events_rf = router_file.route_file(tmp_route_txt)
     check(len(events_rf) > 0, f"route_file(.txt): возвращает события (got {len(events_rf)})")
 finally:
     os.unlink(tmp_route_txt)
