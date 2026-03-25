@@ -159,7 +159,7 @@ MULTIMODAL BRAIN
 │   ├─ ConfidenceCalibrator     оценка качества слияния
 │   └─ ContradictionDetector    обнаружение противоречий между модальностями
 │
-├─ 4. Memory System ✅          ← Гиппокамп + Кора (память)
+├─ 4. Memory System             ← Гиппокамп + Кора (память)
 │   ├─ WorkingMemory            активный контекст (sliding window, max=20)
 │   ├─ SemanticMemory           граф понятий и связей (BFS, JSON)
 │   ├─ EpisodicMemory           хронология событий (кросс-модальные записи)
