@@ -16,7 +16,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
@@ -216,3 +216,79 @@ class BrainOutput(ContractMixin):
     digest: str = ""
     action: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# API Protocol контракты — формальные интерфейсы для dependency injection
+# ---------------------------------------------------------------------------
+
+@runtime_checkable
+class MemoryManagerProtocol(Protocol):
+    """
+    Формальный интерфейс MemoryManager для dependency injection.
+
+    Любой объект с методами store(), retrieve(), store_fact(), save_all()
+    удовлетворяет этому протоколу (structural subtyping).
+    """
+
+    def store(
+        self,
+        content: str,
+        importance: float = 0.5,
+        source_ref: str = "",
+        tags: Optional[List[str]] = None,
+    ) -> Any:
+        """Сохранить контент в память (working + episodic + semantic)."""
+        ...
+
+    def retrieve(self, query: str, top_n: int = 5) -> Any:
+        """Поиск по всем видам памяти."""
+        ...
+
+    def store_fact(
+        self,
+        concept: str,
+        description: str,
+        importance: float = 0.5,
+    ) -> Any:
+        """Явное сохранение факта в семантическую память."""
+        ...
+
+    def save_all(self) -> None:
+        """Сохранить все виды памяти на диск."""
+        ...
+
+
+@runtime_checkable
+class EventBusProtocol(Protocol):
+    """
+    Формальный интерфейс EventBus для dependency injection.
+
+    Любой объект с методами publish(), subscribe(), unsubscribe()
+    удовлетворяет этому протоколу.
+    """
+
+    def publish(self, event_type: str, data: Any = None) -> None:
+        """Опубликовать событие."""
+        ...
+
+    def subscribe(self, event_type: str, handler: Any) -> None:
+        """Подписаться на тип события."""
+        ...
+
+    def unsubscribe(self, event_type: str, handler: Any) -> None:
+        """Отписаться от типа события."""
+        ...
+
+
+@runtime_checkable
+class ResourceMonitorProtocol(Protocol):
+    """
+    Формальный интерфейс ResourceMonitor для dependency injection.
+
+    Любой объект с методом snapshot() удовлетворяет этому протоколу.
+    """
+
+    def snapshot(self) -> Any:
+        """Получить текущий снимок ресурсов (ResourceState или dict)."""
+        ...

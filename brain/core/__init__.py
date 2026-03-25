@@ -31,6 +31,9 @@ from .contracts import (
     TraceChain,
     CognitiveResult,
     BrainOutput,
+    MemoryManagerProtocol,
+    EventBusProtocol,
+    ResourceMonitorProtocol,
 )
 from .event_bus import EventBus, BusStats
 from .scheduler import Scheduler, TaskPriority, SchedulerConfig, SchedulerStats
@@ -62,6 +65,10 @@ __all__ = [
     "TraceChain",
     "CognitiveResult",
     "BrainOutput",
+    # protocols
+    "MemoryManagerProtocol",
+    "EventBusProtocol",
+    "ResourceMonitorProtocol",
     # event_bus
     "EventBus",
     "BusStats",

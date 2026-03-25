@@ -31,9 +31,8 @@ Unit-тесты для VectorRetrievalBackend и HybridRetrievalBackend.
 
 import math
 import pytest
-from unittest.mock import MagicMock
 from dataclasses import dataclass, field
-from typing import List, Optional, Any
+from typing import List, Optional
 
 from brain.cognition.context import EvidencePack
 from brain.cognition.retrieval_adapter import (

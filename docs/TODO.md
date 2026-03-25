@@ -63,72 +63,84 @@
 > Выявлено аудитом (AUDIT_REPORT.md + внешний ревью). Исправить ДО начала Этапа H.
 > Приоритеты: P0 — блокирует / P1 — важно после стабилизации / P2 — улучшения / P3 — backlog
 
-### P0 — Критические (сделать в первую очередь)
+### P0 — Критические ✅ (ВСЕ ВЫПОЛНЕНЫ — 660/660 тестов)
 
-- [ ] **P0.1** Синхронизировать версии во всех файлах:
-  - `brain/__init__.py`: `"0.3.0"` → `"0.6.1"`
-  - `pyproject.toml`: `"0.6.0"` → `"0.6.1"`
-  - `README.md`: уже `0.6.1` (источник правды)
-  - Обновить число тестов в README: `611` → `650`
-  - Рассмотреть single-source-of-truth (importlib.metadata)
+- [x] **P0.1** Синхронизировать версии во всех файлах:
+  - `brain/__init__.py`: `"0.3.0"` → `"0.6.1"` ✅
+  - `pyproject.toml`: `"0.6.0"` → `"0.6.1"` ✅
+  - `README.md`: тесты `611` → `660`, версия → `0.6.1` ✅
 
-- [ ] **P0.2** Очистить артефакты `NaN` в README.md:
-  - Повреждённый текст в середине файла (`NaN retry-only MVP)`, обрезанные блоки кода)
-  - Видно пользователям на GitHub — критично для доверия к проекту
+- [x] **P0.2** Очистить артефакты `NaN` в README.md ✅:
+  - Убраны `NaN retry-only MVP)` и починены обрезанные блоки кода
+  - Добавлена строка `test_vector_retrieval.py` в таблицу тестов
 
-- [ ] **P0.3** Проверить/очистить артефакт `NaN` в `brain/core/events.py`:
-  - Строка `NaNlity: float = 1.0` — повреждённый код
-  - Файл работает (тесты проходят), но содержит мусорные данные
+- [x] **P0.3** Проверить/очистить артефакт `NaN` в `brain/core/events.py` ✅:
+  - Файл уже чист (NaN был в README, не в events.py)
 
-- [ ] **P0.4** Зафиксировать API-контракты между слоями:
-  - Ввести `MemoryManagerProtocol` в `contracts.py`
-  - Убрать лишний duck typing в `cognition/retrieval` (`Any`, `getattr()`, `hasattr()`)
-  - Проверить остальные стыки модулей на неявные интерфейсы
-  - **Зачем:** система гибкая, но хрупкая при росте; скрытые несовместимости между модулями
+- [x] **P0.4** Зафиксировать API-контракты между слоями ✅:
+  - Добавлены `MemoryManagerProtocol`, `EventBusProtocol`, `ResourceMonitorProtocol` в `contracts.py`
+  - Экспортированы из `brain/core/__init__.py`
+  - `CognitiveCore` конструктор типизирован Protocol'ами
 
-- [ ] **P0.5** Убрать скрытые side effects в retrieval:
-  - Перестать мутировать `EvidencePack` в RRF merge
-  - Создавать копию объекта с новым `relevance_score`
-  - **Зачем:** один и тот же EvidencePack может быть переиспользован с "испорченным" score
+- [x] **P0.5** Убрать скрытые side effects в retrieval ✅:
+  - `retrieval_adapter.py`: `dataclasses.replace()` в `_ensure_canonical()`, `_enrich()`, `_rrf_merge()`
+  - `retrieve()` loop captures return values
 
-- [ ] **P0.6** Добавить E2E тест полного pipeline + сделать lint блокирующим:
-  - Добавить интеграционный тест: `query → retrieval → cognition → output`
-  - В CI убрать `continue-on-error: true` для ruff (или разделить на advisory/blocking)
-  - **Зачем:** линтер не является quality gate, e2e сценарии отсутствуют
+- [x] **P0.6** Добавить E2E тест полного pipeline + сделать lint блокирующим ✅:
+  - `tests/test_e2e_pipeline.py`: 10 E2E тестов (Protocol conformance + full pipeline)
+  - `.github/workflows/ci.yml`: убран `continue-on-error: true` для ruff
 
 ### P1 — Важно после стабилизации базы
 
-- [ ] **P1.1** Усилить keyword retrieval: BM25 или TF-IDF:
-  - Заменить примитивный keyword overlap на BM25/TF-IDF с нормализацией текста
-  - **Зачем:** текущее пересечение слов слишком слабое для смыслового поиска, плохо переживает морфологию
+- [x] **P1.0** Ruff lint cleanup — 131 → 0 errors ✅:
+  - 103 auto-fixed by `ruff --fix` (F401 unused imports, F541 f-strings)
+  - 9× E702 semicolons split manually (`test_memory.py`)
+  - 4× E741 ambiguous variable `l` → `line` (`test_scheduler.py`, `test_resource_monitor.py`)
+  - 14× `# noqa: E402` for intentional late imports after try/except blocks
+  - 2× `# noqa: F401` for side-effect imports (`numpy`, `psutil` in `semantic_memory.py`)
+  - CI ruff lint step is now **blocking** (no `continue-on-error`)
+
+- [x] **P1.1** Усилить keyword retrieval: BM25 reranking ✅:
+  - `BM25Scorer` класс в `retrieval_adapter.py`: TF-IDF с BM25 формулой (k1=1.5, b=0.75)
+  - `KeywordRetrievalBackend._bm25_rerank()`: reranking кандидатов после keyword overlap
+  - Опциональная лемматизация через pymorphy3 (graceful fallback без зависимости)
+  - 55 тестов в `tests/test_bm25.py` (unit + integration)
+  - **Scope:** reranking only, НЕ замена VectorRetrievalBackend
 
 - [ ] **P1.2** Заменить brute-force vector search на ANN:
   - Вынести vector retrieval на FAISS или hnswlib
   - **Зачем:** текущий O(n*d) подходит для MVP, но станет узким местом при росте памяти
 
-- [ ] **P1.3** Добавить нормальный persistence layer:
-  - SQLite MVP для памяти и индексов, JSON как импорт/экспорт или dev-формат
-  - **Зачем:** надёжнее сохранение состояния, проще миграции
+- [x] **P1.3** SQLite persistence layer (P1c-a) ✅:
+  - `brain/memory/storage.py`: MemoryDatabase (WAL, RLock, schema versioning, full CRUD)
+  - `brain/memory/migrate.py`: JSON→SQLite миграция (backup, idempotent, marker)
+  - Все memory модули: `storage_backend="auto"|"sqlite"|"json"`, `db` параметр
+  - `MemoryManager`: создаёт MemoryDatabase, транзакционный `save_all()`
+  - 58 тестов в `tests/test_storage.py` (CRUD, transactions, threads, migration, integration)
+  - **Scope:** persistence parity only. FTS5/indexed search → P1c-b
 
-- [ ] **P1.4** Передавать `session_id` в `CognitiveCore.run()`:
-  - Сделать session_id внешним параметром или частью session context
-  - **Зачем:** без этого трудно строить многоходовую сессию и связывать trace/память/output
+- [x] **P1.4** Передавать `session_id` в `CognitiveCore.run()` ✅:
+  - Добавлен `session_id: Optional[str] = None` в `run()` и `_create_context()`
+  - Если None — генерируется автоматически (обратная совместимость)
 
-- [ ] **P1.5** CI: добавить `pytest-cov` для измерения покрытия
+- [x] **P1.5** CI: добавить `pytest-cov` для измерения покрытия ✅:
+  - `pytest-cov>=5.0` в dev deps, `--cov=brain --cov-report=term-missing --cov-report=xml` в CI
 
-- [ ] **P1.6** Синхронизировать зависимости:
-  - `tqdm` в requirements.txt но не в pyproject.toml
-  - `ruff` не в dev deps но используется в CI
-  - Рассмотреть requirements.txt как deprecated в пользу pyproject.toml
+- [x] **P1.6** Синхронизировать зависимости ✅:
+  - `tqdm>=4.66.0` добавлен в core deps pyproject.toml
+  - `ruff>=0.4.0`, `mypy>=1.10` добавлены в dev deps
+  - `requirements.txt` помечен DEPRECATED, синхронизирован с pyproject.toml
 
-- [ ] **P1.7** `docs/ARCHITECTURE.md` — пометить как концептуальный или обновить:
-  - Описывает CognitiveNeuron (дендриты, мембранный потенциал) — НЕ реализован в текущем коде
-  - Вводит в заблуждение новых контрибьюторов
+- [x] **P1.7** `docs/ARCHITECTURE.md` — пометить как концептуальный ✅:
+  - Добавлен disclaimer ⚠️ КОНЦЕПТУАЛЬНЫЙ ДОКУМЕНТ вверху файла
 
-- [ ] **P1.8** BrainLogger: добавить `atexit` handler для закрытия файловых дескрипторов:
-  - Файлы открываются через `open()` и хранятся в `_files` dict без гарантии закрытия
+- [x] **P1.8** BrainLogger: добавить `atexit` handler ✅:
+  - `atexit.register()` через `weakref.ref` (не удерживает объект в памяти)
 
-- [ ] **P1.9** CI: добавить mypy/pyright для type checking
+- [x] **P1.9** CI: добавить mypy/pyright для type checking ✅:
+  - Новый job `typecheck` в CI с `mypy --ignore-missing-imports`
+  - Секция `[tool.mypy]` в pyproject.toml
+  - Non-blocking (`|| true`) на первом этапе
 
 ### P2 — Улучшения качества и масштабируемости
 
@@ -587,12 +599,14 @@
 - [x] **T.4 Regression memory tests** — ✅ 101/101 (`test_memory.py`)
 - [ ] **T.5 Load/degradation tests** (CPU/RAM pressure сценарии) — ожидает Этап H
 
-**Текущее покрытие:** 650 тестов, 0 failures (подтверждено: Python 3.14.3, 130.88s)
+**Текущее покрытие:** 773 тестов, 0 failures (подтверждено: Python 3.14.3)
 | Файл | Тестов | Статус |
 |------|--------|--------|
+| test_bm25.py | 55 | ✅ |
 | test_memory.py | 101 | ✅ |
 | test_cognition.py | 182 | ✅ |
 | test_cognition_integration.py | 7 | ✅ |
+| test_e2e_pipeline.py | 10 | ✅ |
 | test_output.py | 106 | ✅ |
 | test_output_integration.py | 7 | ✅ |
 | test_text_encoder.py | 80 | ✅ |
@@ -600,8 +614,9 @@
 | test_logging.py | 25 | ✅ |
 | test_resource_monitor.py | 13 | ✅ |
 | test_scheduler.py | 11 | ✅ |
+| test_storage.py | 58 | ✅ |
 | test_vector_retrieval.py | 39 | ✅ |
-| **Итого** | **650** | **✅** |
+| **Итого** | **773** | **✅** |
 
 ---
 

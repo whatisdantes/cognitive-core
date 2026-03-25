@@ -21,9 +21,12 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 _logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from .storage import MemoryDatabase
 
 try:
     import psutil
@@ -192,11 +195,20 @@ class EpisodicMemory:
         max_episodes: int = 5_000,
         importance_threshold: float = IMPORTANCE_PROTECT,
         autosave_every: int = 20,
+        storage_backend: str = "auto",
+        db: Optional["MemoryDatabase"] = None,
     ):
         self._data_path = data_path
         self._max_episodes = max_episodes
         self._importance_threshold = importance_threshold
         self._autosave_every = autosave_every
+        self._db = db
+
+        # Определяем backend
+        if storage_backend == "auto":
+            self._backend = "sqlite" if db is not None else "json"
+        else:
+            self._backend = storage_backend
 
         self._episodes: List[Episode] = []          # хронологический список
         self._index_by_id: Dict[str, Episode] = {}  # быстрый доступ по ID
@@ -472,6 +484,13 @@ class EpisodicMemory:
     # ─── Персистентность ─────────────────────────────────────────────────────
 
     def save(self, path: Optional[str] = None):
+        """Сохранить эпизодическую память (SQLite или JSON)."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._save_sqlite()
+        else:
+            self._save_json(path)
+
+    def _save_json(self, path: Optional[str] = None):
         """Сохранить эпизодическую память на диск (JSON)."""
         path = path or self._data_path
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -492,10 +511,25 @@ class EpisodicMemory:
         else:
             os.rename(tmp_path, path)
 
-        _logger.info("Эпизодическая память сохранена: %d эпизодов -> %s", len(self._episodes), path)
+        _logger.info("Эпизодическая память сохранена (JSON): %d эпизодов -> %s", len(self._episodes), path)
+
+    def _save_sqlite(self):
+        """Сохранить эпизодическую память в SQLite."""
+        if self._db is None:
+            return
+        episodes_data = [ep.to_dict() for ep in self._episodes]
+        self._db.save_all_episodes(episodes_data)
+        _logger.info("Эпизодическая память сохранена (SQLite): %d эпизодов", len(self._episodes))
 
     def _load(self):
-        """Загрузить эпизодическую память с диска."""
+        """Загрузить эпизодическую память."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._load_sqlite()
+        else:
+            self._load_json()
+
+    def _load_json(self):
+        """Загрузить эпизодическую память с диска (JSON)."""
         if not os.path.exists(self._data_path):
             return
 
@@ -513,9 +547,28 @@ class EpisodicMemory:
                         self._index_by_concept[key] = []
                     self._index_by_concept[key].append(ep.episode_id)
 
-            _logger.info("Эпизодическая память загружена: %d эпизодов <- %s", len(self._episodes), self._data_path)
+            _logger.info("Эпизодическая память загружена (JSON): %d эпизодов <- %s", len(self._episodes), self._data_path)
         except Exception as e:
             _logger.warning("Ошибка загрузки эпизодической памяти: %s", e)
+
+    def _load_sqlite(self):
+        """Загрузить эпизодическую память из SQLite."""
+        if self._db is None:
+            return
+        try:
+            rows = self._db.load_all_episodes()
+            for ep_dict in rows:
+                ep = Episode.from_dict(ep_dict)
+                self._episodes.append(ep)
+                self._index_by_id[ep.episode_id] = ep
+                for concept in ep.concepts:
+                    key = concept.lower().strip()
+                    if key not in self._index_by_concept:
+                        self._index_by_concept[key] = []
+                    self._index_by_concept[key].append(ep.episode_id)
+            _logger.info("Эпизодическая память загружена (SQLite): %d эпизодов", len(self._episodes))
+        except Exception as e:
+            _logger.warning("Ошибка загрузки эпизодической памяти из SQLite: %s", e)
 
     def _maybe_autosave(self):
         """Автосохранение каждые N операций."""
@@ -553,7 +606,7 @@ class EpisodicMemory:
         """Вывести статус в консоль."""
         s = self.status()
         print(f"\n{'─'*50}")
-        print(f"🧠 Эпизодическая память")
+        print("🧠 Эпизодическая память")
         print(f"  Эпизодов: {s['episode_count']} / {s['max_episodes']}")
         print(f"  Защищённых: {s['protected_count']}")
         print(f"  Средняя важность: {s['avg_importance']:.2%}")

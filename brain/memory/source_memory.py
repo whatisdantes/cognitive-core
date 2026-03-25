@@ -18,9 +18,12 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 _logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from .storage import MemoryDatabase
 
 
 # ─── Запись об источнике ─────────────────────────────────────────────────────
@@ -154,10 +157,19 @@ class SourceMemory:
         data_path: str = "brain/data/memory/sources.json",
         default_trust: float = 0.7,
         autosave_every: int = 30,
+        storage_backend: str = "auto",
+        db: Optional["MemoryDatabase"] = None,
     ):
         self._data_path = data_path
         self._default_trust = default_trust
         self._autosave_every = autosave_every
+        self._db = db
+
+        # Определяем backend
+        if storage_backend == "auto":
+            self._backend = "sqlite" if db is not None else "json"
+        else:
+            self._backend = storage_backend
 
         self._sources: Dict[str, SourceRecord] = {}
         self._write_count = 0
@@ -310,7 +322,14 @@ class SourceMemory:
     # ─── Персистентность ─────────────────────────────────────────────────────
 
     def save(self, path: Optional[str] = None):
-        """Сохранить память об источниках на диск."""
+        """Сохранить память об источниках (SQLite или JSON)."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._save_sqlite()
+        else:
+            self._save_json(path)
+
+    def _save_json(self, path: Optional[str] = None):
+        """Сохранить память об источниках на диск (JSON)."""
         path = path or self._data_path
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -330,10 +349,27 @@ class SourceMemory:
         else:
             os.rename(tmp_path, path)
 
-        _logger.info("Память об источниках сохранена: %d источников -> %s", len(self._sources), path)
+        _logger.info("Память об источниках сохранена (JSON): %d источников -> %s", len(self._sources), path)
+
+    def _save_sqlite(self):
+        """Сохранить память об источниках в SQLite."""
+        if self._db is None:
+            return
+        sources_data = [
+            (sid, rec.to_dict()) for sid, rec in self._sources.items()
+        ]
+        self._db.save_all_sources(sources_data)
+        _logger.info("Память об источниках сохранена (SQLite): %d источников", len(self._sources))
 
     def _load(self):
-        """Загрузить память об источниках с диска."""
+        """Загрузить память об источниках."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._load_sqlite()
+        else:
+            self._load_json()
+
+    def _load_json(self):
+        """Загрузить память об источниках с диска (JSON)."""
         if not os.path.exists(self._data_path):
             return
 
@@ -344,9 +380,21 @@ class SourceMemory:
             for sid, rec_dict in data.get("sources", {}).items():
                 self._sources[sid] = SourceRecord.from_dict(rec_dict)
 
-            _logger.info("Память об источниках загружена: %d источников <- %s", len(self._sources), self._data_path)
+            _logger.info("Память об источниках загружена (JSON): %d источников <- %s", len(self._sources), self._data_path)
         except Exception as e:
             _logger.warning("Ошибка загрузки памяти об источниках: %s", e)
+
+    def _load_sqlite(self):
+        """Загрузить память об источниках из SQLite."""
+        if self._db is None:
+            return
+        try:
+            rows = self._db.load_all_sources()
+            for rec_dict in rows:
+                self._sources[rec_dict["source_id"]] = SourceRecord.from_dict(rec_dict)
+            _logger.info("Память об источниках загружена (SQLite): %d источников", len(self._sources))
+        except Exception as e:
+            _logger.warning("Ошибка загрузки памяти об источниках из SQLite: %s", e)
 
     def _maybe_autosave(self):
         if self._write_count % self._autosave_every == 0:
@@ -380,7 +428,7 @@ class SourceMemory:
         """Вывести статус в консоль."""
         s = self.status()
         print(f"\n{'─'*50}")
-        print(f"🧠 Память об источниках")
+        print("🧠 Память об источниках")
         print(f"  Источников: {s['source_count']}")
         print(f"  Надёжных: {s['reliable_count']} | Заблокированных: {s['blacklisted_count']}")
         print(f"  Среднее доверие: {s['avg_trust_score']:.2%}")

@@ -420,7 +420,7 @@ print(f"\n{'='*60}")
 total = passed + failed
 print(f"  Perception Tests: {passed}/{total} passed")
 if failed == 0:
-    print(f"  [OK] Vse testy proshli!")
+    print("  [OK] Vse testy proshli!")
 else:
     print(f"  {RED}FAILED: {failed} тестов провалено{RESET}")
 print(f"{'='*60}\n")

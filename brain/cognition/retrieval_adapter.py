@@ -22,6 +22,7 @@ brain/cognition/retrieval_adapter.py
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import logging
 import math
@@ -33,6 +34,218 @@ from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from .context import EvidencePack
 
 logger = logging.getLogger(__name__)
+
+# Optional: pymorphy3 для лемматизации (graceful fallback)
+try:
+    import pymorphy3  # noqa: E402
+
+    _morph = pymorphy3.MorphAnalyzer()
+    _HAS_MORPH = True
+except Exception:  # ImportError, ModuleNotFoundError, etc.
+    _morph = None
+    _HAS_MORPH = False
+
+
+# ---------------------------------------------------------------------------
+# BM25Scorer — BM25 reranking scorer (pure Python)
+# ---------------------------------------------------------------------------
+
+class BM25Scorer:
+    """
+    BM25 (Okapi BM25) scorer для reranking кандидатов.
+
+    Использование:
+        scorer = BM25Scorer(k1=1.5, b=0.75)
+        scorer.fit(["документ один", "документ два", ...])
+        score = scorer.score("запрос", "документ один")
+        scores = scorer.score_batch("запрос", ["документ один", "документ два"])
+
+    Если fit() не вызван — fallback на нормализованный keyword overlap.
+    Лемматизация через pymorphy3 (optional, graceful fallback на lower+split).
+
+    Параметры BM25:
+        k1:  контроль насыщения TF (default 1.5, range [1.2, 2.0])
+        b:   контроль нормализации длины документа (default 0.75, range [0, 1])
+    """
+
+    def __init__(
+        self,
+        k1: float = 1.5,
+        b: float = 0.75,
+        use_lemmatization: bool = True,
+    ) -> None:
+        self._k1 = k1
+        self._b = b
+        self._use_lemma = use_lemmatization and _HAS_MORPH
+
+        # IDF state (populated by fit())
+        self._idf: Dict[str, float] = {}
+        self._avgdl: float = 0.0
+        self._n_docs: int = 0
+        self._fitted: bool = False
+
+    @property
+    def fitted(self) -> bool:
+        """True если fit() был вызван с непустым корпусом."""
+        return self._fitted
+
+    @property
+    def vocab_size(self) -> int:
+        """Размер словаря IDF."""
+        return len(self._idf)
+
+    def fit(self, documents: List[str]) -> "BM25Scorer":
+        """
+        Построить IDF индекс на корпусе документов.
+
+        Args:
+            documents: список текстов документов
+
+        Returns:
+            self (для chaining)
+        """
+        if not documents:
+            self._fitted = False
+            return self
+
+        self._n_docs = len(documents)
+
+        # Токенизировать все документы
+        tokenized = [self._tokenize(doc) for doc in documents]
+
+        # Средняя длина документа
+        total_len = sum(len(tokens) for tokens in tokenized)
+        self._avgdl = total_len / self._n_docs if self._n_docs > 0 else 1.0
+
+        # Document frequency: сколько документов содержат каждый терм
+        df: Dict[str, int] = {}
+        for tokens in tokenized:
+            unique_terms = set(tokens)
+            for term in unique_terms:
+                df[term] = df.get(term, 0) + 1
+
+        # IDF: log((N - df + 0.5) / (df + 0.5) + 1)
+        # Robertson/Sparck-Jones IDF с +1 для сглаживания
+        self._idf = {}
+        for term, freq in df.items():
+            numerator = self._n_docs - freq + 0.5
+            denominator = freq + 0.5
+            self._idf[term] = math.log(numerator / denominator + 1.0)
+
+        self._fitted = True
+        return self
+
+    def score(self, query: str, document: str) -> float:
+        """
+        Вычислить BM25 score для одного документа.
+
+        Если fit() не вызван — fallback на keyword overlap.
+
+        Args:
+            query:    текстовый запрос
+            document: текст документа
+
+        Returns:
+            BM25 score (float >= 0.0)
+        """
+        if not query or not document:
+            return 0.0
+
+        if not self._fitted:
+            return self._keyword_overlap_fallback(query, document)
+
+        query_terms = self._tokenize(query)
+        doc_terms = self._tokenize(document)
+
+        if not query_terms or not doc_terms:
+            return 0.0
+
+        # Term frequency в документе
+        tf: Dict[str, int] = {}
+        for term in doc_terms:
+            tf[term] = tf.get(term, 0) + 1
+
+        doc_len = len(doc_terms)
+        total_score = 0.0
+
+        for term in query_terms:
+            if term not in tf:
+                continue
+
+            term_freq = tf[term]
+            idf = self._idf.get(term, 0.0)
+
+            # BM25 TF component:
+            # (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avgdl))
+            numerator = term_freq * (self._k1 + 1.0)
+            denominator = term_freq + self._k1 * (
+                1.0 - self._b + self._b * doc_len / self._avgdl
+            )
+            total_score += idf * (numerator / denominator)
+
+        return total_score
+
+    def score_batch(
+        self,
+        query: str,
+        documents: List[str],
+    ) -> List[float]:
+        """
+        Вычислить BM25 scores для списка документов.
+
+        Args:
+            query:     текстовый запрос
+            documents: список текстов документов
+
+        Returns:
+            Список BM25 scores (same order as documents)
+        """
+        return [self.score(query, doc) for doc in documents]
+
+    def _tokenize(self, text: str) -> List[str]:
+        """
+        Токенизация текста.
+
+        Если pymorphy3 доступен и use_lemmatization=True:
+            слово → нормальная форма (лемма)
+        Иначе:
+            lower() + re.findall(r'\\w+')
+        """
+        if not text:
+            return []
+
+        words = re.findall(r'\w+', text.lower())
+
+        if self._use_lemma and _morph is not None:
+            lemmas = []
+            for word in words:
+                try:
+                    parsed = _morph.parse(word)
+                    if parsed:
+                        lemmas.append(parsed[0].normal_form)
+                    else:
+                        lemmas.append(word)
+                except Exception:
+                    lemmas.append(word)
+            return lemmas
+
+        return words
+
+    @staticmethod
+    def _keyword_overlap_fallback(query: str, document: str) -> float:
+        """
+        Fallback: нормализованный keyword overlap.
+
+        Используется если fit() не был вызван.
+        Формула: |query_words ∩ doc_words| / |query_words|
+        """
+        if not query or not document:
+            return 0.0
+        query_words = set(re.findall(r'\w+', query.lower()))
+        doc_words = set(re.findall(r'\w+', document.lower()))
+        if not query_words:
+            return 0.0
+        return len(query_words & doc_words) / len(query_words)
 
 
 # ---------------------------------------------------------------------------
@@ -125,10 +338,59 @@ class KeywordRetrievalBackend:
             ev = self._from_episodic(ep, query)
             evidence.append(ev)
 
+        # --- BM25 reranking ---
+        # Собрать тексты кандидатов, fit BM25, пересчитать relevance_score
+        if len(evidence) >= 2:
+            evidence = self._bm25_rerank(query, evidence)
+
         # Сортировка по relevance_score (desc), stable
         evidence.sort(key=lambda e: (-e.relevance_score, e.evidence_id))
 
         return evidence[:top_n]
+
+    @staticmethod
+    def _bm25_rerank(
+        query: str,
+        evidence: List[EvidencePack],
+    ) -> List[EvidencePack]:
+        """
+        BM25 reranking кандидатов.
+
+        Строит BM25 индекс на текстах кандидатов, пересчитывает
+        relevance_score. Если BM25 score > 0 хотя бы для одного
+        кандидата, нормализует scores в [0, 1] и заменяет
+        relevance_score. Иначе оставляет оригинальные scores.
+        """
+        texts = [ev.content for ev in evidence]
+        scorer = BM25Scorer(use_lemmatization=True)
+        scorer.fit(texts)
+
+        if not scorer.fitted:
+            return evidence
+
+        raw_scores = scorer.score_batch(query, texts)
+        max_score = max(raw_scores) if raw_scores else 0.0
+
+        # Если BM25 не дал ненулевых scores — оставить оригинальные
+        if max_score <= 0.0:
+            return evidence
+
+        # Нормализация в [0, 1]
+        reranked: List[EvidencePack] = []
+        for ev, bm25_score in zip(evidence, raw_scores):
+            normalized = bm25_score / max_score if max_score > 0 else 0.0
+            reranked.append(
+                dataclasses.replace(
+                    ev,
+                    relevance_score=round(normalized, 6),
+                    metadata={
+                        **ev.metadata,
+                        "bm25_raw_score": round(bm25_score, 6),
+                        "reranking": "bm25",
+                    },
+                )
+            )
+        return reranked
 
     # ------------------------------------------------------------------
     # Конвертеры: memory type → EvidencePack
@@ -585,8 +847,8 @@ class HybridRetrievalBackend:
         results: List[EvidencePack] = []
         for eid in ranked_ids[:top_n]:
             ev = evidence_map[eid]
-            # Update relevance_score to RRF score for downstream use
-            ev.relevance_score = round(scores[eid], 6)
+            # Immutable update: replace relevance_score with RRF score
+            ev = dataclasses.replace(ev, relevance_score=round(scores[eid], 6))
             results.append(ev)
 
         return results
@@ -669,11 +931,11 @@ class RetrievalAdapter:
         retrieved_at = time.time()
         backend_name = self.backend_name
 
-        # Ensure canonical fields + enrich with adapter metadata
+        # Ensure canonical fields + enrich with adapter metadata (immutable)
         enriched = []
         for ev in evidence:
-            self._ensure_canonical(ev)
-            self._enrich(ev, backend_name, retrieved_at)
+            ev = self._ensure_canonical(ev)
+            ev = self._enrich(ev, backend_name, retrieved_at)
             enriched.append(ev)
 
         logger.debug(
@@ -689,19 +951,27 @@ class RetrievalAdapter:
 
     @staticmethod
     def _ensure_canonical(ev: EvidencePack) -> EvidencePack:
-        """Убедиться что все канонические поля имеют значения."""
+        """
+        Убедиться что все канонические поля имеют значения.
+
+        Возвращает новый EvidencePack (immutable) если требуются изменения,
+        иначе возвращает оригинал без копирования.
+        """
+        overrides: Dict[str, Any] = {}
         if not ev.evidence_id:
-            ev.evidence_id = f"ev_{uuid.uuid4().hex[:8]}"
+            overrides["evidence_id"] = f"ev_{uuid.uuid4().hex[:8]}"
         if ev.trust is None:
-            ev.trust = 0.5
+            overrides["trust"] = 0.5
         if ev.contradiction_flags is None:
-            ev.contradiction_flags = []
+            overrides["contradiction_flags"] = []
         if ev.concept_refs is None:
-            ev.concept_refs = []
+            overrides["concept_refs"] = []
         if ev.source_refs is None:
-            ev.source_refs = []
+            overrides["source_refs"] = []
         if ev.supports_hypotheses is None:
-            ev.supports_hypotheses = []
+            overrides["supports_hypotheses"] = []
+        if overrides:
+            return dataclasses.replace(ev, **overrides)
         return ev
 
     @staticmethod
@@ -713,10 +983,13 @@ class RetrievalAdapter:
         """
         Добавить adapter metadata в EvidencePack.
 
-        Мутирует EvidencePack.metadata (оригинал создан backend'ом,
-        не shared — безопасно мутировать).
+        Возвращает новый EvidencePack (immutable) с обновлённым metadata dict.
+        Оригинальный EvidencePack не мутируется.
         """
-        ev.metadata["retrieval_backend"] = backend_name
-        ev.metadata["retrieved_at"] = retrieved_at
-        ev.metadata["original_memory_type"] = ev.memory_type
-        return ev
+        new_metadata = {
+            **ev.metadata,
+            "retrieval_backend": backend_name,
+            "retrieved_at": retrieved_at,
+            "original_memory_type": ev.memory_type,
+        }
+        return dataclasses.replace(ev, metadata=new_metadata)

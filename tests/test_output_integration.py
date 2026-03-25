@@ -12,7 +12,6 @@ Integration smoke tests для brain/output/ — Output MVP.
 """
 
 import pytest
-from typing import Any
 
 from brain.core.contracts import BrainOutput, CognitiveResult, TraceChain, TraceRef
 from brain.memory.memory_manager import MemoryManager

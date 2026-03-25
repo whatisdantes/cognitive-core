@@ -21,8 +21,7 @@ MemoryManager — это "диспетчер" памяти мозга:
 from __future__ import annotations
 
 import logging
-import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -32,12 +31,13 @@ try:
 except ImportError:
     _PSUTIL_AVAILABLE = False
 
-from .working_memory import WorkingMemory, MemoryItem
-from .semantic_memory import SemanticMemory, SemanticNode
-from .episodic_memory import EpisodicMemory, Episode, ModalEvidence
-from .source_memory import SourceMemory, SourceRecord
-from .procedural_memory import ProceduralMemory, Procedure
-from .consolidation_engine import ConsolidationEngine, ConsolidationConfig
+from .working_memory import WorkingMemory, MemoryItem  # noqa: E402
+from .semantic_memory import SemanticMemory, SemanticNode  # noqa: E402
+from .episodic_memory import EpisodicMemory, Episode, ModalEvidence  # noqa: E402
+from .source_memory import SourceMemory  # noqa: E402
+from .procedural_memory import ProceduralMemory  # noqa: E402
+from .consolidation_engine import ConsolidationEngine  # noqa: E402
+from .storage import MemoryDatabase  # noqa: E402
 
 
 # ─── Результат поиска ────────────────────────────────────────────────────────
@@ -109,11 +109,26 @@ class MemoryManager:
         episodic_max: int = 5_000,
         auto_consolidate: bool = True,
         on_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        storage_backend: str = "auto",
     ):
         self._data_dir = data_dir
         self._auto_consolidate = auto_consolidate
         self._on_event = on_event
         self._started = False
+        self._storage_backend = storage_backend
+
+        # ── SQLite backend (если запрошен) ────────────────────────────────────
+        self._db: Optional[MemoryDatabase] = None
+
+        if storage_backend == "sqlite" or (
+            storage_backend == "auto" and self._should_use_sqlite()
+        ):
+            self._db = MemoryDatabase(
+                db_path=f"{data_dir}/memory.db",
+            )
+            self._effective_backend = "sqlite"
+        else:
+            self._effective_backend = "json"
 
         # ── Инициализация всех видов памяти ──────────────────────────────────
         self.working = WorkingMemory(max_size=working_max_size)
@@ -121,19 +136,27 @@ class MemoryManager:
         self.semantic = SemanticMemory(
             data_path=f"{data_dir}/semantic.json",
             max_nodes=semantic_max_nodes,
+            storage_backend=self._effective_backend,
+            db=self._db,
         )
 
         self.episodic = EpisodicMemory(
             data_path=f"{data_dir}/episodes.json",
             max_episodes=episodic_max,
+            storage_backend=self._effective_backend,
+            db=self._db,
         )
 
         self.source = SourceMemory(
             data_path=f"{data_dir}/sources.json",
+            storage_backend=self._effective_backend,
+            db=self._db,
         )
 
         self.procedural = ProceduralMemory(
             data_path=f"{data_dir}/procedures.json",
+            storage_backend=self._effective_backend,
+            db=self._db,
         )
 
         # ── Движок консолидации (Гиппокамп) ──────────────────────────────────
@@ -149,6 +172,17 @@ class MemoryManager:
         self._store_count = 0
         self._retrieve_count = 0
 
+    def _should_use_sqlite(self) -> bool:
+        """
+        Определить, стоит ли использовать SQLite в режиме 'auto'.
+
+        Логика: если уже есть memory.db — используем SQLite.
+        Иначе — JSON (обратная совместимость).
+        """
+        import os
+        db_path = f"{self._data_dir}/memory.db"
+        return os.path.exists(db_path)
+
     # ─── Жизненный цикл ──────────────────────────────────────────────────────
 
     def start(self):
@@ -163,6 +197,8 @@ class MemoryManager:
     def stop(self, save: bool = True):
         """Остановить менеджер памяти."""
         self.consolidation.stop(save_all=save)
+        if self._db is not None:
+            self._db.close()
         self._started = False
         self._log("info", "MemoryManager остановлен")
 
@@ -370,8 +406,22 @@ class MemoryManager:
     # ─── Персистентность ─────────────────────────────────────────────────────
 
     def save_all(self):
-        """Сохранить все виды памяти на диск."""
-        self.consolidation.save_all()
+        """Сохранить все виды памяти (JSON или SQLite с транзакцией)."""
+        if self._db is not None:
+            try:
+                self._db.begin()
+                self.semantic.save()
+                self.episodic.save()
+                self.source.save()
+                self.procedural.save()
+                self._db.commit()
+                _logger.info("save_all: транзакция SQLite зафиксирована")
+            except Exception:
+                self._db.rollback()
+                _logger.exception("save_all: откат транзакции SQLite")
+                raise
+        else:
+            self.consolidation.save_all()
 
     def force_consolidate(self) -> Dict[str, int]:
         """Принудительно запустить консолидацию."""
@@ -401,14 +451,25 @@ class MemoryManager:
 
     # ─── Статистика ──────────────────────────────────────────────────────────
 
+    @property
+    def db(self) -> Optional[MemoryDatabase]:
+        """Доступ к SQLite backend (None если JSON)."""
+        return self._db
+
+    @property
+    def effective_backend(self) -> str:
+        """Текущий backend: 'sqlite' или 'json'."""
+        return self._effective_backend
+
     def status(self) -> Dict[str, Any]:
         """Полный статус системы памяти."""
-        return {
+        result = {
             "memory_manager": {
                 "started": self._started,
                 "store_count": self._store_count,
                 "retrieve_count": self._retrieve_count,
                 "data_dir": self._data_dir,
+                "storage_backend": self._effective_backend,
             },
             "working": self.working.status(),
             "semantic": self.semantic.status(),
@@ -418,11 +479,14 @@ class MemoryManager:
             "consolidation": self.consolidation.status(),
             "ram": self.ram_status(),
         }
+        if self._db is not None:
+            result["sqlite"] = self._db.status()
+        return result
 
     def display_status(self):
         """Вывести полный статус в консоль."""
         print(f"\n{'═'*55}")
-        print(f"🧠 СИСТЕМА ПАМЯТИ — СТАТУС")
+        print("🧠 СИСТЕМА ПАМЯТИ — СТАТУС")
         print(f"{'═'*55}")
 
         # RAM
@@ -433,39 +497,39 @@ class MemoryManager:
 
         # Рабочая память
         wm = self.working.status()
-        print(f"\n📋 Рабочая память:")
+        print("\n📋 Рабочая память:")
         print(f"   {wm['normal_items']} обычных + {wm['protected_items']} защищённых "
               f"(лимит: {wm['effective_max']})")
 
         # Семантическая память
         sm = self.semantic.status()
-        print(f"\n📚 Семантическая память:")
+        print("\n📚 Семантическая память:")
         print(f"   {sm['node_count']} понятий | {sm['total_relations']} связей | "
               f"уверенность: {sm['avg_confidence']:.0%}")
 
         # Эпизодическая память
         em = self.episodic.status()
-        print(f"\n📖 Эпизодическая память:")
+        print("\n📖 Эпизодическая память:")
         print(f"   {em['episode_count']} эпизодов | "
               f"защищённых: {em['protected_count']} | "
               f"модальности: {em['modality_breakdown']}")
 
         # Источники
         src = self.source.status()
-        print(f"\n🔗 Источники:")
+        print("\n🔗 Источники:")
         print(f"   {src['source_count']} источников | "
               f"надёжных: {src['reliable_count']} | "
               f"среднее доверие: {src['avg_trust_score']:.0%}")
 
         # Процедуры
         proc = self.procedural.status()
-        print(f"\n⚙️  Процедурная память:")
+        print("\n⚙️  Процедурная память:")
         print(f"   {proc['procedure_count']} процедур | "
               f"success rate: {proc['avg_success_rate']:.0%}")
 
         # Консолидация
         cons = self.consolidation.status()
-        print(f"\n🔄 Консолидация (Гиппокамп):")
+        print("\n🔄 Консолидация (Гиппокамп):")
         print(f"   {'🟢 работает' if cons['running'] else '🔴 остановлена'} | "
               f"циклов: {cons['consolidation_count']} | "
               f"перенесено: {cons['items_transferred']}")

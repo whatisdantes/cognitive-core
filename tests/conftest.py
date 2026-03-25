@@ -7,7 +7,6 @@ conftest.py — общая конфигурация pytest для cognitive-core
 """
 
 import sys
-import os
 from pathlib import Path
 
 # ── Гарантируем что корень проекта в sys.path ────────────────────────────────
@@ -17,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-import pytest
+import pytest  # noqa: E402
 
 
 @pytest.fixture

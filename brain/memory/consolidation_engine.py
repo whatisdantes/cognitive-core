@@ -19,8 +19,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -30,11 +30,11 @@ try:
 except ImportError:
     _PSUTIL_AVAILABLE = False
 
-from .working_memory import WorkingMemory, MemoryItem
-from .episodic_memory import EpisodicMemory, Episode, ModalEvidence
-from .semantic_memory import SemanticMemory
-from .source_memory import SourceMemory
-from .procedural_memory import ProceduralMemory
+from .working_memory import WorkingMemory, MemoryItem  # noqa: E402
+from .episodic_memory import EpisodicMemory  # noqa: E402
+from .semantic_memory import SemanticMemory  # noqa: E402
+from .source_memory import SourceMemory  # noqa: E402
+from .procedural_memory import ProceduralMemory  # noqa: E402
 
 
 # ─── Конфигурация консолидации ───────────────────────────────────────────────
@@ -458,7 +458,7 @@ class ConsolidationEngine:
         """Вывести статус в консоль."""
         s = self.status()
         print(f"\n{'─'*50}")
-        print(f"🧠 Движок консолидации (Гиппокамп)")
+        print("🧠 Движок консолидации (Гиппокамп)")
         print(f"  Статус: {'🟢 работает' if s['running'] else '🔴 остановлен'}")
         print(f"  Аптайм: {s['uptime_seconds']:.0f}с")
         print(f"  Циклов консолидации: {s['consolidation_count']}")

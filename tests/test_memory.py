@@ -55,8 +55,7 @@ section("1. Events (brain/core/events.py)")
 
 try:
     from brain.core.events import (
-        BaseEvent, PerceptEvent, MemoryEvent,
-        CognitiveEvent, LearningEvent, SystemEvent, EventFactory
+        PerceptEvent, EventFactory
     )
 
     ev = PerceptEvent(source="test", content="привет", modality="text", quality=0.9)
@@ -74,7 +73,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА импорта events: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -130,7 +130,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА WorkingMemory: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -139,7 +140,7 @@ except Exception as e:
 section("3. SemanticMemory")
 
 try:
-    from brain.memory.semantic_memory import SemanticMemory, SemanticNode, Relation
+    from brain.memory.semantic_memory import SemanticMemory, SemanticNode
 
     sm = SemanticMemory(
         data_path="brain/data/memory/test_semantic.json",
@@ -203,7 +204,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА SemanticMemory: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -286,7 +288,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА EpisodicMemory: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -351,7 +354,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА SourceMemory: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -428,7 +432,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА ProceduralMemory: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -508,7 +513,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА MemoryManager: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -522,7 +528,7 @@ try:
     from brain.memory.episodic_memory import EpisodicMemory
     from brain.memory.source_memory import SourceMemory
     from brain.memory.procedural_memory import ProceduralMemory
-    from brain.memory.consolidation_engine import ConsolidationEngine, ConsolidationConfig
+    from brain.memory.consolidation_engine import ConsolidationEngine
 
     wm = WorkingMemory(max_size=20)
     sm = SemanticMemory(data_path="brain/data/memory/test_cons_sem.json", autosave_every=9999)
@@ -576,7 +582,8 @@ try:
 
 except Exception as e:
     print(f"  {RED}ОШИБКА ConsolidationEngine: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════
@@ -593,14 +600,14 @@ try:
     check_test("brain.memory импортирует все классы", True)
 
     from brain.core import (
-        BaseEvent, PerceptEvent, MemoryEvent,
-        CognitiveEvent, LearningEvent, SystemEvent, EventFactory,
+        PerceptEvent, EventFactory,
     )
     check_test("brain.core импортирует все события", True)
 
 except Exception as e:
     print(f"  {RED}ОШИБКА импорта через __init__.py: {e}{RESET}")
-    import traceback; traceback.print_exc()
+    import traceback
+    traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════

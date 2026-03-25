@@ -337,7 +337,7 @@ class WorkingMemory:
         """Вывести статус в консоль."""
         s = self.status()
         print(f"\n{'─'*50}")
-        print(f"🧠 Рабочая память")
+        print("🧠 Рабочая память")
         print(f"  Элементов: {s['normal_items']} обычных + {s['protected_items']} защищённых")
         print(f"  Лимит: {s['effective_max']} (макс: {s['max_size']})")
         print(f"  Добавлено: {s['push_count']} | Вытеснено: {s['evict_count']}")

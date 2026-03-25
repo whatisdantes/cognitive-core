@@ -23,9 +23,8 @@ Output Consistency Validator — проверка ответа перед отп
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from brain.core.contracts import CognitiveResult, ContractMixin
 

@@ -16,9 +16,6 @@ Unit тесты для brain/output/ — Output MVP.
 Итого: ~104 теста
 """
 
-import pytest
-import time
-from typing import Any, Dict, List
 
 from brain.core.contracts import (
     BrainOutput,
@@ -34,8 +31,6 @@ from brain.output.trace_builder import (
 from brain.output.response_validator import (
     FALLBACK_RESPONSE_EN,
     FALLBACK_RESPONSE_RU,
-    HEDGE_MARKERS_EN,
-    HEDGE_MARKERS_RU,
     MAX_RESPONSE_LENGTH,
     ResponseValidator,
     ValidationIssue,
@@ -847,7 +842,7 @@ class TestResponseValidator:
             action="respond_direct",
         )
         validator = ResponseValidator()
-        vr = validator.validate(result)
+        validator.validate(result)
 
         # Result не мутирован
         assert result.trace_id == "trace_xyz"

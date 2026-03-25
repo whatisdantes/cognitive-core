@@ -21,7 +21,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ class DigestGenerator:
         if info.memory_used:
             lines.append(f"  Memory used:  {', '.join(info.memory_used)}")
         else:
-            lines.append(f"  Memory used:  —")
+            lines.append("  Memory used:  —")
 
         # Источники
         if info.sources_used:
@@ -183,7 +183,7 @@ class DigestGenerator:
         if info.contradiction:
             lines.append(f"  Contradiction: {info.contradiction}")
         else:
-            lines.append(f"  Contradiction: none")
+            lines.append("  Contradiction: none")
 
         # Уверенность и действие
         conf_label = _confidence_label(info.confidence)

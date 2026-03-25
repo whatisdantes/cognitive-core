@@ -26,7 +26,6 @@ from brain.core.contracts import ContractMixin
 from .context import (
     CognitiveOutcome,
     EvidencePack,
-    GoalTypeLimits,
     PolicyConstraints,
     ReasoningState,
 )

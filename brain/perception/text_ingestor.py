@@ -19,14 +19,11 @@ text_ingestor.py — Парсинг текстовых файлов в PerceptEv
 from __future__ import annotations
 
 import csv
-import io
 import json
 import logging
-import os
 import re
-import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from brain.core.events import EventFactory, PerceptEvent
 from brain.perception.metadata_extractor import MetadataExtractor

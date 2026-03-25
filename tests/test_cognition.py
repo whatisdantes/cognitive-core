@@ -9,12 +9,8 @@ Unit-тесты когнитивного ядра (Stage F).
 
 import sys
 import os
-import uuid
-import time
-from unittest.mock import MagicMock, patch, PropertyMock
-from dataclasses import dataclass
+from unittest.mock import MagicMock
 
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -1270,8 +1266,7 @@ class TestImports:
 
     def test_import_context_types(self):
         from brain.cognition import (
-            CognitiveContext, CognitiveOutcome, EvidencePack,
-            GoalTypeLimits, PolicyConstraints, ReasoningState,
+            CognitiveContext,
         )
         assert CognitiveContext is not None
 

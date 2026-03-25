@@ -20,18 +20,21 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 _logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from .storage import MemoryDatabase
+
 try:
-    import numpy as np
+    import numpy as np  # noqa: F401 — availability check, used conditionally
     _NUMPY_AVAILABLE = True
 except ImportError:
     _NUMPY_AVAILABLE = False
 
 try:
-    import psutil
+    import psutil  # noqa: F401 — availability check, used conditionally
     _PSUTIL_AVAILABLE = True
 except ImportError:
     _PSUTIL_AVAILABLE = False
@@ -237,17 +240,26 @@ class SemanticMemory:
         max_nodes: int = 10_000,
         decay_rate: float = 0.005,
         autosave_every: int = 50,
+        storage_backend: str = "auto",
+        db: Optional["MemoryDatabase"] = None,
     ):
         self._data_path = data_path
         self._max_nodes = max_nodes
         self._decay_rate = decay_rate
         self._autosave_every = autosave_every
+        self._db = db
+
+        # Определяем backend: "json", "sqlite", "auto"
+        if storage_backend == "auto":
+            self._backend = "sqlite" if db is not None else "json"
+        else:
+            self._backend = storage_backend
 
         self._nodes: Dict[str, SemanticNode] = {}
         self._write_count = 0
         self._load_count = 0
 
-        # Загружаем с диска если файл существует
+        # Загружаем данные
         self._load()
 
     # ─── Основные операции ───────────────────────────────────────────────────
@@ -544,6 +556,13 @@ class SemanticMemory:
     # ─── Персистентность ─────────────────────────────────────────────────────
 
     def save(self, path: Optional[str] = None):
+        """Сохранить семантическую память (SQLite или JSON)."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._save_sqlite()
+        else:
+            self._save_json(path)
+
+    def _save_json(self, path: Optional[str] = None):
         """Сохранить семантическую память на диск (JSON)."""
         path = path or self._data_path
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -565,10 +584,27 @@ class SemanticMemory:
         else:
             os.rename(tmp_path, path)
 
-        _logger.info("Семантическая память сохранена: %d понятий -> %s", len(self._nodes), path)
+        _logger.info("Семантическая память сохранена (JSON): %d понятий -> %s", len(self._nodes), path)
+
+    def _save_sqlite(self):
+        """Сохранить семантическую память в SQLite."""
+        if self._db is None:
+            return
+        nodes_data = [
+            (concept, node.to_dict()) for concept, node in self._nodes.items()
+        ]
+        self._db.save_all_semantic(nodes_data)
+        _logger.info("Семантическая память сохранена (SQLite): %d понятий", len(self._nodes))
 
     def _load(self):
-        """Загрузить семантическую память с диска."""
+        """Загрузить семантическую память."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._load_sqlite()
+        else:
+            self._load_json()
+
+    def _load_json(self):
+        """Загрузить семантическую память с диска (JSON)."""
         if not os.path.exists(self._data_path):
             return
 
@@ -580,9 +616,21 @@ class SemanticMemory:
             for concept, node_dict in nodes_data.items():
                 self._nodes[concept] = SemanticNode.from_dict(node_dict)
 
-            _logger.info("Семантическая память загружена: %d понятий <- %s", len(self._nodes), self._data_path)
+            _logger.info("Семантическая память загружена (JSON): %d понятий <- %s", len(self._nodes), self._data_path)
         except Exception as e:
             _logger.warning("Ошибка загрузки семантической памяти: %s", e)
+
+    def _load_sqlite(self):
+        """Загрузить семантическую память из SQLite."""
+        if self._db is None:
+            return
+        try:
+            rows = self._db.load_all_semantic_nodes()
+            for node_dict in rows:
+                self._nodes[node_dict["concept"]] = SemanticNode.from_dict(node_dict)
+            _logger.info("Семантическая память загружена (SQLite): %d понятий", len(self._nodes))
+        except Exception as e:
+            _logger.warning("Ошибка загрузки семантической памяти из SQLite: %s", e)
 
     def _maybe_autosave(self):
         """Автосохранение каждые N операций записи."""
@@ -650,7 +698,7 @@ class SemanticMemory:
         """Вывести статус в консоль."""
         s = self.status()
         print(f"\n{'─'*50}")
-        print(f"🧠 Семантическая память")
+        print("🧠 Семантическая память")
         print(f"  Понятий: {s['node_count']} / {s['max_nodes']}")
         print(f"  Связей: {s['total_relations']}")
         print(f"  Средняя уверенность: {s['avg_confidence']:.2%}")

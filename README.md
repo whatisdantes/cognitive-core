@@ -1,10 +1,10 @@
 # 🧠 Искусственный Мультимодальный Мозг
 
-> **Версия:** 0.6.1  
-> **Статус:** 🚧 В разработке — Этап G ✅, Этап F+ ✅ (review fixes applied), CI/CD ✅ → Этап H в очереди  
+> **Версия:** 0.7.0  
+> **Статус:** 🚧 В разработке — P1a–P1c ✅ (BM25 + SQLite + CI), Этап H в очереди  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
-> **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest, ruff lint)  
-> **Тесты:** 611/611 ✅ — `test_memory.py` (101) · `test_scheduler.py` (11) · `test_resource_monitor.py` (13) · `test_logging.py` (25) · `test_perception.py` (79) · `test_text_encoder.py` (80) · `test_cognition.py` (182) · `test_cognition_integration.py` (7) · `test_output.py` (106) · `test_output_integration.py` (7)
+> **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
+> **Тесты:** 773/773 ✅ — `test_bm25.py` (55) · `test_memory.py` (101) · `test_cognition.py` (182) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_text_encoder.py` (80) · `test_perception.py` (79) · `test_logging.py` (25) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_vector_retrieval.py` (39)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -51,7 +51,7 @@ download_libraries.bat
 # 4. Проверить установку
 python check_deps.py
 
-# 5. Запустить все тесты (~611)
+# 5. Запустить все тесты (773)
 python -m pytest tests/ -v
 
 # 6. Использовать Memory System в коде
@@ -237,7 +237,7 @@ MULTIMODAL BRAIN
 ```
 cognitive-core/
 │
-├── brain/                              # Основной пакет мозга (v0.4.0)
+├── brain/                              # Основной пакет мозга (v0.7.0)
 │   ├── __init__.py                     # Корневой пакет
 │   │
 │   ├── core/                           # Ядро автономного цикла
@@ -250,15 +250,17 @@ cognitive-core/
 │   │   ├── scheduler.py                # ✅ Scheduler — тик-планировщик (heapq, 4 приоритета, адаптивный tick)
 │   │   └── resource_monitor.py         # ✅ ResourceMonitor — CPU/RAM мониторинг, 4 политики деградации
 │   │
-│   ├── memory/                         # Система памяти ✅ РЕАЛИЗОВАНО
-│   │   ├── __init__.py                 # Экспорты 14 классов
-│   │   ├── working_memory.py           # ✅ WorkingMemory + MemoryItem
+│   ├── memory/                         # Система памяти ✅ РЕАЛИЗОВАНО (JSON + SQLite)
+│   │   ├── __init__.py                 # Экспорты 17 классов
+│   │   ├── working_memory.py           # ✅ WorkingMemory + MemoryItem (RAM-only)
 │   │   ├── semantic_memory.py          # ✅ SemanticMemory + SemanticNode + Relation
 │   │   ├── episodic_memory.py          # ✅ EpisodicMemory + Episode + ModalEvidence
 │   │   ├── source_memory.py            # ✅ SourceMemory + SourceRecord
 │   │   ├── procedural_memory.py        # ✅ ProceduralMemory + Procedure + ProcedureStep
 │   │   ├── consolidation_engine.py     # ✅ ConsolidationEngine + ConsolidationConfig
-│   │   └── memory_manager.py           # ✅ MemoryManager + MemorySearchResult
+│   │   ├── memory_manager.py           # ✅ MemoryManager + MemorySearchResult (SQLite transactions)
+│   │   ├── storage.py                  # ✅ MemoryDatabase — SQLite WAL backend (P1c)
+│   │   └── migrate.py                  # ✅ JSON→SQLite миграция (backup, idempotent)
 │   │
 │   ├── perception/                     # Слой восприятия ✅ РЕАЛИЗОВАНО (Этап D)
 │   │   ├── __init__.py                 # Экспорты: MetadataExtractor, TextIngestor, InputRouter
@@ -284,8 +286,8 @@ cognitive-core/
 │   │   ├── reasoner.py                 # ✅ ReasoningStep, ReasoningTrace, Reasoner
 │   │   ├── action_selector.py          # ✅ ActionType, ActionDecision, ActionSelector
 │   │   ├── cognitive_core.py           # ✅ CognitiveCore — orchestrator (run → CognitiveResult)
-│   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend,
-│   │   │                               #    VectorRetrievalBackend, HybridRetrievalBackend (F+)
+│   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend (BM25 reranking),
+│   │   │                               #    VectorRetrievalBackend, HybridRetrievalBackend, BM25Scorer
 │   │   ├── contradiction_detector.py   # ✅ Contradiction, ContradictionDetector (F+)
 │   │   └── uncertainty_monitor.py      # ✅ UncertaintySnapshot, UncertaintyMonitor (F+)
 │   │
@@ -309,24 +311,29 @@ cognitive-core/
 │   │   └── dialogue_responder.py       # ✅ DialogueResponder (template MVP + LLM TODO), OutputPipeline
 │   │
 │   └── data/                           # Постоянное хранилище
-│       └── memory/                     # JSON-файлы памяти (создаются автоматически)
-│           ├── semantic.json           # граф понятий (SemanticMemory)
-│           ├── episodes.json           # хронология событий (EpisodicMemory)
-│           ├── sources.json            # доверие к источникам (SourceMemory)
-│           └── procedures.json         # навыки и стратегии (ProceduralMemory)
+│       └── memory/                     # Данные памяти (создаются автоматически)
+│           ├── memory.db               # SQLite WAL база (основной backend v0.7.0+)
+│           ├── semantic.json           # граф понятий (legacy JSON fallback)
+│           ├── episodes.json           # хронология событий (legacy JSON fallback)
+│           ├── sources.json            # доверие к источникам (legacy JSON fallback)
+│           └── procedures.json         # навыки и стратегии (legacy JSON fallback)
 │
-├── tests/                              # Тесты (pytest-совместимые, ~611 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 773 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
+│   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_logging.py                 # ✅ 25/25 тестов Logging & Observability (unittest)
 │   ├── test_memory.py                  # ✅ 101/101 тестов системы памяти
 │   ├── test_perception.py              # ✅ 79/79 тестов Perception Layer
 │   ├── test_resource_monitor.py        # ✅ 13/13 тестов ResourceMonitor
 │   ├── test_scheduler.py              # ✅ 11/11 тестов Scheduler
+│   ├── test_storage.py                # ✅ 58/58 тестов SQLite Storage + Migration
 │   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
 │   ├── test_cognition.py             # ✅ 182/182 тестов Cognitive Core (unit)
 │   ├── test_cognition_integration.py  # ✅ 7/7 тестов Cognitive Core (integration)
+│   ├── test_e2e_pipeline.py           # ✅ 10/10 тестов E2E Pipeline
 │   ├── test_output.py                 # ✅ 106/106 тестов Output Layer (unit)
-│   └── test_output_integration.py     # ✅ 7/7 тестов Output Layer (integration)
+│   ├── test_output_integration.py     # ✅ 7/7 тестов Output Layer (integration)
+│   └── test_vector_retrieval.py       # ✅ 39/39 тестов Vector Retrieval
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
@@ -721,28 +728,32 @@ python check_deps.py
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (~611 ✅)
+# Запустить все тесты (773 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
 python -m pytest tests/test_memory.py -v
 ```
 
-### Состав тестового набора (~611 тестов)
+### Состав тестового набора (773 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
+| `tests/test_bm25.py` | BM25 Scorer (unit + KeywordBackend reranking integration) | 55 |
 | `tests/test_logging.py` | Logging & Observability (BrainLogger, DigestGenerator, TraceBuilder) | 25 |
 | `tests/test_memory.py` | Memory System (Events, WM, SM, EM, Source, Procedural, Manager, Consolidation) | 101 |
 | `tests/test_perception.py` | Perception Layer (MetadataExtractor, TextIngestor, InputRouter) | 79 |
 | `tests/test_resource_monitor.py` | ResourceMonitor (policies, hysteresis, background thread) | 13 |
 | `tests/test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval, error handling) | 11 |
+| `tests/test_storage.py` | SQLite Storage (MemoryDatabase CRUD, transactions, threads, migration) | 58 |
 | `tests/test_text_encoder.py` | Text Encoder (primary/fallback/failed modes, semantic checks, batch, cache) | 80 |
 | `tests/test_cognition.py` | Cognitive Core (Context, Goals, Planner, Hypotheses, Reasoner, Actions, Core) | 182 |
 | `tests/test_cognition_integration.py` | Cognitive Core Integration (smoke tests with real MemoryManager) | 7 |
+| `tests/test_e2e_pipeline.py` | E2E Pipeline (Protocol conformance + full pipeline) | 10 |
 | `tests/test_output.py` | Output Layer (ExplainabilityTrace, OutputTraceBuilder, Validator, Responder, Pipeline) | 106 |
 | `tests/test_output_integration.py` | Output Layer Integration (CognitiveCore → OutputPipeline → BrainOutput) | 7 |
-| | **Итого** | **~611** |
+| `tests/test_vector_retrieval.py` | Vector Retrieval (VectorRetrievalBackend, HybridRetrievalBackend, cosine similarity) | 39 |
+| | **Итого** | **773** |
 
 ---
 
@@ -920,7 +931,6 @@ tests/
 ├── test_logging.py         ← 25/25 тестов ✅
 ├── test_perception.py      ← 79/79 тестов ✅
 └── test_text_encoder.py    ← 80/80 тестов ✅
-```
 
 brain/cognition/
 ├── context.py              ← CognitiveContext, CognitiveOutcome, EvidencePack,
@@ -929,9 +939,9 @@ brain/cognition/
 ├── goal_manager.py         ← GoalStatus, Goal, GoalManager (push/complete/fail/
 │                              cancel/interrupt/resume, priority queue + tree)
 ├── planner.py              ← PlanStep, ExecutionPlan, Planner (decompose 4 templates,
-│                              check_stop_conditions, replan retry-only MVP)
-├── hypothesis_engine.py    ← Hypothesis, HypothesisEngine (associative + deductive,
-│                              max 3, deterministic, stable sort, score/rank)
+│                              check_stop_conditions, replan with 5 strategies)
+├── hypothesis_engine.py    ← Hypothesis, HypothesisEngine (associative + deductive
+│                              + causal + analogical, max 3, stable sort, score/rank)
 ├── reasoner.py             ← ReasoningStep, ReasoningTrace, Reasoner
 │                              (retrieve → hypothesize → score → select loop)
 ├── action_selector.py      ← ActionType (5 types), ActionDecision, ActionSelector
@@ -939,12 +949,16 @@ brain/cognition/
 ├── cognitive_core.py       ← CognitiveCore — orchestrator (run → CognitiveResult,
 │                              goal detection, EventBus publish, trace chain,
 │                              HybridRetrievalBackend vector bridge)
-└── __init__.py             ← экспорты 24 классов (22 + VectorRetrievalBackend, HybridRetrievalBackend)
+├── retrieval_adapter.py    ← RetrievalAdapter, KeywordRetrievalBackend,
+│                              VectorRetrievalBackend, HybridRetrievalBackend (F+)
+├── contradiction_detector.py ← Contradiction, ContradictionDetector (F+)
+├── uncertainty_monitor.py  ← UncertaintySnapshot, UncertaintyMonitor (F+)
+└── __init__.py             ← экспорты 30 классов
 
 tests/
 ├── test_cognition.py           ← 182/182 unit тестов ✅
-└── test_cognition_integration.py ← 7/7 integration smoke тестов ✅
-```
+├── test_cognition_integration.py ← 7/7 integration smoke тестов ✅
+└── test_vector_retrieval.py    ← 39/39 тестов ✅
 
 brain/output/
 ├── trace_builder.py        ← ExplainabilityTrace (dataclass, ContractMixin),

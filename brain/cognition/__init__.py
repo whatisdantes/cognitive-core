@@ -10,7 +10,8 @@ cognition — Когнитивное ядро (аналог префронтал
     reasoner.py               — ReasoningStep, ReasoningTrace, Reasoner
     action_selector.py        — ActionType, ActionDecision, ActionSelector
     cognitive_core.py         — CognitiveCore (orchestrator)
-    retrieval_adapter.py      — RetrievalAdapter, RetrievalBackend, KeywordRetrievalBackend
+    retrieval_adapter.py      — RetrievalAdapter, RetrievalBackend, KeywordRetrievalBackend,
+                                BM25Scorer (BM25 reranking)
     contradiction_detector.py — Contradiction, ContradictionDetector
     uncertainty_monitor.py    — UncertaintySnapshot, UncertaintyMonitor
 
@@ -58,6 +59,7 @@ from .action_selector import (
     ActionSelector,
 )
 from .retrieval_adapter import (
+    BM25Scorer,
     RetrievalAdapter,
     KeywordRetrievalBackend,
     VectorRetrievalBackend,
@@ -107,6 +109,7 @@ __all__ = [
     "ActionDecision",
     "ActionSelector",
     # retrieval_adapter (F+)
+    "BM25Scorer",
     "RetrievalAdapter",
     "KeywordRetrievalBackend",
     "VectorRetrievalBackend",

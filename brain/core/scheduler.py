@@ -22,7 +22,7 @@ import logging
 import time
 import traceback
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 

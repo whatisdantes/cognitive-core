@@ -18,9 +18,12 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 _logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from .storage import MemoryDatabase
 
 
 # ─── Шаг процедуры ───────────────────────────────────────────────────────────
@@ -182,9 +185,18 @@ class ProceduralMemory:
         self,
         data_path: str = "brain/data/memory/procedures.json",
         autosave_every: int = 20,
+        storage_backend: str = "auto",
+        db: Optional["MemoryDatabase"] = None,
     ):
         self._data_path = data_path
         self._autosave_every = autosave_every
+        self._db = db
+
+        # Определяем backend
+        if storage_backend == "auto":
+            self._backend = "sqlite" if db is not None else "json"
+        else:
+            self._backend = storage_backend
 
         self._procedures: Dict[str, Procedure] = {}
         self._write_count = 0
@@ -336,7 +348,14 @@ class ProceduralMemory:
     # ─── Персистентность ─────────────────────────────────────────────────────
 
     def save(self, path: Optional[str] = None):
-        """Сохранить процедурную память на диск."""
+        """Сохранить процедурную память (SQLite или JSON)."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._save_sqlite()
+        else:
+            self._save_json(path)
+
+    def _save_json(self, path: Optional[str] = None):
+        """Сохранить процедурную память на диск (JSON)."""
         path = path or self._data_path
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -356,10 +375,27 @@ class ProceduralMemory:
         else:
             os.rename(tmp_path, path)
 
-        _logger.info("Процедурная память сохранена: %d процедур -> %s", len(self._procedures), path)
+        _logger.info("Процедурная память сохранена (JSON): %d процедур -> %s", len(self._procedures), path)
+
+    def _save_sqlite(self):
+        """Сохранить процедурную память в SQLite."""
+        if self._db is None:
+            return
+        procs_data = [
+            (name, proc.to_dict()) for name, proc in self._procedures.items()
+        ]
+        self._db.save_all_procedures(procs_data)
+        _logger.info("Процедурная память сохранена (SQLite): %d процедур", len(self._procedures))
 
     def _load(self):
-        """Загрузить процедурную память с диска."""
+        """Загрузить процедурную память."""
+        if self._backend == "sqlite" and self._db is not None:
+            self._load_sqlite()
+        else:
+            self._load_json()
+
+    def _load_json(self):
+        """Загрузить процедурную память с диска (JSON)."""
         if not os.path.exists(self._data_path):
             return
 
@@ -370,9 +406,21 @@ class ProceduralMemory:
             for name, proc_dict in data.get("procedures", {}).items():
                 self._procedures[name] = Procedure.from_dict(proc_dict)
 
-            _logger.info("Процедурная память загружена: %d процедур <- %s", len(self._procedures), self._data_path)
+            _logger.info("Процедурная память загружена (JSON): %d процедур <- %s", len(self._procedures), self._data_path)
         except Exception as e:
             _logger.warning("Ошибка загрузки процедурной памяти: %s", e)
+
+    def _load_sqlite(self):
+        """Загрузить процедурную память из SQLite."""
+        if self._db is None:
+            return
+        try:
+            rows = self._db.load_all_procedures()
+            for proc_dict in rows:
+                self._procedures[proc_dict["name"]] = Procedure.from_dict(proc_dict)
+            _logger.info("Процедурная память загружена (SQLite): %d процедур", len(self._procedures))
+        except Exception as e:
+            _logger.warning("Ошибка загрузки процедурной памяти из SQLite: %s", e)
 
     def _maybe_autosave(self):
         if self._write_count % self._autosave_every == 0:
@@ -399,7 +447,7 @@ class ProceduralMemory:
         """Вывести статус в консоль."""
         s = self.status()
         print(f"\n{'─'*50}")
-        print(f"🧠 Процедурная память")
+        print("🧠 Процедурная память")
         print(f"  Процедур: {s['procedure_count']}")
         print(f"  Средний success rate: {s['avg_success_rate']:.2%}")
         print(f"  Всего применений: {s['total_uses']}")

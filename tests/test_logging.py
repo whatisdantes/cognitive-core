@@ -10,7 +10,6 @@ test_logging.py — Тесты Этапа C: Logging & Observability.
 Ожидаемый результат: 25/25 тестов
 """
 
-import os
 import tempfile
 import threading
 import unittest
@@ -19,7 +18,6 @@ from pathlib import Path
 from brain.logging.brain_logger import BrainLogger
 from brain.logging.digest_generator import CycleInfo, DigestGenerator
 from brain.logging.reasoning_tracer import TraceBuilder
-from brain.core.contracts import TraceRef, TraceStep
 
 
 # ===========================================================================

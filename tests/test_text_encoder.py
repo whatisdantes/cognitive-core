@@ -13,10 +13,8 @@ tests/test_text_encoder.py
 
 import sys
 import os
-import math
 import uuid
-from unittest.mock import MagicMock, patch
-from collections import OrderedDict
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest

@@ -10,9 +10,9 @@ import pytest
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 
-from brain.core import (
+from brain.core import (  # noqa: E402
     EventBus, Scheduler, TaskPriority, SchedulerConfig,
-    Task, TaskStatus, ResourceState,
+    Task, ResourceState,
 )
 
 PASS = 0
@@ -190,16 +190,16 @@ else:
     fail("handler exception", str(info3))
 
 # ── Тест 11: регрессия памяти ─────────────────────────────────────────────────
-import os
+import os  # noqa: E402
 env = os.environ.copy()
 env["PYTHONIOENCODING"] = "utf-8"
 r = subprocess.run(
     [sys.executable, "-m", "tests.test_memory"],
     capture_output=True, text=True, encoding="utf-8", env=env,
 )
-lines = [l for l in r.stdout.splitlines() if l.strip()]
+lines = [line for line in r.stdout.splitlines() if line.strip()]
 # Ищем строку с итогом (может быть не последней из-за emoji-строки после)
-summary = next((l for l in lines if "101" in l and "провалено" in l), None)
+summary = next((line for line in lines if "101" in line and "провалено" in line), None)
 if summary and "0 провалено" in summary:
     ok(f"memory regression ({summary.strip()})")
 else:

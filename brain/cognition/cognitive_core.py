@@ -17,11 +17,14 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from brain.core.contracts import (
     CognitiveResult,
     EncodedPercept,
+    EventBusProtocol,
+    MemoryManagerProtocol,
+    ResourceMonitorProtocol,
     TraceChain,
     TraceRef,
     TraceStep,
@@ -30,11 +33,10 @@ from .context import (
     CognitiveContext,
     CognitiveOutcome,
     FAILURE_OUTCOMES,
-    GOAL_TYPE_LIMITS,
     PolicyConstraints,
 )
 from .contradiction_detector import ContradictionDetector
-from .goal_manager import Goal, GoalManager, GoalStatus
+from .goal_manager import Goal, GoalManager
 from .planner import Planner
 from .hypothesis_engine import HypothesisEngine
 from .reasoner import Reasoner, ReasoningTrace
@@ -77,16 +79,16 @@ class CognitiveCore:
 
     def __init__(
         self,
-        memory_manager: Any,
+        memory_manager: MemoryManagerProtocol,
         text_encoder: Any = None,
-        event_bus: Any = None,
-        resource_monitor: Any = None,
+        event_bus: Optional[EventBusProtocol] = None,
+        resource_monitor: Optional[ResourceMonitorProtocol] = None,
         policy: Optional[PolicyConstraints] = None,
     ) -> None:
-        self._memory = memory_manager
+        self._memory: MemoryManagerProtocol = memory_manager
         self._encoder = text_encoder
-        self._event_bus = event_bus
-        self._resource_monitor = resource_monitor
+        self._event_bus: Optional[EventBusProtocol] = event_bus
+        self._resource_monitor: Optional[ResourceMonitorProtocol] = resource_monitor
         self._policy = policy or PolicyConstraints()
 
         # Внутренние компоненты
@@ -140,6 +142,7 @@ class CognitiveCore:
         query: str,
         encoded_percept: Optional[EncodedPercept] = None,
         resources: Optional[Dict[str, Any]] = None,
+        session_id: Optional[str] = None,
     ) -> CognitiveResult:
         """
         Выполнить полный когнитивный цикл.
@@ -152,13 +155,21 @@ class CognitiveCore:
           5. Выполнить действие (LEARN → store в память)
           6. Собрать CognitiveResult
 
+        Args:
+            query:           текстовый запрос
+            encoded_percept: закодированный перцепт (опционально)
+            resources:       состояние ресурсов (опционально)
+            session_id:      идентификатор сессии для связывания нескольких
+                             вызовов в один диалог. Если None — генерируется
+                             автоматически (каждый вызов = новая сессия).
+
         Возвращает CognitiveResult.
         """
         start_time = time.perf_counter()
         self._cycle_count += 1
 
         # --- 1. Контекст ---
-        context = self._create_context()
+        context = self._create_context(session_id=session_id)
 
         # --- 2. Ресурсы ---
         if resources is None:
@@ -238,10 +249,18 @@ class CognitiveCore:
     # Приватные методы
     # ------------------------------------------------------------------
 
-    def _create_context(self) -> CognitiveContext:
-        """Создать контекст для текущего цикла."""
+    def _create_context(
+        self,
+        session_id: Optional[str] = None,
+    ) -> CognitiveContext:
+        """Создать контекст для текущего цикла.
+
+        Args:
+            session_id: внешний session_id для связывания вызовов.
+                        Если None — генерируется автоматически.
+        """
         return CognitiveContext(
-            session_id=f"session_{uuid.uuid4().hex[:8]}",
+            session_id=session_id or f"session_{uuid.uuid4().hex[:8]}",
             cycle_id=f"cycle_{self._cycle_count}",
             trace_id=f"trace_{uuid.uuid4().hex[:8]}",
         )

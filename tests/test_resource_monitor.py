@@ -12,7 +12,7 @@ import pytest
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 
-from brain.core import (
+from brain.core import (  # noqa: E402
     EventBus,
     ResourceMonitor,
     ResourceMonitorConfig,
@@ -204,8 +204,8 @@ r = subprocess.run(
     [sys.executable, "-m", "tests.test_memory"],
     capture_output=True, text=True, encoding="utf-8", env=env,
 )
-lines = [l for l in r.stdout.splitlines() if l.strip()]
-summary = next((l for l in lines if "101" in l and "провалено" in l), None)
+lines = [line for line in r.stdout.splitlines() if line.strip()]
+summary = next((line for line in lines if "101" in line and "провалено" in line), None)
 if summary and "0 провалено" in summary:
     ok(f"memory regression ({summary.strip()})")
 else:

@@ -22,11 +22,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from brain.core.events import EventFactory, PerceptEvent
+from brain.core.events import PerceptEvent
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 
