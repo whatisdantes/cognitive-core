@@ -1,7 +1,10 @@
 # 🧠 Слой 5: Cognitive Core (Префронтальная кора)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ⬜ Фаза 7 — не реализовано**
+> **Статус: ✅ Реализовано (Этап F + F+)**  
+> CognitiveCore orchestrator, GoalManager, Planner, HypothesisEngine, Reasoner,  
+> ContradictionDetector, UncertaintyMonitor, ActionSelector — 182+7 тестов.  
+> SalienceEngine и PolicyLayer — запланированы (Этап H).
 
 ---
 
@@ -1568,21 +1571,21 @@ Cycle 4521
 
 | Компонент | Статус | Файл |
 |-----------|--------|------|
-| `Goal` + `PlanStep` dataclasses | ⬜ Фаза 7.0 | `brain/cognition/planner.py` |
-| `GoalManager` | ⬜ Фаза 7.1 | `brain/cognition/planner.py` |
-| `Planner` + `replan()` | ⬜ Фаза 7.2 | `brain/cognition/planner.py` |
-| `ReasoningTrace` + `ReasoningStep` | ⬜ Фаза 7.3 | `brain/cognition/reasoner.py` |
-| `Reasoner` (associative) | ⬜ Фаза 7.4 | `brain/cognition/reasoner.py` |
-| `Reasoner` (causal/deductive/analogical) | ⬜ Фаза 7.5 | `brain/cognition/reasoner.py` |
-| `ContradictionDetector` + `ConflictType` | ⬜ Фаза 7.6 | `brain/cognition/contradiction_detector.py` |
-| `UncertaintyMonitor` + `UncertaintyReport` | ⬜ Фаза 7.7 | `brain/cognition/uncertainty_monitor.py` |
-| `SalienceEngine` + `SalienceScore` | ⬜ Фаза 7.8 | `brain/cognition/salience_engine.py` |
-| `ActionSelector` + cost model | ⬜ Фаза 7.9 | `brain/cognition/action_selector.py` |
-| `HypothesisEngine` + `Hypothesis` | ⬜ Фаза 7.10 | `brain/cognition/hypothesis_engine.py` |
-| `CognitiveResult` | ⬜ Фаза 7.11 | `brain/cognition/__init__.py` |
-| `CognitiveContext` + `ResourceState` | ⬜ Фаза 7.12 | `brain/cognition/context.py` |
-| `EvidencePack` + `ReasoningState` | ⬜ Фаза 7.13 | `brain/cognition/context.py` |
-| `GoalTypeLimits` + `PolicyConstraints` | ⬜ Фаза 7.14 | `brain/cognition/context.py` |
-| `check_stop_conditions()` | ⬜ Фаза 7.15 | `brain/cognition/planner.py` |
-| `PolicyLayer` (filters + modifiers) | ⬜ Фаза 7.16 | `brain/cognition/policy_layer.py` |
-| `CognitiveOutcome` enum (+ `CognitiveFailure` alias) | ⬜ Фаза 7.17 | `brain/cognition/context.py` |
+| `Goal` + `PlanStep` dataclasses | ✅ Этап F | `brain/cognition/planner.py` |
+| `GoalManager` | ✅ Этап F | `brain/cognition/planner.py` |
+| `Planner` + `replan()` | ✅ Этап F | `brain/cognition/planner.py` |
+| `ReasoningTrace` + `ReasoningStep` | ✅ Этап F | `brain/cognition/reasoner.py` |
+| `Reasoner` (associative) | ✅ Этап F | `brain/cognition/reasoner.py` |
+| `Reasoner` (causal/deductive/analogical) | ✅ Этап F | `brain/cognition/reasoner.py` |
+| `ContradictionDetector` + `ConflictType` | ✅ Этап F+ | `brain/cognition/contradiction_detector.py` |
+| `UncertaintyMonitor` + `UncertaintyReport` | ✅ Этап F+ | `brain/cognition/uncertainty_monitor.py` |
+| `SalienceEngine` + `SalienceScore` | ⬜ Этап H | `brain/cognition/salience_engine.py` |
+| `ActionSelector` + cost model | ✅ Этап F | `brain/cognition/action_selector.py` |
+| `HypothesisEngine` + `Hypothesis` | ✅ Этап F | `brain/cognition/hypothesis_engine.py` |
+| `CognitiveResult` | ✅ Этап F | `brain/cognition/__init__.py` |
+| `CognitiveContext` + `ResourceState` | ✅ Этап F | `brain/cognition/context.py` |
+| `EvidencePack` + `ReasoningState` | ✅ Этап F | `brain/cognition/context.py` |
+| `GoalTypeLimits` + `PolicyConstraints` | ✅ Этап F | `brain/cognition/context.py` |
+| `check_stop_conditions()` | ✅ Этап F | `brain/cognition/planner.py` |
+| `PolicyLayer` (filters + modifiers) | ⬜ Этап H | `brain/cognition/policy_layer.py` |
+| `CognitiveOutcome` enum (+ `CognitiveFailure` alias) | ✅ Этап F | `brain/cognition/context.py` |

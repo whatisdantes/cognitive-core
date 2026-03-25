@@ -35,7 +35,8 @@
 
 ## ⚡ Быстрый старт
 
-> Для запуска достаточно установить зависимости и запустить тесты. Полный мозг (all phases) ещё в разработке.
+> **Статус:** text-only MVP в разработке. CLI entrypoint запланирован (Фаза A.1).
+> Сейчас доступен программный API и полный набор тестов (773).
 
 ```bash
 # 1. Клонировать репозиторий
@@ -67,7 +68,7 @@ mm.stop()
 ```
 
 > 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
-> 📋 План реализации (14 фаз): [`TODO.md`](docs/TODO.md)  
+> 📋 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](docs/TODO.md)  
 > 🗂️ Документация по слоям: [`docs/layers/`](docs/layers/)
 
 ---
@@ -88,11 +89,11 @@ mm.stop()
 **Главная инженерная идея:**
 > Разум — это не генерация текста, а **управление внутренним состоянием и памятью**.
 
-Система работает с несколькими модальностями:
-- 📄 Документы (`.txt`, `.md`, `.pdf`, `.docx`, `.json`)
-- 🖼️ Изображения (OCR + понимание сцен)
-- 🎙️ Аудио (ASR + временные метки)
-- 🎬 Видео (покадровый анализ + временное отслеживание)
+Система работает с текстовыми данными (MVP), с планами на мультимодальность:
+- 📄 **Документы** (`.txt`, `.md`, `.pdf`, `.docx`, `.json`) — ✅ реализовано
+- 🖼️ Изображения (OCR + понимание сцен) — 🔮 Planned (post-MVP, Этап J)
+- 🎙️ Аудио (ASR + временные метки) — 🔮 Planned (post-MVP, Этап J)
+- 🎬 Видео (покадровый анализ + временное отслеживание) — 🔮 Planned (post-MVP, Этап J)
 
 ---
 
@@ -833,16 +834,16 @@ python -m pytest tests/test_memory.py -v
 | [`02_modality_encoders.md`](docs/layers/02_modality_encoders.md) | Modality Encoders | Сенсорная кора | ✅ Реализовано (Этап E, text-only, 80/80) |
 | [`03_cross_modal_fusion.md`](docs/layers/03_cross_modal_fusion.md) | Cross-Modal Fusion | Ассоциативная кора | 📄 Спецификация (Этап K) |
 | [`04_memory_system.md`](docs/layers/04_memory_system.md) | Memory System | Гиппокамп + Кора | ✅ Реализовано (101/101) |
-| [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | 📋 Детальная спецификация (Этап F) |
+| [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | ✅ Реализовано (Этап F+F+, 182+7) |
 | [`06_learning_loop.md`](docs/layers/06_learning_loop.md) | Learning Loop | Мозжечок + Гиппокамп | 📄 Спецификация (Этап I) |
-| [`07_output_layer.md`](docs/layers/07_output_layer.md) | Output Layer | Речевые зоны Брока/Вернике | 📄 Спецификация (Этап G) |
+| [`07_output_layer.md`](docs/layers/07_output_layer.md) | Output Layer | Речевые зоны Брока/Вернике | ✅ Реализовано (Этап G, 106+7) |
 | [`08_attention_resource.md`](docs/layers/08_attention_resource.md) | Attention & Resources | Таламус + Гипоталамус | 📄 Спецификация (Этап H) |
 | [`09_logging_observability.md`](docs/layers/09_logging_observability.md) | Logging & Observability | Метапознание | ✅ Реализовано (Этап C, 25/25) |
 | [`10_safety_boundaries.md`](docs/layers/10_safety_boundaries.md) | Safety & Boundaries | Иммунная система | 📄 Спецификация (Этап L) |
 | [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | 📄 Спецификация (Этап M) |
 
 Архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md) (15 разделов)  
-План реализации: [`TODO.md`](docs/TODO.md) (14 фаз, 35+ задач)
+**Единый план реализации (MVP + Post-MVP):** [`TODO.md`](docs/TODO.md)
 
 ---
 
@@ -978,9 +979,12 @@ tests/
 └── test_output_integration.py  ← 7/7 integration smoke тестов ✅
 ```
 
-### Следующий шаг: завершение F+ (тесты) → Этап H — Attention & Resource Control
+### Следующий шаг
 
-**F+ осталось:** Steps 10-12 — ~90 unit тестов, ~5 integration тестов, bump v0.7.0
+> 📋 Единый план реализации: [`docs/TODO.md`](docs/TODO.md)
+
+**MVP Phase A** (текущая): CLI entrypoint, интеграция pipeline, smoke-тесты на реальных данных.  
+**Далее**: Phase B (Retrieval Quality), Phase C (Persistence & Scale).
 
 ```
 brain/attention/
