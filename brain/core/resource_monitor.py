@@ -424,6 +424,14 @@ class ResourceMonitor:
             "policy_changes": s.policy_changes,
         }
 
+    def snapshot(self) -> ResourceState:
+        """
+        Алиас для check() — удовлетворяет ResourceMonitorProtocol.
+
+        Возвращает текущий снимок ресурсов (thread-safe).
+        """
+        return self.check()
+
     def __repr__(self) -> str:
         state = self.check()
         return (

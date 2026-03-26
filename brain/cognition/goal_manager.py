@@ -358,15 +358,14 @@ class GoalManager:
 
     def status(self) -> Dict[str, Any]:
         """Словарь для логирования/observability."""
+        current = self.peek()
         return {
             "total_goals": self.total_count,
             "active_goals": self.active_count,
             "interrupted_goals": self.interrupted_count,
             "completed_goals": len(self._completed),
             "queue_size": len(self._active_queue),
-            "current_goal": (
-                self.peek().goal_id if self.peek() else None
-            ),
+            "current_goal": current.goal_id if current else None,
         }
 
     def clear(self) -> None:
@@ -390,6 +389,10 @@ class GoalManager:
         # Фактическое удаление не нужно — peek() фильтрует.
         # Но для чистоты можно пересобрать очередь при большом размере.
         pass
+
+    def __len__(self) -> int:
+        """Общее количество целей в дереве."""
+        return self.total_count
 
     def __repr__(self) -> str:
         current = self.peek()

@@ -1,6 +1,29 @@
 # 🧠 BRAIN.md — Полный разбор человеческого мозга  
 ## и проектирование искусственного мультимодального мозга (text + media)
 
+> ⚠️ **Disclaimer (март 2026):** Этот документ — **проектная спецификация и vision-документ**.
+> Он описывает целевую архитектуру мультимодального мозга, но **не всё из описанного реализовано**.
+>
+> **Что реализовано (v0.7.0):**
+> - ✅ Perception Layer (текст: txt/md/pdf/docx/json) — Этап B
+> - ✅ Text Encoder (sentence-transformers 768d, fallback navec 300d) — Этап E
+> - ✅ Memory System (5 типов памяти + SQLite WAL persistence) — Этапы D + P1c
+> - ✅ Cognitive Core (10-step pipeline, BM25 retrieval, planning, reasoning) — Этапы F/F+/P1b
+> - ✅ Output Layer (trace, validation, dialogue, pipeline) — Этап G
+> - ✅ Logging & Observability (JSONL, categories, rotation, atexit) — Этап C
+> - ✅ Core Infrastructure (EventBus, ResourceMonitor, Scheduler, Contracts) — Этап A
+>
+> **Что НЕ реализовано:**
+> - ⬜ Vision/Audio/Video Ingestors (Этап J — post-MVP)
+> - ⬜ Cross-Modal Fusion (Этап K — post-MVP)
+> - ⬜ Learning Loop (Этап I — post-MVP)
+> - ⬜ Safety Boundaries (Этап L — post-MVP)
+> - ⬜ Motivation/Reward System (секция 15) — post-MVP
+> - ⬜ CuriosityEngine, MotivationEngine, SalienceEngine — post-MVP
+> - ⬜ brain/motivation/ директория — не существует
+>
+> Актуальный roadmap: [`docs/TODO.md`](TODO.md)
+
 ---
 
 ## 0) Целевая платформа (Hardware Constraints)
@@ -270,31 +293,35 @@ MULTIMODAL BRAIN
 
 ## 12) Roadmap реализации (под CPU-only, media-aware архитектуру)
 
+> **Примечание:** Этот roadmap — оригинальный vision из BRAIN.md.
+> Актуальный roadmap с точными статусами: [`docs/TODO.md`](TODO.md).
+> Ниже — обновлённые статусы по состоянию на v0.7.0.
+
 ### Фаза A — Multimodal Perception
-- [ ] Text ingest pipeline (txt/md/pdf/docx/json).
-- [ ] Vision ingest (image parsing + OCR, CPU-only).
-- [ ] Audio ingest (Whisper tiny/base, CPU-only).
-- [ ] Унифицированный формат `PerceptEvent`.
+- [x] Text ingest pipeline (txt/md/pdf/docx/json) — ✅ Этап B
+- [ ] Vision ingest (image parsing + OCR, CPU-only) — ⬜ Этап J
+- [ ] Audio ingest (Whisper tiny/base, CPU-only) — ⬜ Этап J
+- [x] Унифицированный формат `PerceptEvent` — ✅ Этап A
 
 ### Фаза B — Cross-Modal Fusion
-- [ ] Shared embedding space (лёгкие модели ≤ 500 MB).
-- [ ] Entity/link alignment между модальностями.
-- [ ] Confidence calibration по источникам.
+- [ ] Shared embedding space (лёгкие модели ≤ 500 MB) — ⬜ Этап K
+- [ ] Entity/link alignment между модальностями — ⬜ Этап K
+- [ ] Confidence calibration по источникам — ⬜ Этап K
 
 ### Фаза C — Memory Upgrade
-- [ ] Кросс-модальная эпизодическая память.
-- [ ] Source memory (trust/provenance).
-- [ ] Temporal indexing + retrieval by evidence.
+- [x] Кросс-модальная эпизодическая память — ✅ Этап D (текстовая)
+- [x] Source memory (trust/provenance) — ✅ Этап D
+- [ ] Temporal indexing + retrieval by evidence — ⬜ Post-MVP
 
 ### Фаза D — Cognitive Control
-- [ ] Planner + Goal stack.
-- [ ] Causal reasoner + contradiction checker.
-- [ ] Resource-aware attention controller (CPU/RAM budget).
+- [x] Planner + Goal stack — ✅ Этап F
+- [x] Causal reasoner + contradiction checker — ✅ Этап F/F+
+- [x] Resource-aware attention controller (CPU/RAM budget) — ✅ Этап A (ResourceMonitor)
 
 ### Фаза E — Self-Development
-- [ ] Автоматическое выявление пробелов знаний.
-- [ ] Hypothesis-to-test pipeline.
-- [ ] Reflection dashboard с метриками качества мышления.
+- [ ] Автоматическое выявление пробелов знаний — ⬜ Post-MVP
+- [x] Hypothesis-to-test pipeline — ✅ Этап F+ (HypothesisEngine)
+- [ ] Reflection dashboard с метриками качества мышления — ⬜ Post-MVP
 
 ---
 

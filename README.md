@@ -1,10 +1,10 @@
 # 🧠 Cognitive Core
 
 > **Версия:** 0.7.0  
-> **Статус:** 🚧 В разработке — P1a–P1c ✅ (BM25 + SQLite + CI), Этап H в очереди  
+> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C next  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 773/773 ✅ — `test_bm25.py` (55) · `test_memory.py` (101) · `test_cognition.py` (182) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_text_encoder.py` (80) · `test_perception.py` (79) · `test_logging.py` (25) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_vector_retrieval.py` (39)
+> **Тесты:** 1249/1249 ✅ — `test_bm25.py` (55) · `test_cli.py` (20) · `test_cognition.py` (190) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_golden.py` (414) · `test_logging.py` (25) · `test_memory.py` (101) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_perception.py` (79) · `test_perception_hardening.py` (34) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_text_encoder.py` (80) · `test_vector_retrieval.py` (39)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -35,37 +35,52 @@
 
 ## ⚡ Быстрый старт
 
-> **Статус:** text-only MVP в разработке. CLI entrypoint запланирован (Фаза A.1).
-> Сейчас доступен программный API и полный набор тестов (773).
-
 ```bash
-# 1. Клонировать репозиторий
+# 1. Клонировать и установить
 git clone https://github.com/whatisdantes/cognitive-core.git
 cd cognitive-core
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # Linux/macOS
+pip install -e ".[dev]"
 
-# 2. Установить зависимости (Windows — автоматически)
-download_libraries.bat
+# 2. Задать вопрос через CLI
+cognitive-core "Что такое нейропластичность?"
 
-# 3. Активировать окружение
-.venv\Scripts\activate
-
-# 4. Проверить установку
-python check_deps.py
-
-# 5. Запустить все тесты (773)
+# 3. Запустить все тесты (1249 ✅)
 python -m pytest tests/ -v
 
-# 6. Использовать Memory System в коде
-python -c "
-from brain.memory import MemoryManager
-mm = MemoryManager(data_dir='brain/data/memory', auto_consolidate=False)
-mm.start()
-mm.store('нейрон это клетка нервной системы', importance=0.8, source_ref='test')
-result = mm.retrieve('нейрон')
-print(result.summary())
-mm.stop()
-"
+# 4. Docker (опционально)
+docker build -t cognitive-core .
+docker run cognitive-core "Что такое нейрон?"
 ```
+
+### Программный API
+
+```python
+from brain.core import EventBus, ResourceMonitor
+from brain.memory import MemoryManager
+from brain.cognition import CognitiveCore
+from brain.output import OutputPipeline
+
+bus = EventBus()
+rm  = ResourceMonitor(event_bus=bus)
+mm  = MemoryManager(data_dir="brain/data/memory", auto_consolidate=False)
+mm.start()
+
+core = CognitiveCore(memory_manager=mm, event_bus=bus, resource_monitor=rm)
+result = core.run("Что такое нейрон?")
+
+pipeline = OutputPipeline()
+output = pipeline.process(result)
+print(output.text)
+
+mm.stop()
+```
+
+> ⚠️ **Retrieval scope (v0.7.0):** поиск по памяти использует keyword BM25 + in-memory cosine similarity.
+> Persisted ANN/FAISS индексы запланированы на Post-MVP (Фаза D).
+> Без предварительно загруженных данных в памяти ответы будут шаблонными.
 
 > 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
 > 📋 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](docs/TODO.md)  
@@ -118,14 +133,13 @@ mm.stop()
 
 ### Модели и их размеры
 
-| Модуль | Модель (основная) | Размер | Fallback |
-|--------|------------------|--------|----------|
-| Text Encoder | sentence-transformers large | ~1.3 GB | navec (~200 MB) |
-| Vision Encoder | CLIP ViT-B/32 | ~600 MB | ResNet-50 (~100 MB) |
-| Audio ASR | Whisper medium | ~1.5 GB | Whisper base (~150 MB) |
-| **Итого** | | **~3.4 GB** | **~450 MB** |
+| Модуль | Модель (основная) | Размер | Fallback | Статус |
+|--------|------------------|--------|----------|--------|
+| Text Encoder | sentence-transformers large | ~1.3 GB | navec (~200 MB) | ✅ Реализовано |
+| Vision Encoder | CLIP ViT-B/32 | ~600 MB | ResNet-50 (~100 MB) | 🔮 Planned (Этап J) |
+| Audio ASR | Whisper medium | ~1.5 GB | Whisper base (~150 MB) | 🔮 Planned (Этап J) |
 
-> ⚠️ Модели загружаются автоматически при первом запуске соответствующего энкодера.
+> ⚠️ Сейчас используется только Text Encoder. Vision/Audio энкодеры запланированы на post-MVP (Этап J).
 
 ---
 
@@ -141,23 +155,23 @@ MULTIMODAL BRAIN
 │   └─ AttentionController      бюджет вычислений по модальностям
 │
 ├─ 1. Perception Layer          ← Таламус (маршрутизация входов)
-│   ├─ TextIngestor             txt / md / pdf / docx / json
-│   ├─ VisionIngestor           img / video frames + OCR
-│   ├─ AudioIngestor            ASR + acoustic events
-│   ├─ MetadataExtractor        source, timestamp, quality, language
-│   └─ InputRouter              маршрутизация по типу модальности
+│   ├─ TextIngestor             ✅ txt / md / pdf / docx / json
+│   ├─ VisionIngestor           🔮 img / video frames + OCR (Этап J)
+│   ├─ AudioIngestor            🔮 ASR + acoustic events (Этап J)
+│   ├─ MetadataExtractor        ✅ source, timestamp, quality, language
+│   └─ InputRouter              ✅ маршрутизация по типу модальности
 │
 ├─ 2. Modality Encoders         ← Сенсорная кора (векторизация)
-│   ├─ TextEncoder              sentence-transformers (768d/1024d)
-│   ├─ VisionEncoder            CLIP ViT-B/32 (512d)
-│   ├─ AudioEncoder             Whisper medium + MFCC
-│   └─ TemporalEncoder          позиционное кодирование (видео)
+│   ├─ TextEncoder              ✅ sentence-transformers (768d/1024d)
+│   ├─ VisionEncoder            🔮 CLIP ViT-B/32 (512d) (Этап J)
+│   ├─ AudioEncoder             🔮 Whisper medium + MFCC (Этап J)
+│   └─ TemporalEncoder          🔮 позиционное кодирование (видео) (Этап J)
 │
-├─ 3. Cross-Modal Fusion        ← Ассоциативная кора (слияние)
-│   ├─ SharedSpaceProjector     единое латентное пространство
-│   ├─ EntityLinker             связывание сущностей из разных источников
-│   ├─ ConfidenceCalibrator     оценка качества слияния
-│   └─ ContradictionDetector    обнаружение противоречий между модальностями
+├─ 3. Cross-Modal Fusion        ← Ассоциативная кора (слияние) 🔮 Этап K
+│   ├─ SharedSpaceProjector     🔮 единое латентное пространство
+│   ├─ EntityLinker             🔮 связывание сущностей из разных источников
+│   ├─ ConfidenceCalibrator     🔮 оценка качества слияния
+│   └─ ContradictionDetector    🔮 обнаружение противоречий между модальностями
 │
 ├─ 4. Memory System             ← Гиппокамп + Кора (память)
 │   ├─ WorkingMemory            активный контекст (sliding window, max=20)
@@ -169,31 +183,31 @@ MULTIMODAL BRAIN
 │   └─ MemoryManager            единый интерфейс store()/retrieve()
 │
 ├─ 5. Cognitive Core            ← Префронтальная кора (мышление)
-│   ├─ GoalManager              управление целями (создание, приоритизация, завершение)
-│   ├─ Planner                  декомпозиция целей на шаги + выбор стратегии
-│   ├─ HypothesisEngine         генерация и оценка гипотез (causal/associative/analogical)
-│   ├─ Reasoner                 reasoning loop (retrieve → hypothesize → score → act)
-│   ├─ ContradictionDetector    поиск конфликтующих фактов
-│   ├─ UncertaintyMonitor       оценка уверенности по гипотезам
-│   ├─ SalienceEngine           оценка значимости (аналог Миндалины)
-│   └─ ActionSelector           выбор действия (аналог Базальных ганглий)
+│   ├─ GoalManager              ✅ управление целями (создание, приоритизация, завершение)
+│   ├─ Planner                  ✅ декомпозиция целей на шаги + выбор стратегии
+│   ├─ HypothesisEngine         ✅ генерация и оценка гипотез (causal/associative/analogical)
+│   ├─ Reasoner                 ✅ reasoning loop (retrieve → hypothesize → score → act)
+│   ├─ ContradictionDetector    ✅ поиск конфликтующих фактов
+│   ├─ UncertaintyMonitor       ✅ оценка уверенности по гипотезам
+│   ├─ SalienceEngine           🔮 оценка значимости (аналог Миндалины) (Post-MVP)
+│   └─ ActionSelector           ✅ выбор действия (аналог Базальных ганглий)
 │
-├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение)
-│   ├─ OnlineLearner            обновление после каждого взаимодействия
-│   ├─ ReplayEngine             периодическое воспроизведение эпизодов
-│   ├─ SelfSupervisedLearner    согласованность картинка ↔ текст ↔ аудио
-│   └─ HypothesisEngine         генерация и проверка гипотез
+├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение) 🔮 Этап I
+│   ├─ OnlineLearner            🔮 обновление после каждого взаимодействия
+│   ├─ ReplayEngine             🔮 периодическое воспроизведение эпизодов
+│   ├─ SelfSupervisedLearner    🔮 согласованность картинка ↔ текст ↔ аудио
+│   └─ HypothesisEngine         ✅ генерация и проверка гипотез (в cognition/)
 │
 ├─ 7. Output Layer              ← Речевые зоны (вывод)
-│   ├─ DialogueResponder        текстовый ответ + объяснение + confidence
-│   ├─ ActionProposer           предложение действий с обоснованием
-│   └─ TraceBuilder             полная цепочка причинности
+│   ├─ DialogueResponder        ✅ текстовый ответ + объяснение + confidence
+│   ├─ ActionProposer           🔮 предложение действий с обоснованием (Post-MVP)
+│   └─ TraceBuilder             ✅ полная цепочка причинности
 │
-├─ 8. Attention & Resources     ← Таламус + Гипоталамус
-│   ├─ AttentionController      goal-driven + salience-driven внимание
-│   ├─ ModalityRouter           маршрутизация по приоритету
-│   ├─ CognitiveLoadBalancer    балансировка нагрузки
-│   └─ DegradationPolicy        политика деградации при нехватке ресурсов
+├─ 8. Attention & Resources     ← Таламус + Гипоталамус 🔮 Этап H
+│   ├─ AttentionController      🔮 goal-driven + salience-driven внимание
+│   ├─ ModalityRouter           🔮 маршрутизация по приоритету
+│   ├─ CognitiveLoadBalancer    🔮 балансировка нагрузки
+│   └─ DegradationPolicy        ✅ политика деградации (в ResourceMonitor)
 │
 ├─ 9. Logging & Observability   ← Метапознание
 │   ├─ BrainLogger              JSONL-логгер (одна строка = одно событие)
@@ -201,16 +215,16 @@ MULTIMODAL BRAIN
 │   ├─ TraceBuilder             trace chain для каждого решения
 │   └─ MetricsCollector         KPI метрики в реальном времени
 │
-├─ 10. Safety & Boundaries      ← Иммунная система
-│   ├─ SourceTrust              оценка надёжности источников
-│   ├─ ConflictDetector         детектор конфликтов фактов
-│   ├─ BoundaryGuard            ограничения на действия системы
-│   └─ AuditLogger              аудит решений с высоким риском
+├─ 10. Safety & Boundaries      ← Иммунная система 🔮 Этап L
+│   ├─ SourceTrust              ✅ оценка надёжности источников (в SourceMemory)
+│   ├─ ConflictDetector         ✅ детектор конфликтов фактов (ContradictionDetector)
+│   ├─ BoundaryGuard            🔮 ограничения на действия системы
+│   └─ AuditLogger              🔮 аудит решений с высоким риском
 │
-└─ 11. Reward & Motivation      ← Средний мозг (дофаминовая система)
-    ├─ RewardEngine             5 типов вознаграждения + prediction error
-    ├─ MotivationEngine         накопление reward signals, decay мотивации
-    └─ CuriosityEngine          любопытство ∝ 1/knowledge_coverage
+└─ 11. Reward & Motivation      ← Средний мозг (дофаминовая система) 🔮 Этап M
+    ├─ RewardEngine             🔮 5 типов вознаграждения + prediction error
+    ├─ MotivationEngine         🔮 накопление reward signals, decay мотивации
+    └─ CuriosityEngine          🔮 любопытство ∝ 1/knowledge_coverage
 ```
 
 ---
@@ -263,11 +277,14 @@ cognitive-core/
 │   │   ├── storage.py                  # ✅ MemoryDatabase — SQLite WAL backend (P1c)
 │   │   └── migrate.py                  # ✅ JSON→SQLite миграция (backup, idempotent)
 │   │
-│   ├── perception/                     # Слой восприятия ✅ РЕАЛИЗОВАНО (Этап D)
-│   │   ├── __init__.py                 # Экспорты: MetadataExtractor, TextIngestor, InputRouter
+│   ├── cli.py                          # ✅ CLI entrypoint (cognitive-core "вопрос") — MVP Phase A
+│   │
+│   ├── perception/                     # Слой восприятия ✅ РЕАЛИЗОВАНО (Этап D + B.2 hardening)
+│   │   ├── __init__.py                 # Экспорты: MetadataExtractor, TextIngestor, InputRouter, validators
 │   │   ├── metadata_extractor.py       # ✅ MetadataExtractor — quality scoring, language detection
-│   │   ├── text_ingestor.py            # ✅ TextIngestor — .txt/.md/.pdf/.docx/.json/.csv
-│   │   └── input_router.py             # ✅ InputRouter — SHA256 dedup, quality policy, text-only MVP
+│   │   ├── text_ingestor.py            # ✅ TextIngestor — .txt/.md/.pdf/.docx/.json/.csv + path/size guards
+│   │   ├── input_router.py             # ✅ InputRouter — SHA256 dedup, quality policy + path/size guards
+│   │   └── validators.py              # ✅ validate_file_path(), check_file_size() — B.2 hardening
 │   │
 │   ├── encoders/                       # Модальные энкодеры ✅ РЕАЛИЗОВАНО (Этап E, text-only)
 │   │   ├── __init__.py                 # Экспорты: TextEncoder
@@ -319,21 +336,27 @@ cognitive-core/
 │           ├── sources.json            # доверие к источникам (legacy JSON fallback)
 │           └── procedures.json         # навыки и стратегии (legacy JSON fallback)
 │
-├── tests/                              # Тесты (pytest-совместимые, 773 ✅)
+├── examples/                           # Примеры использования
+│   └── demo.py                         # ✅ Демо: полный pipeline в 30 строк
+│
+├── tests/                              # Тесты (pytest-совместимые, 1249 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
+│   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
+│   ├── test_cognition.py             # ✅ 190/190 тестов Cognitive Core (unit + auto-encode)
+│   ├── test_cognition_integration.py  # ✅ 7/7 тестов Cognitive Core (integration)
+│   ├── test_e2e_pipeline.py           # ✅ 10/10 тестов E2E Pipeline
+│   ├── test_golden.py                 # ✅ 414/414 тестов Golden-answer benchmarks (Phase B.5)
 │   ├── test_logging.py                 # ✅ 25/25 тестов Logging & Observability (unittest)
 │   ├── test_memory.py                  # ✅ 101/101 тестов системы памяти
+│   ├── test_output.py                 # ✅ 106/106 тестов Output Layer (unit)
+│   ├── test_output_integration.py     # ✅ 7/7 тестов Output Layer (integration)
 │   ├── test_perception.py              # ✅ 79/79 тестов Perception Layer
+│   ├── test_perception_hardening.py   # ✅ 34/34 тестов Perception Hardening (Phase B.2)
 │   ├── test_resource_monitor.py        # ✅ 13/13 тестов ResourceMonitor
 │   ├── test_scheduler.py              # ✅ 11/11 тестов Scheduler
 │   ├── test_storage.py                # ✅ 58/58 тестов SQLite Storage + Migration
 │   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
-│   ├── test_cognition.py             # ✅ 182/182 тестов Cognitive Core (unit)
-│   ├── test_cognition_integration.py  # ✅ 7/7 тестов Cognitive Core (integration)
-│   ├── test_e2e_pipeline.py           # ✅ 10/10 тестов E2E Pipeline
-│   ├── test_output.py                 # ✅ 106/106 тестов Output Layer (unit)
-│   ├── test_output_integration.py     # ✅ 7/7 тестов Output Layer (integration)
 │   └── test_vector_retrieval.py       # ✅ 39/39 тестов Vector Retrieval
 │
 ├── docs/                               # Документация
@@ -357,10 +380,12 @@ cognitive-core/
 │       └── 11_midbrain_reward.md       # Средний мозг — мотивация, вознаграждение
 │
 ├── .gitignore                          # Git ignore rules
-├── pyproject.toml                      # Конфигурация проекта + pytest
+├── .dockerignore                       # Docker ignore rules
+├── Dockerfile                          # ✅ Multi-stage Docker build (Phase A.1b)
+├── pyproject.toml                      # Конфигурация проекта + pytest + [project.scripts]
 ├── requirements.txt                    # Зависимости Python
-├── download_libraries.bat              # Автоустановка зависимостей (Windows)
-├── check_deps.py                       # Проверка установленных зависимостей
+├── download_libraries.bat              # ⚠️ Legacy — используйте pip install -e ".[dev]"
+├── check_deps.py                       # ⚠️ Legacy — используйте pip install -e ".[dev]"
 └── README.md                           # Этот файл
 ```
 
@@ -614,36 +639,36 @@ mm.display_status()
 ## 📦 Зависимости
 
 ```
-# Ядро
+# Ядро (обязательные)
 numpy>=1.26.0
 jsonlines>=4.0.0
-
-# PyTorch (CPU-only — устанавливается отдельно через download_libraries.bat)
-torch>=2.2.0
-
-# Русский язык
-pymorphy3>=1.0.0
-razdel>=0.5.0
-nltk>=3.8.0
-navec>=0.10.0              # fallback text encoder (~200 MB)
-
-# Text Encoder
-sentence-transformers>=2.7.0   # основной (~1.3 GB при первом запуске)
-
-# Vision Encoder
-open-clip-torch>=2.24.0        # CLIP ViT-B/32 (~600 MB при первом запуске)
-pillow>=10.0.0
-
-# Audio ASR
-openai-whisper>=20231117       # Whisper medium (~1.5 GB при первом запуске)
+psutil>=5.9.0
+tqdm>=4.66.0
 
 # Документы
 pymupdf>=1.24.0
 python-docx>=1.1.0
 
-# Утилиты
-psutil>=5.9.0
-tqdm>=4.66.0
+# Русский язык (NLP)
+pymorphy3>=1.0.0               # лемматизация для BM25
+razdel>=0.5.0                  # токенизация
+nltk>=3.8.0                    # стоп-слова
+
+# Text Encoder (опционально — graceful fallback)
+sentence-transformers>=2.7.0   # основной (~1.3 GB при первом запуске)
+navec>=0.10.0                  # fallback text encoder (~200 MB)
+
+# Dev
+pytest>=8.0
+pytest-cov>=4.0
+ruff>=0.4.0
+mypy>=1.10
+
+# ─── Post-MVP (Этап J — не нужны для текущей версии) ───
+# open-clip-torch>=2.24.0      # 🔮 Vision Encoder (CLIP ViT-B/32)
+# pillow>=10.0.0               # 🔮 Image processing
+# openai-whisper>=20231117     # 🔮 Audio ASR (Whisper)
+# torch>=2.2.0                 # 🔮 PyTorch CPU-only (для vision/audio)
 ```
 
 ---
@@ -653,27 +678,11 @@ tqdm>=4.66.0
 ### Требования
 
 - Python 3.11+
-- Windows 10/11 (или Linux/macOS с адаптацией скрипта)
-- 32 GB RAM (рекомендуется)
-- ~5 GB свободного места на диске (для моделей)
+- Windows 10/11, Linux или macOS
+- 4 GB RAM минимум (32 GB рекомендуется для полного стека)
+- ~500 MB свободного места (+ ~1.3 GB для sentence-transformers при первом запуске)
 
-### Шаг 1 — Автоматическая установка (Windows)
-
-```bat
-download_libraries.bat
-```
-
-Скрипт выполняет 8 шагов:
-1. Проверка Python 3.10+
-2. Создание виртуального окружения `venv/`
-3. Активация `venv` и обновление `pip`
-4. Установка PyTorch CPU-only (`--index-url https://download.pytorch.org/whl/cpu`)
-5. Установка базовых зависимостей (numpy, psutil, pymorphy3, razdel, nltk, navec, pillow, pymupdf, python-docx)
-6. Установка `sentence-transformers` (Text Encoder)
-7. Установка `open-clip-torch` (Vision Encoder)
-8. Установка `openai-whisper` (Audio ASR) + загрузка NLTK данных
-
-### Шаг 2 — Ручная установка
+### Установка
 
 ```bash
 # Создать виртуальное окружение
@@ -685,41 +694,15 @@ python -m venv .venv
 # Активировать (Linux/macOS)
 source .venv/bin/activate
 
-# Установить PyTorch CPU-only
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Установить проект с dev-зависимостями
+pip install -e ".[dev]"
 
-# Установить остальные зависимости
-pip install -r requirements.txt
+# Или минимальная установка (только ядро)
+pip install -e .
 ```
 
-### Шаг 3 — Проверка установки
-
-```bash
-python check_deps.py
-```
-
-Ожидаемый вывод:
-```
-====================================================
-  ✅  УСТАНОВЛЕНО:
-====================================================
-  PyTorch (CPU-only)             v2.x.x+cpu
-  NumPy                          v2.x.x
-  sentence-transformers          v2.x.x
-  open-clip-torch (CLIP)         v2.x.x
-  openai-whisper                 v20231117
-  pymorphy3                      v1.x.x
-  psutil                         v5.x.x
-  ...
-  Все зависимости установлены корректно!
-
-====================================================
-  🔍  PyTorch детали:
-====================================================
-  CUDA доступна: False
-  CPU потоков:  16
-  Тест матрицы: OK (3x3 mm)
-```
+> **Примечание:** Файлы `download_libraries.bat` и `check_deps.py` — legacy-артефакты ранних версий.
+> Рекомендуемый способ установки — через `pip install -e ".[dev]"`.
 
 ---
 
@@ -729,32 +712,38 @@ python check_deps.py
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (773 ✅)
+# Запустить все тесты (1249 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
 python -m pytest tests/test_memory.py -v
+
+# С покрытием
+python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (773 тестов)
+### Состав тестового набора (1249 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
-| `tests/test_bm25.py` | BM25 Scorer (unit + KeywordBackend reranking integration) | 55 |
-| `tests/test_logging.py` | Logging & Observability (BrainLogger, DigestGenerator, TraceBuilder) | 25 |
-| `tests/test_memory.py` | Memory System (Events, WM, SM, EM, Source, Procedural, Manager, Consolidation) | 101 |
-| `tests/test_perception.py` | Perception Layer (MetadataExtractor, TextIngestor, InputRouter) | 79 |
-| `tests/test_resource_monitor.py` | ResourceMonitor (policies, hysteresis, background thread) | 13 |
-| `tests/test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval, error handling) | 11 |
-| `tests/test_storage.py` | SQLite Storage (MemoryDatabase CRUD, transactions, threads, migration) | 58 |
-| `tests/test_text_encoder.py` | Text Encoder (primary/fallback/failed modes, semantic checks, batch, cache) | 80 |
-| `tests/test_cognition.py` | Cognitive Core (Context, Goals, Planner, Hypotheses, Reasoner, Actions, Core) | 182 |
-| `tests/test_cognition_integration.py` | Cognitive Core Integration (smoke tests with real MemoryManager) | 7 |
-| `tests/test_e2e_pipeline.py` | E2E Pipeline (Protocol conformance + full pipeline) | 10 |
-| `tests/test_output.py` | Output Layer (ExplainabilityTrace, OutputTraceBuilder, Validator, Responder, Pipeline) | 106 |
-| `tests/test_output_integration.py` | Output Layer Integration (CognitiveCore → OutputPipeline → BrainOutput) | 7 |
-| `tests/test_vector_retrieval.py` | Vector Retrieval (VectorRetrievalBackend, HybridRetrievalBackend, cosine similarity) | 39 |
-| | **Итого** | **773** |
+| `test_bm25.py` | BM25 Scorer + KeywordBackend reranking | 55 |
+| `test_cli.py` | CLI entrypoint (argparse, pipeline assembly, error handling) | 20 |
+| `test_cognition.py` | Cognitive Core (unit + auto-encode) | 190 |
+| `test_cognition_integration.py` | Cognitive Core (integration, real MemoryManager) | 7 |
+| `test_e2e_pipeline.py` | E2E Pipeline (protocol conformance + full pipeline) | 10 |
+| `test_golden.py` | Golden-answer benchmarks (20 Q&A × 7 checks + pipeline + round-trip) | 414 |
+| `test_logging.py` | Logging & Observability (BrainLogger, DigestGenerator, TraceBuilder) | 25 |
+| `test_memory.py` | Memory System (Events, WM, SM, EM, Source, Procedural, Manager) | 101 |
+| `test_output.py` | Output Layer (Trace, Validator, Responder, Pipeline) | 106 |
+| `test_output_integration.py` | Output Layer Integration (CognitiveCore → OutputPipeline) | 7 |
+| `test_perception.py` | Perception Layer (MetadataExtractor, TextIngestor, InputRouter) | 79 |
+| `test_perception_hardening.py` | Perception Hardening (path traversal, null bytes, symlinks, size) | 34 |
+| `test_resource_monitor.py` | ResourceMonitor (policies, hysteresis, background thread) | 13 |
+| `test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval) | 11 |
+| `test_storage.py` | SQLite Storage (CRUD, transactions, threads, migration) | 58 |
+| `test_text_encoder.py` | Text Encoder (primary/fallback/failed, semantic, batch, cache) | 80 |
+| `test_vector_retrieval.py` | Vector Retrieval (Vector, Hybrid, cosine similarity) | 39 |
+| | **Итого** | **1249** |
 
 ---
 
@@ -849,23 +838,30 @@ python -m pytest tests/test_memory.py -v
 
 ## ✅ Прогресс реализации
 
-| Фаза | Название | Статус | Тестов |
+> **Примечание:** Нумерация этапов ниже — историческая (из BRAIN.md).
+> Актуальный roadmap с MVP-фазами: [`docs/TODO.md`](docs/TODO.md).
+
+| Этап | Название | Статус | Тестов |
 |------|----------|--------|--------|
-| 0 | Foundation & Bootstrap | 🚧 В процессе | — |
-| 1 | Always-On Autonomous Loop | ✅ Этап B завершён (events ✅, contracts ✅, event_bus ✅, scheduler ✅, resource_monitor ✅) | 11+13 |
-| **2** | **Logging & Observability** | **✅ Завершено** | **25/25** |
-| **3** | **Perception Layer (text-only)** | **✅ Завершено (Этап D)** | **79/79** |
-| **4** | **Modality Encoders (text-only)** | **✅ Завершено (Этап E)** | **80/80** |
-| 5 | Cross-Modal Fusion | ⬜ Не начато | — |
-| **6** | **Memory System** | **✅ Завершено** | **101/101** |
-| **7** | **Cognitive Core** | **✅ Завершено (Этап F)** | **182+7** |
-| **8** | **Explainability & Output** | **✅ Завершено (Этап G)** | **106+7** |
-| 9 | Attention & Resource Control | ⬜ Не начато | — |
-| 10 | Learning Loop | ⬜ Не начато | — |
-| 11 | Safety & Boundaries | ⬜ Не начато | — |
-| 12 | Self-Development & Reflection | ⬜ Не начато | — |
-| 13 | Metrics & KPI Dashboard | ⬜ Не начато | — |
-| 14 | Reward & Motivation System | ⬜ Не начато | — |
+| A | Core Infrastructure (events, contracts, bus, scheduler, monitor) | ✅ Завершено | 24 |
+| B | Perception Layer (text-only) | ✅ Завершено | 79 |
+| C | Logging & Observability | ✅ Завершено | 25 |
+| D | Memory System (5 типов + consolidation) | ✅ Завершено | 101 |
+| E | Modality Encoders (text-only) | ✅ Завершено | 80 |
+| F/F+ | Cognitive Core (10-step pipeline + F+ extensions) | ✅ Завершено | 182+7 |
+| G | Output Layer (trace, validation, dialogue) | ✅ Завершено | 106+7 |
+| P0 | Audit fixes (ruff, e2e tests, protocol conformance) | ✅ Завершено | 10 |
+| P1a | Quick wins (session_id, pytest-cov, deps sync, atexit, mypy) | ✅ Завершено | — |
+| P1b | BM25 Retrieval Quality | ✅ Завершено | 55 |
+| P1c | SQLite Persistence | ✅ Завершено | 58 |
+| **MVP A** | **CLI, Docker, ResourceMonitor, mypy** | **✅ Завершено** | **20** |
+| **MVP B** | **Auto-encode, Perception hardening, Golden benchmarks** | **✅ Завершено** | **456** |
+| H | Attention & Resource Control | ⬜ Post-MVP | — |
+| I | Learning Loop | ⬜ Post-MVP | — |
+| J | Vision/Audio Encoders | ⬜ Post-MVP | — |
+| K | Cross-Modal Fusion | ⬜ Post-MVP | — |
+| L | Safety & Boundaries | ⬜ Post-MVP | — |
+| M | Reward & Motivation | ⬜ Post-MVP | — |
 
 ### Что реализовано сейчас
 
@@ -983,13 +979,6 @@ tests/
 
 > 📋 Единый план реализации: [`docs/TODO.md`](docs/TODO.md)
 
-**MVP Phase A** (текущая): CLI entrypoint, интеграция pipeline, smoke-тесты на реальных данных.  
-**Далее**: Phase B (Retrieval Quality), Phase C (Persistence & Scale).
-
-```
-brain/attention/
-├── attention_controller.py ← AttentionController (goal-driven + salience-driven)
-├── modality_router.py      ← ModalityRouter (маршрутизация по приоритету)
-├── load_balancer.py        ← CognitiveLoadBalancer (балансировка нагрузки)
-└── __init__.py             ← экспорты
-```
+**MVP Phase A** ✅ — CLI entrypoint, Docker, ResourceMonitor.snapshot(), mypy без `|| true`.  
+**MVP Phase B** ✅ — Auto-encode, Perception hardening, Retrieval scope docs, README update, Golden-answer benchmarks (414 тестов).  
+**Далее**: Phase C (Critical DRY — detect_language, extract_fact, sha256 в utils.py).

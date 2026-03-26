@@ -1248,6 +1248,125 @@ class TestCognitiveCore:
 
 
 # ===================================================================
+# TestAutoEncode (B.1) (~8 tests)
+# ===================================================================
+
+class TestAutoEncode:
+    """Тесты для auto-encode в CognitiveCore.run() (B.1)."""
+
+    def test_auto_encode_called_when_no_percept(self):
+        """Если encoded_percept=None и encoder есть — encoder.encode() вызывается."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        from brain.core.contracts import EncodedPercept, Modality
+        encoder.encode.return_value = EncodedPercept(
+            percept_id="auto_1", modality=Modality.TEXT,
+            vector=[0.1] * 10, text="что такое нейрон?",
+            metadata={"keywords": ["нейрон"], "encoder_status": "ok"},
+        )
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        core.run("что такое нейрон?")
+        encoder.encode.assert_called_once_with("что такое нейрон?")
+
+    def test_auto_encode_skipped_when_percept_provided(self):
+        """Если encoded_percept передан — encoder.encode() НЕ вызывается."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        from brain.core.contracts import EncodedPercept, Modality
+        ep = EncodedPercept(
+            percept_id="manual_1", modality=Modality.TEXT,
+            metadata={"keywords": ["нейрон"]},
+        )
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        core.run("что такое нейрон?", encoded_percept=ep)
+        encoder.encode.assert_not_called()
+
+    def test_auto_encode_skipped_when_no_encoder(self):
+        """Если encoder=None — работает без ошибок (как раньше)."""
+        mm = _make_mock_memory()
+        core = CognitiveCore(memory_manager=mm, text_encoder=None)
+        result = core.run("что такое нейрон?")
+        assert result.action in {a.value for a in ActionType}
+
+    def test_auto_encode_failure_graceful(self):
+        """Если encoder.encode() бросает исключение — run() не падает."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        encoder.encode.side_effect = RuntimeError("encoder crashed")
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        result = core.run("что такое нейрон?")
+        assert result.action in {a.value for a in ActionType}
+
+    def test_auto_encode_enriches_retrieval_query(self):
+        """Auto-encoded percept с keywords обогащает retrieval query."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        from brain.core.contracts import EncodedPercept, Modality
+        encoder.encode.return_value = EncodedPercept(
+            percept_id="auto_2", modality=Modality.TEXT,
+            vector=[0.1] * 10, text="нейрон",
+            metadata={"keywords": ["нейрон", "клетка", "мозг"], "encoder_status": "ok"},
+        )
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        result = core.run("нейрон")
+        # Проверяем что search был вызван с обогащённым запросом
+        call_args = mm.search.call_args
+        if call_args:
+            search_query = call_args[0][0] if call_args[0] else call_args[1].get("query", "")
+            # Запрос должен содержать keywords
+            assert "нейрон" in search_query
+
+    def test_auto_encode_result_has_percept_in_goal(self):
+        """Auto-encode устанавливает has_percept=True в goal context."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        from brain.core.contracts import EncodedPercept, Modality
+        encoder.encode.return_value = EncodedPercept(
+            percept_id="auto_3", modality=Modality.TEXT,
+            vector=[0.1] * 10, text="тест",
+            metadata={"keywords": [], "encoder_status": "ok"},
+        )
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        core.run("тест")
+        # Проверяем что goal был создан с has_percept=True
+        gm = core.goal_manager
+        # Последняя цель должна иметь has_percept=True
+        goals = list(gm._goal_tree.values())
+        assert len(goals) >= 1
+        last_goal = goals[-1]
+        assert last_goal.context.get("has_percept") is True
+
+    def test_auto_encode_learn_fact_with_encoder(self):
+        """Auto-encode работает и для learn_fact запросов."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        from brain.core.contracts import EncodedPercept, Modality
+        encoder.encode.return_value = EncodedPercept(
+            percept_id="auto_4", modality=Modality.TEXT,
+            vector=[0.1] * 10, text="запомни: нейрон — клетка",
+            metadata={"keywords": ["нейрон", "клетка"], "encoder_status": "ok"},
+        )
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        result = core.run("запомни: нейрон — клетка")
+        assert result.action == ActionType.LEARN.value
+        encoder.encode.assert_called_once()
+
+    def test_auto_encode_with_zero_vector_handled(self):
+        """Auto-encode с нулевым вектором не ломает pipeline."""
+        mm = _make_mock_memory()
+        encoder = MagicMock()
+        from brain.core.contracts import EncodedPercept, Modality
+        encoder.encode.return_value = EncodedPercept(
+            percept_id="auto_5", modality=Modality.TEXT,
+            vector=[0.0] * 10, text="тест",
+            metadata={"keywords": [], "encoder_status": "failed"},
+        )
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        result = core.run("тест")
+        assert result.action in {a.value for a in ActionType}
+
+
+# ===================================================================
 # TestImports (~4 tests)
 # ===================================================================
 

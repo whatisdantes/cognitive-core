@@ -171,24 +171,37 @@ class CognitiveCore:
         # --- 1. Контекст ---
         context = self._create_context(session_id=session_id)
 
-        # --- 2. Ресурсы ---
+        # --- 2. Auto-encode (B.1) ---
+        if encoded_percept is None and self._encoder is not None:
+            try:
+                encoded_percept = self._encoder.encode(query)
+                logger.debug(
+                    "[CognitiveCore] auto-encoded query: mode=%s dim=%d",
+                    getattr(encoded_percept, "encoder_model", "?"),
+                    getattr(encoded_percept, "vector_dim", 0),
+                )
+            except Exception as e:
+                logger.warning("[CognitiveCore] auto-encode failed: %s", e)
+                encoded_percept = None
+
+        # --- 3. Ресурсы ---
         if resources is None:
             resources = self._get_resources()
 
-        # --- 3. Retrieval query ---
+        # --- 4. Retrieval query ---
         retrieval_query = self._build_retrieval_query(
             query, encoded_percept,
         )
 
-        # --- 4. Создать цель ---
+        # --- 5. Создать цель ---
         goal = self._create_goal(query, encoded_percept)
         self._goal_manager.push(goal)
         context.active_goal = goal
 
-        # --- 5. Index vector from encoded_percept (if available) ---
+        # --- 6. Index vector from encoded_percept (if available) ---
         query_vector = self._index_percept_vector(encoded_percept, query)
 
-        # --- 6. Reasoning loop ---
+        # --- 7. Reasoning loop ---
         trace = self._reasoner.reason(
             query=retrieval_query,
             goal=goal,
@@ -197,7 +210,7 @@ class CognitiveCore:
             query_vector=query_vector,
         )
 
-        # --- 7. Выбор действия ---
+        # --- 8. Выбор действия ---
         decision = self._action_selector.select(
             trace=trace,
             goal_type=goal.goal_type,
@@ -205,17 +218,17 @@ class CognitiveCore:
             resources=resources,
         )
 
-        # --- 8. Выполнить действие (LEARN → store) ---
+        # --- 9. Выполнить действие (LEARN → store) ---
         self._execute_action(decision, query, trace)
 
-        # --- 9. Завершить цель ---
+        # --- 10. Завершить цель ---
         outcome = self._parse_outcome(trace.outcome)
         if outcome and outcome in FAILURE_OUTCOMES:
             self._goal_manager.fail(goal.goal_id, trace.stop_reason)
         else:
             self._goal_manager.complete(goal.goal_id)
 
-        # --- 10. Собрать CognitiveResult ---
+        # --- 11. Собрать CognitiveResult ---
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         result = self._build_cognitive_result(
             query=query,
@@ -226,7 +239,7 @@ class CognitiveCore:
             elapsed_ms=elapsed_ms,
         )
 
-        # --- 11. Публикация события ---
+        # --- 12. Публикация события ---
         self._publish_event("cognitive_cycle_complete", {
             "trace_id": context.trace_id,
             "cycle_id": context.cycle_id,
@@ -271,7 +284,10 @@ class CognitiveCore:
             try:
                 snap = self._resource_monitor.snapshot()
                 if hasattr(snap, "to_dict"):
-                    return snap.to_dict()
+                    snap_dict = snap.to_dict()
+                    if isinstance(snap_dict, dict):
+                        return snap_dict
+                    return {}
                 if isinstance(snap, dict):
                     return snap
             except Exception as e:
@@ -569,6 +585,10 @@ class CognitiveCore:
 
     def status(self) -> Dict[str, Any]:
         """Статус когнитивного ядра для observability."""
+        policy_dict = self._policy.to_dict()
+        if not isinstance(policy_dict, dict):
+            policy_dict = {}
+
         return {
             "cycle_count": self._cycle_count,
             "goal_manager": self._goal_manager.status(),
@@ -578,5 +598,5 @@ class CognitiveCore:
             "has_retrieval_adapter": self._retrieval_adapter is not None,
             "has_contradiction_detector": True,
             "has_uncertainty_monitor": True,
-            "policy": self._policy.to_dict(),
+            "policy": policy_dict,
         }

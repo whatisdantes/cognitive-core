@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Set
 from brain.core.events import PerceptEvent
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
+from brain.perception.validators import validate_file_path, check_file_size
 
 _logger = logging.getLogger(__name__)
 
@@ -295,12 +296,32 @@ class InputRouter:
         force: bool,
     ) -> List[PerceptEvent]:
         """Маршрутизировать файл."""
+        # B.2: Валидация пути (path traversal, null bytes, system dirs)
+        safe, reason = validate_file_path(file_path)
+        if not safe:
+            _logger.warning(
+                "InputRouter: файл отклонён валидацией — %s: %s",
+                reason, file_path,
+            )
+            self._stats.hard_rejected += 1
+            return []
+
         path = Path(file_path)
 
         # Проверка существования
         if not path.exists():
             _logger.error("InputRouter: файл не найден: %s", file_path)
             self._stats.errors += 1
+            return []
+
+        # B.2: Проверка размера файла
+        size_ok, size_mb = check_file_size(file_path)
+        if not size_ok:
+            _logger.warning(
+                "InputRouter: файл слишком большой (%.1f MB): %s",
+                size_mb, file_path,
+            )
+            self._stats.hard_rejected += 1
             return []
 
         # Определяем модальность

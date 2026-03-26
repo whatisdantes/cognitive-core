@@ -1,6 +1,14 @@
 # 🧠 Слой 2: Modality Encoders (Сенсорная кора)
 ## Подробное описание архитектуры и работы
 
+> **Статус: 🟡 Частично реализовано (Этап E — Text Encoder)** · 80/80 тестов
+> ✅ `text_encoder.py` — TextEncoder (sentence-transformers 768d / navec 300d fallback, 4 режима)
+> ✅ `EncodedPercept` dataclass — реализован в `brain/core/contracts.py`
+> ⬜ `VisionEncoder` — Этап J (мультимодальное расширение)
+> ⬜ `AudioEncoder` — Этап J (мультимодальное расширение)
+> ⬜ `TemporalEncoder` — Этап J (мультимодальное расширение)
+> ⬜ `EmbeddingCache` — Post-MVP
+
 ---
 
 ## Что такое Сенсорная кора в биологии
@@ -392,12 +400,12 @@ Encoders только **преобразуют сырые данные в век
 
 | Компонент | Статус | Файл |
 |-----------|--------|------|
-| `EncodedPercept` dataclass | ⬜ Фаза 4.0 | `brain/core/events.py` (расширить) |
-| `TextEncoder` | ⬜ Фаза 4.1 | `brain/encoders/text_encoder.py` |
-| `VisionEncoder` | ⬜ Фаза 4.2 | `brain/encoders/vision_encoder.py` |
-| `AudioEncoder` | ⬜ Фаза 4.3 | `brain/encoders/audio_encoder.py` |
-| `TemporalEncoder` | ⬜ Фаза 4.4 | `brain/encoders/temporal_encoder.py` |
-| `EmbeddingCache` | ⬜ Фаза 4.5 | `brain/encoders/embedding_cache.py` |
+| `EncodedPercept` dataclass | ✅ Реализовано (Этап A) | `brain/core/contracts.py` |
+| `TextEncoder` | ✅ Реализовано (Этап E, 80 тестов) | `brain/encoders/text_encoder.py` |
+| `VisionEncoder` | ⬜ Этап J | `brain/encoders/vision_encoder.py` |
+| `AudioEncoder` | ⬜ Этап J | `brain/encoders/audio_encoder.py` |
+| `TemporalEncoder` | ⬜ Этап J | `brain/encoders/temporal_encoder.py` |
+| `EmbeddingCache` | ⬜ Post-MVP | `brain/encoders/embedding_cache.py` |
 
 ---
 

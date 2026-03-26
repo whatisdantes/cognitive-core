@@ -14,9 +14,13 @@ perception — Слой восприятия (аналог Таламуса).
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.input_router import InputRouter
+from brain.perception.validators import validate_file_path, check_file_size, MAX_FILE_SIZE_MB
 
 __all__ = [
     "MetadataExtractor",
     "TextIngestor",
     "InputRouter",
+    "validate_file_path",
+    "check_file_size",
+    "MAX_FILE_SIZE_MB",
 ]

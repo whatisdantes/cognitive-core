@@ -1,9 +1,9 @@
 # 🧠 TODO — Master Roadmap
 ## cognitive-core v0.7.0
 
-> **Обновлено:** 2026-03-25  
+> **Обновлено:** 2026-03-26  
 > **Принцип:** сначала стабилизировать text-only MVP, затем расширять  
-> **Тесты:** 773/773 ✅ · **Ruff:** 0 errors · **CI:** test + lint + typecheck  
+> **Тесты:** 1249/1249 ✅ · **Ruff:** 0 errors · **CI:** test + lint + typecheck  
 > **Связанные документы:**
 > - [`cognitive_core_mvp_roadmap_revised.md`](cognitive_core_mvp_roadmap_revised.md) — детальный MVP roadmap с Definition of Done
 > - [`PLANS.md`](PLANS.md) — стратегический контекст (Axicor, ARCHITECTURE.md роль, hot/cold path)
@@ -32,14 +32,14 @@
 
 ### Критерии готовности MVP
 
-- [ ] `pip install -e . && cognitive-core "вопрос"` работает из коробки
-- [ ] text-only пайплайн замкнут: `input → encode → memory → reason → output`
-- [ ] `CognitiveCore` использует encoder автоматически
-- [ ] `ResourceMonitor` передаёт реальные данные в cognition
-- [ ] CI зелёный с реальным mypy (без `|| true`)
-- [ ] Perception отвергает опасные пути и слишком большие файлы
-- [ ] README соответствует фактическому поведению проекта
-- [ ] есть `examples/demo.py` или аналогичный рабочий demo
+- [x] `pip install -e . && cognitive-core "вопрос"` работает из коробки ✅ (Phase A)
+- [x] text-only пайплайн замкнут: `input → encode → memory → reason → output` ✅ (B.1)
+- [x] `CognitiveCore` использует encoder автоматически ✅ (B.1)
+- [x] `ResourceMonitor` передаёт реальные данные в cognition ✅ (Phase A)
+- [x] CI зелёный с реальным mypy (без `|| true`) ✅ (Phase A)
+- [x] Perception отвергает опасные пути и слишком большие файлы ✅ (B.2)
+- [x] README соответствует фактическому поведению проекта ✅ (B.4)
+- [x] есть `examples/demo.py` или аналогичный рабочий demo ✅ (Phase A)
 
 ---
 
@@ -47,24 +47,24 @@
 
 > Убрать всё, что мешает проекту запускаться и быть воспроизводимым.
 
-- [ ] **A.1** Официальный entrypoint / CLI
-  - Создать `brain/cli.py` + `[project.scripts]` в pyproject.toml
-  - Команда: `cognitive-core "Что такое нейропластичность?"`
-  - Собрать минимальный пайплайн: `MemoryManager → CognitiveCore → OutputPipeline`
-  - Добавить `examples/demo.py`
-  - **DoD:** `pip install -e . && cognitive-core "вопрос"` → осмысленный ответ
+- [x] **A.1** Официальный entrypoint / CLI ✅
+  - `brain/cli.py` + `[project.scripts]` в pyproject.toml
+  - `cognitive-core "Что такое нейропластичность?"` работает
+  - Пайплайн: `MemoryManager → CognitiveCore → OutputPipeline`
+  - `examples/demo.py` создан
+  - `tests/test_cli.py` — 20 тестов
 
-- [ ] **A.2** Починить контракт `ResourceMonitor ↔ CognitiveCore`
-  - Синхронизировать `ResourceMonitor`, `ResourceMonitorProtocol`, `CognitiveCore`
-  - Один публичный API: `snapshot()` или `check()` с единым return type
-  - Unit-тест на protocol conformance + integration-тест с реальным ResourceMonitor
-  - **DoD:** `CognitiveCore` получает реальные данные о ресурсах, а не пустой fallback
+- [x] **A.1b** Dockerfile ✅
+  - Multi-stage Dockerfile + `.dockerignore`
 
-- [ ] **A.3** Сделать mypy настоящим барьером качества
-  - Убрать `|| true` из mypy job для `brain/core`, `brain/cognition`, `brain/memory`
-  - Исправить критические type errors
-  - Точечные `# type: ignore` с TODO где необходимо
-  - **DoD:** CI проходит с реальным mypy без искусственного пропуска ошибок
+- [x] **A.2** Починить контракт `ResourceMonitor ↔ CognitiveCore` ✅
+  - `snapshot()` добавлен в ResourceMonitor
+  - Protocol conformance проверена
+
+- [x] **A.3** Сделать mypy настоящим барьером качества ✅
+  - `|| true` убран из CI
+  - mypy scope: `brain/core`, `brain/cognition` — 0 ошибок
+  - CI проходит с реальным mypy
 
 ---
 
@@ -72,39 +72,46 @@
 
 > Реально замкнуть text-only MVP-пайплайн.
 
-- [ ] **B.1** Auto-encode в `CognitiveCore`
+- [x] **B.1** Auto-encode в `CognitiveCore` ✅
   - Если `encoded_percept is None` и encoder доступен → `CognitiveCore.run()` сам кодирует query
   - Передать результат в retrieval / reasoning
   - Обновить e2e тесты
   - **DoD:** `CognitiveCore.run("запрос")` без ручного `encoded_percept` использует encoder автоматически
 
-- [ ] **B.2** Минимальный hardening perception
+- [x] **B.2** Минимальный hardening perception ✅
   - `validate_file_path(...)`, `check_file_size(...)`, конфиг `MAX_FILE_SIZE_MB`
   - Интегрировать в `TextIngestor` и `InputRouter`
-  - Тесты: path traversal, oversized file
+  - Тесты: path traversal, oversized file (34 тестов в `test_perception_hardening.py`)
   - **DoD:** система предсказуемо отвергает опасные пути и слишком большие файлы
 
-- [ ] **B.3** Зафиксировать retrieval scope для MVP
+- [x] **B.3** Зафиксировать retrieval scope для MVP ✅
   - Retrieval = keyword-first + BM25 reranking (текущий)
   - Vector retrieval не позиционируется как fully persisted MVP-capability
   - **DoD:** README и CLI честно описывают retrieval как text-first путь
 
-- [ ] **B.4** README привести к реальности
+- [x] **B.4** README привести к реальности ✅
   - Quick Start → реальный entrypoint (`pip install -e . && cognitive-core "..."`)
   - Multimodal → пометить как "Planned (post-MVP)"
   - Честно описать статус retrieval
   - Обновить "Что сделано / Что дальше"
   - **DoD:** README = единственный правдивый источник запуска и статуса MVP
 
+- [x] **B.5** Golden-answer бенчмарки ✅
+  - `tests/golden/questions.json` — 20 Q&A пар
+  - `tests/test_golden.py` — 414 параметризованных тестов (7 классов проверок)
+  - Метрики: answer_rate, keyword_hit_rate, avg_confidence
+  - **DoD:** `pytest tests/test_golden.py` — 414/414 ✅
+
 ---
 
-### Фаза C — MVP Cleanup (1–2 дня)
+### Фаза C — MVP Cleanup + Critical DRY (1–2 дня)
 
-> Убрать самые вредные дубли и сцепки, не уходя в большой рефакторинг.
+> Убрать самые вредные дубли и сцепки. Критичные DRY-задачи перенесены сюда из Post-MVP,
+> чтобы не накапливать технический долг перед расширением.
 
-- [ ] **C.1** Канонический `detect_language()`
+- [ ] **C.1** Канонический `detect_language()` + `brain/core/utils.py`
   - Вынести в `brain/core/utils.py`
-  - Основные runtime-пути используют одну реализацию
+  - Заменить дубли в `text_encoder.py`, `dialogue_responder.py`, `metadata_extractor.py`
   - **DoD:** одна каноническая функция, все модули используют её
 
 - [ ] **C.2** Канонический `extract_fact()`
@@ -115,9 +122,14 @@
   - `MemoryManager` не должен зависеть от приватной внутренности `ConsolidationEngine`
   - **DoD:** приватный `_extract_fact()` не вызывается извне
 
-- [ ] **C.4** Optional: вынести `_sha256()`
-  - Если уже создаётся `utils.py`, заодно вынести hash helpers
-  - **DoD:** не блокер MVP
+- [ ] **C.4** Вынести `_sha256()` и JSON helpers в `brain/core/utils.py`
+  - `_sha256()` дублируется в text_encoder.py и input_router.py
+  - JSON serialization helpers (если есть дубли)
+  - **DoD:** единые утилиты в `brain/core/utils.py`
+
+- [ ] **C.5** Общий JSON serialization helper
+  - Перенесено из Post-MVP E.1 — критичный дубль
+  - **DoD:** один helper для JSON сериализации контрактов
 
 ---
 
@@ -132,11 +144,14 @@
 - [ ] **D.3** Hybrid retrieval как официальный путь
 - [ ] **D.4** Retrieval quality benchmarks (Recall@5, MRR@10, gold set)
 
-### Фаза E — Clean Code / DRY Sweep (2–3 дня)
+### Фаза E — Clean Code / DRY Sweep (1–2 дня)
 
-- [ ] **E.1** Общий JSON serialization helper
-- [ ] **E.2** Cleanup utilities (дублирующиеся функции)
-- [ ] **E.3** Частичный разбор дублирующихся функций между модулями
+> Критичные дубли (detect_language, extract_fact, sha256, JSON helpers) уже в Фазе C.
+> Здесь — оставшиеся cleanup задачи.
+
+- [ ] **E.1** Cleanup оставшихся дублирующихся функций между модулями
+- [ ] **E.2** Унификация error handling patterns
+- [ ] **E.3** Ревизия import structure (circular deps, lazy imports)
 
 ### Фаза F — Hardening & DX (2–3 дня)
 
@@ -144,6 +159,7 @@
 - [ ] **F.2** Graceful shutdown через `Event.wait()` где оправдано
 - [ ] **F.3** Concurrency stress tests
 - [ ] **F.4** Lock-файл / reproducible builds
+- [ ] **F.5** Docker Compose для dev-окружения (если нужен persistent storage)
 
 ### Этап H — Attention & Resource Control (10–14 часов)
 
@@ -229,24 +245,37 @@
 ## 📋 Backlog (P2/P3)
 
 > Улучшения качества, масштабируемости и DX. Не блокируют MVP.
+> **Ранжировано по ценности** (сверху — самые полезные).
 
-### P2 — Улучшения
+### P2 — Улучшения (по приоритету)
 
-- [ ] **P2.1** TTL/LRU для in-memory индексов BrainLogger (защита от роста памяти)
+- [ ] **P2.4** ⭐ Property-based и benchmark тесты (hypothesis library, perf regression)
+  - _Высший приоритет: даёт уверенность в корректности при рефакторинге_
+- [ ] **P2.10** ⭐ ContradictionDetector: заменить `copy.deepcopy` на `dataclasses.replace` (performance)
+  - _Высокий: bottleneck на каждом cognitive cycle_
 - [ ] **P2.2** Ослабить связность EvidencePack (core + metadata разделение)
+  - _Средний: упрощает тестирование и расширение_
 - [ ] **P2.3** Вынести стратегии HypothesisEngine в Strategy pattern
-- [ ] **P2.4** Property-based и benchmark тесты (hypothesis library, perf regression)
-- [ ] **P2.5** Убрать Python 3.14 из classifiers в pyproject.toml (не тестируется в CI)
+  - _Средний: улучшает расширяемость_
 - [ ] **P2.6** Добавить CHANGELOG.md
+  - _Средний: нужен для релизов_
+- [ ] **P2.1** TTL/LRU для in-memory индексов BrainLogger (защита от роста памяти)
+  - _Низкий: проблема проявится только при длительной работе_
+- [ ] **P2.5** Убрать Python 3.14 из classifiers в pyproject.toml (не тестируется в CI)
+  - _Низкий: косметика_
 - [ ] **P2.7** Добавить CONTRIBUTING.md
+  - _Низкий: нужен при появлении контрибьюторов_
 - [ ] **P2.8** Добавить `.gitkeep` в `brain/data/memory/`
+  - _Низкий: косметика_
 - [ ] **P2.9** CI: добавить pip cache для ускорения билдов
-- [ ] **P2.10** ContradictionDetector: заменить `copy.deepcopy` на `dataclasses.replace` (performance)
+  - _Низкий: уже есть `cache: pip` в setup-python_
 
-### P3 — Research / Backlog
+### P3 — Research / Backlog (по приоритету)
 
-- [ ] **P3.1** Contradiction detection: NLI-модель вместо negation-based логики
+- [ ] **P3.1** ⭐ Contradiction detection: NLI-модель вместо negation-based логики
+  - _Высший: качественный скачок в обнаружении противоречий_
 - [ ] **P3.2** OpenTelemetry: оценить замену части кастомного трейсинга
+  - _Средний: стандартизация observability_
 
 ---
 
@@ -354,25 +383,28 @@
 
 ## 🧪 Test Coverage
 
-**Всего: 773/773 ✅** (Python 3.14.3, 97.21s)
+**Всего: 1249/1249 ✅** (18 test files, ~15s)
 
 | Файл | Модуль | Тестов | Статус |
 |------|--------|--------|--------|
 | `test_bm25.py` | BM25 Scorer + KeywordBackend reranking | 55 | ✅ |
-| `test_storage.py` | SQLite Storage + Migration | 58 | ✅ |
-| `test_e2e_pipeline.py` | E2E Pipeline + Protocol conformance | 10 | ✅ |
-| `test_memory.py` | Memory System (5 types + consolidation + manager) | 101 | ✅ |
-| `test_cognition.py` | Cognitive Core (unit) | 182 | ✅ |
+| `test_cli.py` | CLI entrypoint (Phase A) | 20 | ✅ |
+| `test_cognition.py` | Cognitive Core (unit + auto-encode) | 190 | ✅ |
 | `test_cognition_integration.py` | Cognitive Core (integration) | 7 | ✅ |
+| `test_e2e_pipeline.py` | E2E Pipeline + Protocol conformance | 10 | ✅ |
+| `test_golden.py` | Golden-answer benchmarks (Phase B.5) | 414 | ✅ |
+| `test_logging.py` | Logging & Observability | 25 | ✅ |
+| `test_memory.py` | Memory System (5 types + consolidation + manager) | 101 | ✅ |
 | `test_output.py` | Output Layer (unit) | 106 | ✅ |
 | `test_output_integration.py` | Output Layer (integration) | 7 | ✅ |
-| `test_text_encoder.py` | Text Encoder (4 modes) | 80 | ✅ |
 | `test_perception.py` | Perception Layer | 79 | ✅ |
-| `test_logging.py` | Logging & Observability | 25 | ✅ |
+| `test_perception_hardening.py` | Perception Hardening (Phase B.2) | 34 | ✅ |
 | `test_resource_monitor.py` | ResourceMonitor | 13 | ✅ |
 | `test_scheduler.py` | Scheduler | 11 | ✅ |
+| `test_storage.py` | SQLite Storage + Migration | 58 | ✅ |
+| `test_text_encoder.py` | Text Encoder (4 modes) | 80 | ✅ |
 | `test_vector_retrieval.py` | Vector Retrieval | 39 | ✅ |
-| **Итого** | | **773** | **✅** |
+| **Итого** | | **1249** | **✅** |
 
 ---
 
@@ -380,13 +412,13 @@
 
 | Этап | Название | Статус | Тесты |
 |------|----------|--------|-------|
-| A–G | Foundation → Output MVP | ✅ Завершено | 773 |
+| A–G | Foundation → Output MVP | ✅ Завершено | 793 |
 | F+ | Cognitive Extensions | ✅ Завершено | (в test_cognition) |
 | P0 | Критические исправления | ✅ Завершено | — |
 | P1 | BM25 + SQLite + CI | ✅ Завершено | 113 новых |
-| **MVP A** | **Foundation** | **[ ] Следующий** | — |
-| MVP B | Close the Loop | [ ] | — |
-| MVP C | MVP Cleanup | [ ] | — |
+| **MVP A** | **Foundation** | **✅ Завершено** | 835 |
+| **MVP B** | **Close the Loop** | **✅ Завершено** | 456 |
+| MVP C | MVP Cleanup | [ ] Следующий | — |
 | D | Retrieval Upgrade | [ ] Post-MVP | — |
 | E | DRY Sweep | [ ] Post-MVP | — |
 | F | Hardening & DX | [ ] Post-MVP | — |

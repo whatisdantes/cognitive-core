@@ -1,0 +1,222 @@
+[
+  {
+    "id": "q01",
+    "query": "что такое нейрон?",
+    "description": "Прямой вопрос по предзагруженному факту",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["нейрон"],
+    "must_not_contain": [],
+    "tags": ["biology", "with_memory", "ru"]
+  },
+  {
+    "id": "q02",
+    "query": "что такое синапс?",
+    "description": "Вопрос по второму предзагруженному факту",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["синапс"],
+    "must_not_contain": [],
+    "tags": ["biology", "with_memory", "ru"]
+  },
+  {
+    "id": "q03",
+    "query": "как работает дофамин?",
+    "description": "Вопрос по факту о дофамине",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["дофамин"],
+    "must_not_contain": [],
+    "tags": ["biology", "with_memory", "ru"]
+  },
+  {
+    "id": "q04",
+    "query": "сколько нейронов в мозге человека?",
+    "description": "Вопрос по факту о количестве нейронов",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["миллиард"],
+    "must_not_contain": [],
+    "tags": ["biology", "with_memory", "ru"]
+  },
+  {
+    "id": "q05",
+    "query": "что такое гиппокамп?",
+    "description": "Вопрос по факту о гиппокампе",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["гиппокамп"],
+    "must_not_contain": [],
+    "tags": ["biology", "with_memory", "ru"]
+  },
+  {
+    "id": "q06",
+    "query": "что такое префронтальная кора?",
+    "description": "Вопрос по факту о префронтальной коре",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["префронтальн"],
+    "must_not_contain": [],
+    "tags": ["biology", "with_memory", "ru"]
+  },
+  {
+    "id": "q07",
+    "query": "запомни: митохондрия — энергетическая станция клетки",
+    "description": "Команда learn_fact",
+    "expected_goal_type": "learn_fact",
+    "expected_actions": ["learn"],
+    "min_confidence": 0.3,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["learn", "ru"]
+  },
+  {
+    "id": "q08",
+    "query": "сохрани: ДНК содержит генетическую информацию",
+    "description": "Команда learn_fact с маркером 'сохрани'",
+    "expected_goal_type": "learn_fact",
+    "expected_actions": ["learn"],
+    "min_confidence": 0.3,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["learn", "ru"]
+  },
+  {
+    "id": "q09",
+    "query": "запиши: аксон передаёт сигнал от тела нейрона",
+    "description": "Команда learn_fact с маркером 'запиши'",
+    "expected_goal_type": "learn_fact",
+    "expected_actions": ["learn"],
+    "min_confidence": 0.3,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["learn", "ru"]
+  },
+  {
+    "id": "q10",
+    "query": "правда ли что мозг потребляет 20% энергии тела?",
+    "description": "Верификация факта (verify_claim)",
+    "expected_goal_type": "verify_claim",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["verify", "ru"]
+  },
+  {
+    "id": "q11",
+    "query": "верно ли что нейроны не восстанавливаются?",
+    "description": "Верификация спорного утверждения",
+    "expected_goal_type": "verify_claim",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["verify", "ru"]
+  },
+  {
+    "id": "q12",
+    "query": "Нейропластичность — это способность мозга изменять свою структуру и функции в ответ на опыт, обучение и повреждения. Этот процесс включает формирование новых синаптических связей и укрепление существующих.",
+    "description": "Длинное утверждение (explore_topic)",
+    "expected_goal_type": "explore_topic",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse", "learn"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["explore", "ru"]
+  },
+  {
+    "id": "q13",
+    "query": "Серотонин — нейромедиатор, участвующий в регуляции настроения, сна, аппетита и когнитивных функций. Низкий уровень серотонина связан с депрессией и тревожными расстройствами.",
+    "description": "Длинное утверждение (explore_topic)",
+    "expected_goal_type": "explore_topic",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse", "learn"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["explore", "ru"]
+  },
+  {
+    "id": "q14",
+    "query": "что такое квантовая хромодинамика?",
+    "description": "Вопрос без фактов в памяти (нет данных по физике)",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["no_memory", "ru"]
+  },
+  {
+    "id": "q15",
+    "query": "кто написал 'Войну и мир'?",
+    "description": "Вопрос без фактов в памяти (нет данных по литературе)",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["no_memory", "ru"]
+  },
+  {
+    "id": "q16",
+    "query": "",
+    "description": "Пустой запрос (edge case)",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["refuse", "ask_clarification"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["edge_case"]
+  },
+  {
+    "id": "q17",
+    "query": "а",
+    "description": "Минимальный запрос (edge case)",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["edge_case"]
+  },
+  {
+    "id": "q18",
+    "query": "What is a neuron?",
+    "description": "Английский вопрос",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["en", "with_memory"]
+  },
+  {
+    "id": "q19_learn",
+    "query": "запомни: рибосома — органелла для синтеза белков",
+    "description": "Round-trip шаг 1: запомнить факт",
+    "expected_goal_type": "learn_fact",
+    "expected_actions": ["learn"],
+    "min_confidence": 0.3,
+    "must_contain_if_found": [],
+    "must_not_contain": [],
+    "tags": ["roundtrip", "learn", "ru"]
+  },
+  {
+    "id": "q20_retrieve",
+    "query": "что такое рибосома?",
+    "description": "Round-trip шаг 2: найти запомненный факт",
+    "expected_goal_type": "answer_question",
+    "expected_actions": ["respond_direct", "respond_hedged", "ask_clarification", "refuse"],
+    "min_confidence": 0.0,
+    "must_contain_if_found": ["рибосом"],
+    "must_not_contain": [],
+    "tags": ["roundtrip", "retrieve", "ru"]
+  }
+]

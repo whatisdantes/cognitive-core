@@ -1,7 +1,13 @@
 # 🧠 Слой 7: Output Layer (Речевые зоны + Моторная кора)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ⬜ Фаза 10 — не реализовано**
+> **Статус: 🟡 Частично реализовано (Этап G)** · 106+7 тестов
+> ✅ `trace_builder.py` — OutputTraceBuilder (ExplainabilityTrace, цепочки причинности)
+> ✅ `response_validator.py` — ResponseValidator (4 проверки: полнота, согласованность, уверенность, длина)
+> ✅ `dialogue_responder.py` — DialogueResponder (hedging, шаблоны, RU/EN)
+> ✅ `OutputPipeline` — оркестратор (trace → validate → respond)
+> ⬜ `ActionProposer` — не реализован (Post-MVP)
+> ⬜ Проверка безопасности / language mismatch в ResponseValidator — Post-MVP
 
 ---
 
@@ -549,13 +555,14 @@ brain/logs/
 
 | Компонент | Статус | Файл |
 |-----------|--------|------|
-| `ExplainabilityTrace` dataclass | ⬜ Фаза 10.0 | `brain/core/events.py` (расширить) |
-| `BrainOutput` dataclass | ⬜ Фаза 10.0 | `brain/core/events.py` (расширить) |
-| `TraceBuilder` | ⬜ Фаза 10.1 | `brain/output/trace_builder.py` |
-| `ResponseValidator` | ⬜ Фаза 10.2 | `brain/output/response_validator.py` |
-| `DialogueResponder` | ⬜ Фаза 10.3 | `brain/output/dialogue_responder.py` |
-| `ActionProposer` | ⬜ Фаза 10.4 | `brain/output/action_proposer.py` |
-| `BrainLogger` (JSONL) | ⬜ Фаза 2.1 | `brain/logging/brain_logger.py` |
+| `ExplainabilityTrace` dataclass | ✅ Реализовано (Этап G) | `brain/output/trace_builder.py` |
+| `BrainOutput` dataclass | ✅ Реализовано (Этап G) | `brain/output/__init__.py` |
+| `OutputTraceBuilder` | ✅ Реализовано (Этап G) | `brain/output/trace_builder.py` |
+| `ResponseValidator` | ✅ Реализовано (Этап G, 4 проверки) | `brain/output/response_validator.py` |
+| `DialogueResponder` | ✅ Реализовано (Этап G) | `brain/output/dialogue_responder.py` |
+| `OutputPipeline` | ✅ Реализовано (Этап G) | `brain/output/__init__.py` |
+| `ActionProposer` | ⬜ Post-MVP | `brain/output/action_proposer.py` |
+| `BrainLogger` (JSONL) | ✅ Реализовано (Этап C) | `brain/logging/brain_logger.py` |
 
 ---
 

@@ -60,6 +60,9 @@ all = [
     "cognitive-core[dev,nlp,vision,audio,docs]",
 ]
 
+[project.scripts]
+cognitive-core = "brain.cli:cli_entry"
+
 [tool.setuptools.packages.find]
 include = ["brain*"]
 

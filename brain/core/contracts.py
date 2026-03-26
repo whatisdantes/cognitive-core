@@ -13,15 +13,17 @@ brain/core/contracts.py
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, TypeVar, cast, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
 # Mixin: единый стиль сериализации для всех контрактов
 # ---------------------------------------------------------------------------
+
+T = TypeVar("T", bound="ContractMixin")
+
 
 class ContractMixin:
     """
@@ -31,18 +33,18 @@ class ContractMixin:
 
     def to_dict(self) -> Dict[str, Any]:
         """Рекурсивно конвертирует dataclass в dict (Enum → str)."""
-        raw = dataclasses.asdict(self)
-        return _enum_to_str(raw)
+        raw = dict(vars(self))
+        return cast(Dict[str, Any], _enum_to_str(raw))
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]):
+    def from_dict(cls: type[T], data: Dict[str, Any]) -> T:
         """
         Создаёт экземпляр из dict.
         Неизвестные ключи игнорируются (forward-compatibility).
         Вложенные dataclass НЕ восстанавливаются автоматически —
         используйте явный from_dict() вложенного типа при необходимости.
         """
-        known = {f.name for f in dataclasses.fields(cls)}
+        known = set(getattr(cls, "__dataclass_fields__", {}).keys())
         return cls(**{k: v for k, v in data.items() if k in known})
 
 

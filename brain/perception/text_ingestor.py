@@ -27,6 +27,7 @@ from typing import Any, List, Optional
 
 from brain.core.events import EventFactory, PerceptEvent
 from brain.perception.metadata_extractor import MetadataExtractor
+from brain.perception.validators import validate_file_path, check_file_size
 
 _logger = logging.getLogger(__name__)
 
@@ -117,8 +118,23 @@ class TextIngestor:
         path = Path(file_path)
         ext = path.suffix.lower()
 
+        # B.2: Валидация пути (path traversal, null bytes, system dirs)
+        safe, reason = validate_file_path(file_path)
+        if not safe:
+            _logger.warning("TextIngestor: файл отклонён валидацией — %s: %s", reason, file_path)
+            return []
+
         if not path.exists():
             _logger.error("TextIngestor: файл не найден: %s", file_path)
+            return []
+
+        # B.2: Проверка размера файла
+        size_ok, size_mb = check_file_size(file_path)
+        if not size_ok:
+            _logger.warning(
+                "TextIngestor: файл слишком большой (%.1f MB): %s",
+                size_mb, file_path,
+            )
             return []
 
         if ext not in TEXT_EXTENSIONS:

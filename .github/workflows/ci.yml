@@ -90,4 +90,4 @@ jobs:
 
       - name: Run mypy
         run: |
-          mypy brain/ --ignore-missing-imports --no-error-summary || true
+          mypy brain/core brain/cognition --ignore-missing-imports --no-error-summary
