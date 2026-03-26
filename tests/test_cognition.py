@@ -1308,7 +1308,7 @@ class TestAutoEncode:
             metadata={"keywords": ["нейрон", "клетка", "мозг"], "encoder_status": "ok"},
         )
         core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
-        result = core.run("нейрон")
+        core.run("нейрон")
         # Проверяем что search был вызван с обогащённым запросом
         call_args = mm.search.call_args
         if call_args:

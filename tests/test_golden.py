@@ -548,7 +548,7 @@ class TestGoldenSummary:
         print("=" * 60)
         print(f"Total questions:    {total}")
         print(f"Avg confidence:     {avg_confidence:.3f}")
-        print(f"Action distribution:")
+        print("Action distribution:")
         for action, count in sorted(action_counts.items()):
             pct = count / total * 100
             print(f"  {action:25s} {count:3d} ({pct:.0f}%)")

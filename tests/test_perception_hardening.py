@@ -13,10 +13,7 @@ test_perception_hardening.py — Тесты B.2: Perception Hardening.
 from __future__ import annotations
 
 import os
-import tempfile
 import textwrap
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
