@@ -10,39 +10,39 @@ brain/core — Ядро автономного цикла мозга.
     attention_controller.py — бюджет вычислений по модальностям
 """
 
-from .events import (
-    BaseEvent,
-    PerceptEvent,
-    MemoryEvent,
-    CognitiveEvent,
-    LearningEvent,
-    SystemEvent,
-    EventFactory,
-)
 from .contracts import (
+    BrainOutput,
+    CognitiveResult,
+    EncodedPercept,
+    EventBusProtocol,
+    FusedPercept,
+    MemoryManagerProtocol,
     Modality,
-    TaskStatus,
+    ResourceMonitorProtocol,
     ResourceState,
     Task,
-    EncodedPercept,
-    FusedPercept,
+    TaskStatus,
+    TraceChain,
     TraceRef,
     TraceStep,
-    TraceChain,
-    CognitiveResult,
-    BrainOutput,
-    MemoryManagerProtocol,
-    EventBusProtocol,
-    ResourceMonitorProtocol,
 )
-from .event_bus import EventBus, BusStats
-from .scheduler import Scheduler, TaskPriority, SchedulerConfig, SchedulerStats
+from .event_bus import BusStats, EventBus
+from .events import (
+    BaseEvent,
+    CognitiveEvent,
+    EventFactory,
+    LearningEvent,
+    MemoryEvent,
+    PerceptEvent,
+    SystemEvent,
+)
 from .resource_monitor import (
-    ResourceMonitor,
     DegradationPolicy,
+    ResourceMonitor,
     ResourceMonitorConfig,
     ResourceMonitorStats,
 )
+from .scheduler import Scheduler, SchedulerConfig, SchedulerStats, TaskPriority
 
 __all__ = [
     # events

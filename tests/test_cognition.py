@@ -7,32 +7,30 @@ Unit-тесты когнитивного ядра (Stage F).
 ~130 тестов, 14 классов.
 """
 
-import sys
 import os
+import sys
 from unittest.mock import MagicMock
-
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from brain.cognition.action_selector import ActionDecision, ActionSelector, ActionType
+from brain.cognition.cognitive_core import CognitiveCore
 from brain.cognition.context import (
+    FAILURE_OUTCOMES,
+    GOAL_TYPE_LIMITS,
+    NORMAL_OUTCOMES,
     CognitiveContext,
-    CognitiveOutcome,
     CognitiveFailure,
+    CognitiveOutcome,
     EvidencePack,
     GoalTypeLimits,
     PolicyConstraints,
     ReasoningState,
-    GOAL_TYPE_LIMITS,
-    NORMAL_OUTCOMES,
-    FAILURE_OUTCOMES,
 )
-from brain.cognition.goal_manager import Goal, GoalStatus, GoalManager
-from brain.cognition.planner import PlanStep, ExecutionPlan, Planner
+from brain.cognition.goal_manager import Goal, GoalManager, GoalStatus
 from brain.cognition.hypothesis_engine import Hypothesis, HypothesisEngine
-from brain.cognition.reasoner import ReasoningStep, ReasoningTrace, Reasoner
-from brain.cognition.action_selector import ActionType, ActionDecision, ActionSelector
-from brain.cognition.cognitive_core import CognitiveCore
-
+from brain.cognition.planner import ExecutionPlan, Planner, PlanStep
+from brain.cognition.reasoner import Reasoner, ReasoningStep, ReasoningTrace
 
 # ===================================================================
 # Helpers
@@ -1224,15 +1222,15 @@ class TestCognitiveCore:
         core = CognitiveCore(memory_manager=mm)
         assert core._detect_goal_type("правда ли что земля круглая?") == "verify_claim"
 
-    def test_extract_fact(self):
+    def test_strip_learn_markers(self):
         mm = _make_mock_memory()
         core = CognitiveCore(memory_manager=mm)
-        assert core._extract_fact("запомни: нейрон — клетка") == "нейрон — клетка"
+        assert core._strip_learn_markers("запомни: нейрон — клетка") == "нейрон — клетка"
 
-    def test_extract_fact_no_marker(self):
+    def test_strip_learn_markers_no_marker(self):
         mm = _make_mock_memory()
         core = CognitiveCore(memory_manager=mm)
-        assert core._extract_fact("просто текст") == "просто текст"
+        assert core._strip_learn_markers("просто текст") == "просто текст"
 
     def test_run_metadata_has_goal_type(self):
         mm = _make_mock_memory()
@@ -1390,7 +1388,7 @@ class TestImports:
         assert CognitiveContext is not None
 
     def test_import_constants(self):
-        from brain.cognition import GOAL_TYPE_LIMITS, NORMAL_OUTCOMES, FAILURE_OUTCOMES
+        from brain.cognition import FAILURE_OUTCOMES, GOAL_TYPE_LIMITS, NORMAL_OUTCOMES
         assert len(GOAL_TYPE_LIMITS) == 4
         assert len(NORMAL_OUTCOMES) == 3
         assert len(FAILURE_OUTCOMES) == 4

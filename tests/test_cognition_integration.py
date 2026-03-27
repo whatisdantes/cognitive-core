@@ -9,20 +9,19 @@ Integration smoke tests для когнитивного ядра (Stage F).
 ~7 smoke tests.
 """
 
-import sys
 import os
-import tempfile
 import shutil
+import sys
+import tempfile
 
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from brain.memory.memory_manager import MemoryManager
-from brain.cognition.cognitive_core import CognitiveCore
 from brain.cognition.action_selector import ActionType
+from brain.cognition.cognitive_core import CognitiveCore
 from brain.core.contracts import CognitiveResult, TraceChain
-
+from brain.memory.memory_manager import MemoryManager
 
 # ===================================================================
 # Fixtures

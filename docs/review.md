@@ -1,5 +1,11 @@
 # Общий review проекта `cognitive-core`
 
+> ⚠️ **ИСТОРИЧЕСКИЙ ДОКУМЕНТ** — снимок состояния проекта на 25 марта 2026 (773 теста).  
+> С момента написания завершены **Phase A** (CLI, Docker, mypy), **Phase B** (auto-encode, perception hardening, golden benchmarks) и **Phase C** (DRY refactoring).  
+> Текущее состояние: **1312 тестов**, CLI entrypoint, Dockerfile, 19 test files, ruff clean.  
+> Многие проблемы, описанные ниже (нет CLI, нет Docker, legacy-артефакты, нет golden-тестов), **уже решены**.  
+> Актуальный roadmap: [`docs/TODO.md`](TODO.md)
+
 **Автор проекта:** whatisdantes  
 **Период оценки:** первые 5 дней разработки (20–25 марта 2026)  
 **Основа ревью:** технический разбор репозитория + внешний аудит + peer review с коррекцией оценок  

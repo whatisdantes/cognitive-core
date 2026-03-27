@@ -17,14 +17,13 @@ import textwrap
 
 import pytest
 
+from brain.perception.input_router import InputRouter
+from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import (
     MAX_FILE_SIZE_MB,
     check_file_size,
     validate_file_path,
 )
-from brain.perception.input_router import InputRouter
-from brain.perception.text_ingestor import TextIngestor
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. validate_file_path — unit tests

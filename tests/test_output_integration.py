@@ -13,11 +13,10 @@ Integration smoke tests для brain/output/ — Output MVP.
 
 import pytest
 
+from brain.cognition.cognitive_core import CognitiveCore
 from brain.core.contracts import BrainOutput, CognitiveResult, TraceChain, TraceRef
 from brain.memory.memory_manager import MemoryManager
-from brain.cognition.cognitive_core import CognitiveCore
 from brain.output.dialogue_responder import OutputPipeline
-
 
 # ===========================================================================
 # Fixtures

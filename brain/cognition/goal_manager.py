@@ -25,7 +25,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from brain.core.contracts import ContractMixin
-from .context import GoalTypeLimits, GOAL_TYPE_LIMITS
+
+from .context import GOAL_TYPE_LIMITS, GoalTypeLimits
 
 logger = logging.getLogger(__name__)
 

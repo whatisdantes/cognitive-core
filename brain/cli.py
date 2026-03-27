@@ -16,12 +16,11 @@ import sys
 from pathlib import Path
 
 from brain import __version__
+from brain.cognition.cognitive_core import CognitiveCore
 from brain.core.event_bus import EventBus
 from brain.core.resource_monitor import ResourceMonitor, ResourceMonitorConfig
 from brain.memory.memory_manager import MemoryManager
-from brain.cognition.cognitive_core import CognitiveCore
 from brain.output.dialogue_responder import OutputPipeline
-
 
 logger = logging.getLogger(__name__)
 

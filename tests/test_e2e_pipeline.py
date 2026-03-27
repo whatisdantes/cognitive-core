@@ -12,17 +12,16 @@ End-to-end pipeline smoke tests.
 
 import pytest
 
-from brain.memory import MemoryManager
 from brain.cognition import CognitiveCore
-from brain.output import OutputPipeline
 from brain.core.contracts import (
     BrainOutput,
     CognitiveResult,
     EncodedPercept,
-    Modality,
     MemoryManagerProtocol,
+    Modality,
 )
-
+from brain.memory import MemoryManager
+from brain.output import OutputPipeline
 
 # ---------------------------------------------------------------------------
 # Fixtures

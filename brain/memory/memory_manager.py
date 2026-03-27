@@ -31,14 +31,15 @@ try:
 except ImportError:
     _PSUTIL_AVAILABLE = False
 
-from .working_memory import WorkingMemory, MemoryItem  # noqa: E402
-from .semantic_memory import SemanticMemory, SemanticNode  # noqa: E402
-from .episodic_memory import EpisodicMemory, Episode, ModalEvidence  # noqa: E402
-from .source_memory import SourceMemory  # noqa: E402
-from .procedural_memory import ProceduralMemory  # noqa: E402
-from .consolidation_engine import ConsolidationEngine  # noqa: E402
-from .storage import MemoryDatabase  # noqa: E402
+from brain.core.text_utils import parse_fact_pattern  # noqa: E402
 
+from .consolidation_engine import ConsolidationEngine  # noqa: E402
+from .episodic_memory import Episode, EpisodicMemory, ModalEvidence  # noqa: E402
+from .procedural_memory import ProceduralMemory  # noqa: E402
+from .semantic_memory import SemanticMemory, SemanticNode  # noqa: E402
+from .source_memory import SourceMemory  # noqa: E402
+from .storage import MemoryDatabase  # noqa: E402
+from .working_memory import MemoryItem, WorkingMemory  # noqa: E402
 
 # ─── Результат поиска ────────────────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ class MemoryManager:
 
         # 3. Семантическая память (автоизвлечение фактов)
         if auto_extract_facts and modality in ("text", "concept"):
-            fact = self.consolidation._extract_fact(content_str)
+            fact = parse_fact_pattern(content_str)
             if fact:
                 concept, description = fact
                 node = self.semantic.store_fact(

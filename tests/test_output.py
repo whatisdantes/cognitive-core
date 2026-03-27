@@ -24,9 +24,13 @@ from brain.core.contracts import (
     TraceRef,
     TraceStep,
 )
-from brain.output.trace_builder import (
-    ExplainabilityTrace,
-    OutputTraceBuilder,
+from brain.output.dialogue_responder import (
+    FALLBACK_TEMPLATES_EN,
+    FALLBACK_TEMPLATES_RU,
+    HEDGING_PHRASES_EN,
+    HEDGING_PHRASES_RU,
+    DialogueResponder,
+    OutputPipeline,
 )
 from brain.output.response_validator import (
     FALLBACK_RESPONSE_EN,
@@ -36,15 +40,10 @@ from brain.output.response_validator import (
     ValidationIssue,
     ValidationResult,
 )
-from brain.output.dialogue_responder import (
-    DialogueResponder,
-    FALLBACK_TEMPLATES_EN,
-    FALLBACK_TEMPLATES_RU,
-    HEDGING_PHRASES_EN,
-    HEDGING_PHRASES_RU,
-    OutputPipeline,
+from brain.output.trace_builder import (
+    ExplainabilityTrace,
+    OutputTraceBuilder,
 )
-
 
 # ===========================================================================
 # Helpers — фабрики для тестовых данных

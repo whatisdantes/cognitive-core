@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from brain.core.contracts import CognitiveResult, ContractMixin
+from brain.core.text_utils import detect_language as _canonical_detect_language
 
 logger = logging.getLogger(__name__)
 
@@ -374,43 +375,33 @@ class ResponseValidator:
 
     @staticmethod
     def _detect_language(result: CognitiveResult) -> str:
-        """Определить язык из CognitiveResult metadata."""
+        """
+        Определить язык из CognitiveResult metadata.
+
+        Адаптер: сначала проверяет metadata, затем делегирует
+        в каноническую detect_language().
+        """
         meta = result.metadata or {}
         lang = meta.get("language", "")
         if lang:
             return lang
 
-        # Эвристика по тексту goal
+        # Эвристика по тексту goal через каноническую функцию
         goal = result.goal or ""
         return ResponseValidator._guess_language(goal)
 
     @staticmethod
     def _guess_language(text: str) -> str:
         """
-        Простая эвристика определения языка.
+        Определение языка текста — адаптер над канонической detect_language().
 
-        Если > 30% символов кириллица → "ru"
-        Если > 30% символов латиница → "en"
-        Иначе → "" (неизвестно)
+        Возвращает: 'ru', 'en', '' (пустая строка = неизвестно).
+        Каноническая функция возвращает 'unknown'/'mixed' — маппим в ''.
         """
         if not text:
             return ""
 
-        # Считаем только буквы
-        cyrillic = 0
-        latin = 0
-        for ch in text:
-            if "\u0400" <= ch <= "\u04ff":
-                cyrillic += 1
-            elif "a" <= ch.lower() <= "z":
-                latin += 1
-
-        total = cyrillic + latin
-        if total == 0:
+        detected = _canonical_detect_language(text)
+        if detected in ("unknown", "mixed"):
             return ""
-
-        if cyrillic / total > 0.3:
-            return "ru"
-        if latin / total > 0.3:
-            return "en"
-        return ""
+        return detected

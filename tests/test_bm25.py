@@ -17,12 +17,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from brain.cognition.context import EvidencePack
 from brain.cognition.retrieval_adapter import (
     BM25Scorer,
     KeywordRetrievalBackend,
 )
-from brain.cognition.context import EvidencePack
-
 
 # =========================================================================
 # Fixtures

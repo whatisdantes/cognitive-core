@@ -11,8 +11,8 @@ tests/test_text_encoder.py
   - Семантические sanity-check через mock-модель с контролируемыми векторами.
 """
 
-import sys
 import os
+import sys
 import uuid
 from unittest.mock import MagicMock
 
@@ -32,7 +32,6 @@ from brain.encoders.text_encoder import (
     _l2_normalize,
     _sha256,
 )
-
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 

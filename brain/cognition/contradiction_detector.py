@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from brain.core.contracts import ContractMixin
+
 from .context import EvidencePack
 
 logger = logging.getLogger(__name__)

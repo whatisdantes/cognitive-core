@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional
 
 from brain.core.contracts import ContractMixin
 
-
 # ---------------------------------------------------------------------------
 # CognitiveOutcome — коды завершения reasoning loop
 # ---------------------------------------------------------------------------

@@ -1,11 +1,10 @@
 # 🧠 TODO — Master Roadmap
 ## cognitive-core v0.7.0
 
-> **Обновлено:** 2026-03-26  
+> **Обновлено:** 2026-03-27  
 > **Принцип:** сначала стабилизировать text-only MVP, затем расширять  
-> **Тесты:** 1249/1249 ✅ · **Ruff:** 0 errors · **CI:** test + lint + typecheck  
+> **Тесты:** 1312/1312 ✅ · **Ruff:** 0 errors · **CI:** test + lint + typecheck  
 > **Связанные документы:**
-> - [`cognitive_core_mvp_roadmap_revised.md`](cognitive_core_mvp_roadmap_revised.md) — детальный MVP roadmap с Definition of Done
 > - [`PLANS.md`](PLANS.md) — стратегический контекст (Axicor, ARCHITECTURE.md роль, hot/cold path)
 > - [`BRAIN.md`](BRAIN.md) — архитектурная спецификация (15 разделов)
 > - [`ARCHITECTURE.md`](ARCHITECTURE.md) — R&D концепт когнитивного нейрона (не текущий target)
@@ -109,27 +108,30 @@
 > Убрать самые вредные дубли и сцепки. Критичные DRY-задачи перенесены сюда из Post-MVP,
 > чтобы не накапливать технический долг перед расширением.
 
-- [ ] **C.1** Канонический `detect_language()` + `brain/core/utils.py`
-  - Вынести в `brain/core/utils.py`
-  - Заменить дубли в `text_encoder.py`, `dialogue_responder.py`, `metadata_extractor.py`
-  - **DoD:** одна каноническая функция, все модули используют её
+- [x] **C.1** Канонический `detect_language()` + `brain/core/text_utils.py` ✅
+  - Вынесено в `brain/core/text_utils.py` (detect_language + parse_fact_pattern)
+  - Заменены дубли в `text_encoder.py`, `dialogue_responder.py`, `response_validator.py`, `metadata_extractor.py`
+  - 63 теста в `tests/test_utils.py`
+  - **DoD:** одна каноническая функция, все 4 модуля делегируют ей ✅
 
-- [ ] **C.2** Канонический `extract_fact()`
-  - Выделить один общий utility / service API для fact extraction
-  - **DoD:** факт-экстракция через явный публичный путь
+- [x] **C.2** Канонический `extract_fact()` → `parse_fact_pattern()` ✅
+  - `brain/core/text_utils.py`: `parse_fact_pattern()` — единый публичный API
+  - `consolidation_engine.py` и `memory_manager.py` импортируют напрямую
+  - **DoD:** факт-экстракция через явный публичный путь ✅
 
-- [ ] **C.3** Убрать прямой вызов `consolidation._extract_fact()`
-  - `MemoryManager` не должен зависеть от приватной внутренности `ConsolidationEngine`
-  - **DoD:** приватный `_extract_fact()` не вызывается извне
+- [x] **C.3** Убрать прямой вызов `consolidation._extract_fact()` ✅
+  - `MemoryManager` импортирует `parse_fact_pattern` из `brain.core.text_utils`
+  - **DoD:** приватный `_extract_fact()` не вызывается извне ✅
 
-- [ ] **C.4** Вынести `_sha256()` и JSON helpers в `brain/core/utils.py`
-  - `_sha256()` дублируется в text_encoder.py и input_router.py
-  - JSON serialization helpers (если есть дубли)
-  - **DoD:** единые утилиты в `brain/core/utils.py`
+- [x] **C.4** Вынести `_sha256()` в `brain/core/hash_utils.py` ✅
+  - `brain/core/hash_utils.py`: `sha256_text()` + `sha256_file()`
+  - `text_encoder.py` и `input_router.py` импортируют из canonical
+  - **DoD:** единые утилиты в `brain/core/hash_utils.py` ✅
 
-- [ ] **C.5** Общий JSON serialization helper
-  - Перенесено из Post-MVP E.1 — критичный дубль
-  - **DoD:** один helper для JSON сериализации контрактов
+- [x] **C.5** Общий JSON serialization helper — **не нужен** ✅
+  - Аудит: 28 вызовов `json.*` в 8 модулях — file I/O, SQLite, logging
+  - Реальных дублей нет, каждый вызов контекстно-специфичен
+  - **DoD:** оценка проведена, helper не требуется ✅
 
 ---
 
@@ -383,7 +385,7 @@
 
 ## 🧪 Test Coverage
 
-**Всего: 1249/1249 ✅** (18 test files, ~15s)
+**Всего: 1312/1312 ✅** (19 test files, ~108s)
 
 | Файл | Модуль | Тестов | Статус |
 |------|--------|--------|--------|
@@ -403,8 +405,9 @@
 | `test_scheduler.py` | Scheduler | 11 | ✅ |
 | `test_storage.py` | SQLite Storage + Migration | 58 | ✅ |
 | `test_text_encoder.py` | Text Encoder (4 modes) | 80 | ✅ |
+| `test_utils.py` | text_utils + hash_utils (Phase C) | 63 | ✅ |
 | `test_vector_retrieval.py` | Vector Retrieval | 39 | ✅ |
-| **Итого** | | **1249** | **✅** |
+| **Итого** | | **1312** | **✅** |
 
 ---
 
@@ -418,7 +421,7 @@
 | P1 | BM25 + SQLite + CI | ✅ Завершено | 113 новых |
 | **MVP A** | **Foundation** | **✅ Завершено** | 835 |
 | **MVP B** | **Close the Loop** | **✅ Завершено** | 456 |
-| MVP C | MVP Cleanup | [ ] Следующий | — |
+| **MVP C** | **MVP Cleanup + Critical DRY** | **✅ Завершено** (C.1–C.5 ✅) | 63 |
 | D | Retrieval Upgrade | [ ] Post-MVP | — |
 | E | DRY Sweep | [ ] Post-MVP | — |
 | F | Hardening & DX | [ ] Post-MVP | — |

@@ -8,7 +8,7 @@ events.py — Типизированные события для шины соо
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -87,8 +87,10 @@ class MemoryEvent(BaseEvent):
         latency_ms  — время операции в мс
     """
     event_type: str = field(default="memory")
-    operation: str = field(default="store")     # 'store' | 'retrieve' | 'update' | 'delete' | 'consolidate' | 'decay'
-    memory_type: str = field(default="working") # 'working' | 'episodic' | 'semantic' | 'procedural' | 'source'
+    # 'store'|'retrieve'|'update'|'delete'|'consolidate'|'decay'
+    operation: str = field(default="store")
+    # 'working'|'episodic'|'semantic'|'procedural'|'source'
+    memory_type: str = field(default="working")
     key: str = field(default="")
     value: Any = field(default=None)
     importance: float = field(default=0.5)      # 0.0 — 1.0
@@ -241,7 +243,10 @@ class EventFactory:
         return ev
 
     @staticmethod
-    def system_info(module: str, message: str, cpu_pct: float = 0.0, ram_mb: float = 0.0) -> SystemEvent:
+    def system_info(
+        module: str, message: str,
+        cpu_pct: float = 0.0, ram_mb: float = 0.0,
+    ) -> SystemEvent:
         return SystemEvent(
             level="INFO",
             module=module,
@@ -251,7 +256,10 @@ class EventFactory:
         )
 
     @staticmethod
-    def system_warn(module: str, message: str, cpu_pct: float = 0.0, ram_mb: float = 0.0) -> SystemEvent:
+    def system_warn(
+        module: str, message: str,
+        cpu_pct: float = 0.0, ram_mb: float = 0.0,
+    ) -> SystemEvent:
         return SystemEvent(
             level="WARN",
             module=module,

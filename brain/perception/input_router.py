@@ -19,16 +19,17 @@ MVP: text-only routing.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from brain.core.events import PerceptEvent
+from brain.core.hash_utils import sha256_file as _sha256_file
+from brain.core.hash_utils import sha256_text
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
-from brain.perception.validators import validate_file_path, check_file_size
+from brain.perception.validators import check_file_size, validate_file_path
 
 _logger = logging.getLogger(__name__)
 
@@ -56,21 +57,8 @@ def _detect_modality(source: str) -> str:
         return "unknown"
 
 
-def _sha256(text: str) -> str:
-    """SHA256 хэш строки (первые 16 символов)."""
-    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:16]
-
-
-def _sha256_file(file_path: str) -> str:
-    """SHA256 хэш файла (первые 16 символов)."""
-    h = hashlib.sha256()
-    try:
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
-        return h.hexdigest()[:16]
-    except OSError:
-        return _sha256(file_path)
+# _sha256 и _sha256_file импортированы из brain.core.hash_utils
+# (sha256_text с truncate=16 по умолчанию, sha256_file с truncate=16)
 
 
 # ─── RouterStats ─────────────────────────────────────────────────────────────
@@ -230,7 +218,7 @@ class InputRouter:
 
         # Дедупликация
         if self._dedup and not force:
-            h = _sha256(text[:2000])  # хэшируем первые 2000 символов
+            h = sha256_text(text[:2000], truncate=16)  # хэшируем первые 2000 символов
             if h in self._seen_hashes:
                 _logger.debug("InputRouter: дубликат text source='%s' hash=%s", source, h)
                 self._stats.duplicates_skipped += 1

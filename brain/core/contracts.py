@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol, TypeVar, cast, runtime_checkable
 
-
 # ---------------------------------------------------------------------------
 # Mixin: единый стиль сериализации для всех контрактов
 # ---------------------------------------------------------------------------

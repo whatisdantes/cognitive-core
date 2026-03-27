@@ -11,9 +11,10 @@ test_memory.py — Тест системы памяти мозга.
   7. ConsolidationEngine — перенос WM → LTM
 """
 
-import sys
 import os
+import sys
 import time
+
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -54,9 +55,7 @@ def section(title: str):
 section("1. Events (brain/core/events.py)")
 
 try:
-    from brain.core.events import (
-        PerceptEvent, EventFactory
-    )
+    from brain.core.events import EventFactory, PerceptEvent
 
     ev = PerceptEvent(source="test", content="привет", modality="text", quality=0.9)
     check_test("PerceptEvent создан", ev.event_type == "percept")
@@ -83,7 +82,7 @@ except Exception as e:
 section("2. WorkingMemory")
 
 try:
-    from brain.memory.working_memory import WorkingMemory, MemoryItem
+    from brain.memory.working_memory import MemoryItem, WorkingMemory
 
     wm = WorkingMemory(max_size=5)
 
@@ -214,7 +213,7 @@ except Exception as e:
 section("4. EpisodicMemory")
 
 try:
-    from brain.memory.episodic_memory import EpisodicMemory, Episode, ModalEvidence
+    from brain.memory.episodic_memory import Episode, EpisodicMemory, ModalEvidence
 
     em = EpisodicMemory(
         data_path="brain/data/memory/test_episodes.json",
@@ -523,12 +522,12 @@ except Exception as e:
 section("8. ConsolidationEngine (Гиппокамп)")
 
 try:
-    from brain.memory.working_memory import WorkingMemory
-    from brain.memory.semantic_memory import SemanticMemory
-    from brain.memory.episodic_memory import EpisodicMemory
-    from brain.memory.source_memory import SourceMemory
-    from brain.memory.procedural_memory import ProceduralMemory
     from brain.memory.consolidation_engine import ConsolidationEngine
+    from brain.memory.episodic_memory import EpisodicMemory
+    from brain.memory.procedural_memory import ProceduralMemory
+    from brain.memory.semantic_memory import SemanticMemory
+    from brain.memory.source_memory import SourceMemory
+    from brain.memory.working_memory import WorkingMemory
 
     wm = WorkingMemory(max_size=20)
     sm = SemanticMemory(data_path="brain/data/memory/test_cons_sem.json", autosave_every=9999)
@@ -593,14 +592,20 @@ section("9. Импорт через brain.memory и brain.core")
 
 try:
     from brain.memory import (
-        MemoryManager, WorkingMemory, SemanticMemory,
-        EpisodicMemory, SourceMemory, ProceduralMemory,
-        ConsolidationEngine, MemorySearchResult,
+        ConsolidationEngine,
+        EpisodicMemory,
+        MemoryManager,
+        MemorySearchResult,
+        ProceduralMemory,
+        SemanticMemory,
+        SourceMemory,
+        WorkingMemory,
     )
     check_test("brain.memory импортирует все классы", True)
 
     from brain.core import (
-        PerceptEvent, EventFactory,
+        EventFactory,
+        PerceptEvent,
     )
     check_test("brain.core импортирует все события", True)
 

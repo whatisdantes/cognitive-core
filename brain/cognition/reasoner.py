@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from brain.core.contracts import ContractMixin
+
 from .context import (
     CognitiveOutcome,
     EvidencePack,

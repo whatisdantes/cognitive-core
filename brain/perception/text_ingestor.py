@@ -27,7 +27,7 @@ from typing import Any, List, Optional
 
 from brain.core.events import EventFactory, PerceptEvent
 from brain.perception.metadata_extractor import MetadataExtractor
-from brain.perception.validators import validate_file_path, check_file_size
+from brain.perception.validators import check_file_size, validate_file_path
 
 _logger = logging.getLogger(__name__)
 

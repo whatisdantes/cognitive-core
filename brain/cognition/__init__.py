@@ -20,60 +20,60 @@ cognition — Когнитивное ядро (аналог префронтал
     skill_refiner.py        — тонкая коррекция паттернов (аналог Мозжечка)
 """
 
+from .action_selector import (
+    ActionDecision,
+    ActionSelector,
+    ActionType,
+)
+from .cognitive_core import CognitiveCore
 from .context import (
+    FAILURE_OUTCOMES,
+    GOAL_TYPE_LIMITS,
+    NORMAL_OUTCOMES,
     CognitiveContext,
-    CognitiveOutcome,
     CognitiveFailure,
+    CognitiveOutcome,
     EvidencePack,
     GoalTypeLimits,
     PolicyConstraints,
     ReasoningState,
-    UncertaintyTrend,
     ReplanStrategy,
-    GOAL_TYPE_LIMITS,
-    NORMAL_OUTCOMES,
-    FAILURE_OUTCOMES,
-)
-from .goal_manager import (
-    Goal,
-    GoalStatus,
-    GoalManager,
-)
-from .planner import (
-    PlanStep,
-    ExecutionPlan,
-    Planner,
-)
-from .hypothesis_engine import (
-    Hypothesis,
-    HypothesisEngine,
-)
-from .reasoner import (
-    ReasoningStep,
-    ReasoningTrace,
-    Reasoner,
-)
-from .action_selector import (
-    ActionType,
-    ActionDecision,
-    ActionSelector,
-)
-from .retrieval_adapter import (
-    BM25Scorer,
-    RetrievalAdapter,
-    KeywordRetrievalBackend,
-    VectorRetrievalBackend,
-    HybridRetrievalBackend,
+    UncertaintyTrend,
 )
 from .contradiction_detector import (
     Contradiction,
     ContradictionDetector,
 )
-from .uncertainty_monitor import (
-    UncertaintySnapshot,
-    UncertaintyMonitor,
+from .goal_manager import (
+    Goal,
+    GoalManager,
+    GoalStatus,
 )
-from .cognitive_core import CognitiveCore
+from .hypothesis_engine import (
+    Hypothesis,
+    HypothesisEngine,
+)
+from .planner import (
+    ExecutionPlan,
+    Planner,
+    PlanStep,
+)
+from .reasoner import (
+    Reasoner,
+    ReasoningStep,
+    ReasoningTrace,
+)
+from .retrieval_adapter import (
+    BM25Scorer,
+    HybridRetrievalBackend,
+    KeywordRetrievalBackend,
+    RetrievalAdapter,
+    VectorRetrievalBackend,
+)
+from .uncertainty_monitor import (
+    UncertaintyMonitor,
+    UncertaintySnapshot,
+)
 
 __all__ = [
     # context

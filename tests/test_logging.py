@@ -19,7 +19,6 @@ from brain.logging.brain_logger import BrainLogger
 from brain.logging.digest_generator import CycleInfo, DigestGenerator
 from brain.logging.reasoning_tracer import TraceBuilder
 
-
 # ===========================================================================
 # 1. BrainLogger
 # ===========================================================================
@@ -445,7 +444,7 @@ class TestLoggingImports(unittest.TestCase):
 
     def test_import_all_classes(self):
         """Все 4 класса импортируются из brain.logging."""
-        from brain.logging import BrainLogger, DigestGenerator, CycleInfo, TraceBuilder
+        from brain.logging import BrainLogger, CycleInfo, DigestGenerator, TraceBuilder
         self.assertTrue(callable(BrainLogger))
         self.assertTrue(callable(DigestGenerator))
         self.assertTrue(callable(CycleInfo))

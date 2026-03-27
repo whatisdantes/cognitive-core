@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -406,7 +406,10 @@ class ProceduralMemory:
             for name, proc_dict in data.get("procedures", {}).items():
                 self._procedures[name] = Procedure.from_dict(proc_dict)
 
-            _logger.info("Процедурная память загружена (JSON): %d процедур <- %s", len(self._procedures), self._data_path)
+            _logger.info(
+                "Процедурная память загружена (JSON): %d процедур <- %s",
+                len(self._procedures), self._data_path,
+            )
         except Exception as e:
             _logger.warning("Ошибка загрузки процедурной памяти: %s", e)
 

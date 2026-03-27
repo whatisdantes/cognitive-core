@@ -1,5 +1,12 @@
 # 🔍 Полный аудит проекта cognitive-core
 
+> ⚠️ **ИСТОРИЧЕСКИЙ ДОКУМЕНТ** — снимок состояния проекта на момент 835 тестов (16 test files).  
+> С момента написания завершены **Phase B** (golden benchmarks — 414 тестов, perception hardening) и **Phase C** (DRY refactoring).  
+> Текущее состояние: **1312 тестов**, 19 test files, ruff clean.  
+> **Исправлено в Phase C:** DRY violations #1–#5 (detect_language → text_utils.py, sha256 → hash_utils.py, extract_fact → parse_fact_pattern, encapsulation violation в MemoryManager).  
+> **Исправлено в Phase B:** golden-answer benchmarks (B.5 — 414 тестов).  
+> Актуальный roadmap: [`docs/TODO.md`](TODO.md)
+
 > **Дата:** 2025-07-14  
 > **Версия:** 0.7.0  
 > **Тесты:** 835/835 ✅ (14.99s)  

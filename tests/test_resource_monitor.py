@@ -8,15 +8,16 @@ import os
 import subprocess
 import sys
 import time
+
 import pytest
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 
 from brain.core import (  # noqa: E402
+    DegradationPolicy,
     EventBus,
     ResourceMonitor,
     ResourceMonitorConfig,
-    DegradationPolicy,
     ResourceState,
     Scheduler,
     SchedulerConfig,

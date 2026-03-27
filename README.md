@@ -1,10 +1,10 @@
 # 🧠 Cognitive Core
 
 > **Версия:** 0.7.0  
-> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C next  
+> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 1249/1249 ✅ — `test_bm25.py` (55) · `test_cli.py` (20) · `test_cognition.py` (190) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_golden.py` (414) · `test_logging.py` (25) · `test_memory.py` (101) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_perception.py` (79) · `test_perception_hardening.py` (34) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_text_encoder.py` (80) · `test_vector_retrieval.py` (39)
+> **Тесты:** 1312/1312 ✅ — `test_bm25.py` (55) · `test_cli.py` (20) · `test_cognition.py` (190) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_golden.py` (414) · `test_logging.py` (25) · `test_memory.py` (101) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_perception.py` (79) · `test_perception_hardening.py` (34) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_text_encoder.py` (80) · `test_utils.py` (63) · `test_vector_retrieval.py` (39)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -47,7 +47,7 @@ pip install -e ".[dev]"
 # 2. Задать вопрос через CLI
 cognitive-core "Что такое нейропластичность?"
 
-# 3. Запустить все тесты (1249 ✅)
+# 3. Запустить все тесты (1312 ✅)
 python -m pytest tests/ -v
 
 # 4. Docker (опционально)
@@ -263,7 +263,9 @@ cognitive-core/
 │   │   │                               #    CognitiveResult, BrainOutput (contracts.py)
 │   │   ├── event_bus.py                # ✅ EventBus — typed pub/sub шина событий
 │   │   ├── scheduler.py                # ✅ Scheduler — тик-планировщик (heapq, 4 приоритета, адаптивный tick)
-│   │   └── resource_monitor.py         # ✅ ResourceMonitor — CPU/RAM мониторинг, 4 политики деградации
+│   │   ├── resource_monitor.py         # ✅ ResourceMonitor — CPU/RAM мониторинг, 4 политики деградации
+│   │   ├── text_utils.py               # ✅ detect_language(), parse_fact_pattern() — Phase C canonical
+│   │   └── hash_utils.py              # ✅ sha256_text(), sha256_file() — Phase C canonical
 │   │
 │   ├── memory/                         # Система памяти ✅ РЕАЛИЗОВАНО (JSON + SQLite)
 │   │   ├── __init__.py                 # Экспорты 17 классов
@@ -339,7 +341,7 @@ cognitive-core/
 ├── examples/                           # Примеры использования
 │   └── demo.py                         # ✅ Демо: полный pipeline в 30 строк
 │
-├── tests/                              # Тесты (pytest-совместимые, 1249 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 1312 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -357,6 +359,7 @@ cognitive-core/
 │   ├── test_scheduler.py              # ✅ 11/11 тестов Scheduler
 │   ├── test_storage.py                # ✅ 58/58 тестов SQLite Storage + Migration
 │   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
+│   ├── test_utils.py                  # ✅ 63/63 тестов text_utils + hash_utils (Phase C)
 │   └── test_vector_retrieval.py       # ✅ 39/39 тестов Vector Retrieval
 │
 ├── docs/                               # Документация
@@ -364,7 +367,6 @@ cognitive-core/
 │   ├── TODO.md                         # План реализации (14 фаз, 35+ задач)
 │   ├── ARCHITECTURE.md                 # Архитектурные решения
 │   ├── PLANS.md                        # Стратегический план
-│   ├── DAILY_REPORT_2026-03-21.md      # Дневной отчёт
 │   └── layers/                         # Описание каждого слоя (12 файлов)
 │       ├── 00_autonomous_loop.md       # Ствол мозга — always-on цикл
 │       ├── 01_perception_layer.md      # Таламус — восприятие и маршрутизация
@@ -382,10 +384,7 @@ cognitive-core/
 ├── .gitignore                          # Git ignore rules
 ├── .dockerignore                       # Docker ignore rules
 ├── Dockerfile                          # ✅ Multi-stage Docker build (Phase A.1b)
-├── pyproject.toml                      # Конфигурация проекта + pytest + [project.scripts]
-├── requirements.txt                    # Зависимости Python
-├── download_libraries.bat              # ⚠️ Legacy — используйте pip install -e ".[dev]"
-├── check_deps.py                       # ⚠️ Legacy — используйте pip install -e ".[dev]"
+├── pyproject.toml                      # Конфигурация проекта + зависимости + pytest + [project.scripts]
 └── README.md                           # Этот файл
 ```
 
@@ -701,8 +700,7 @@ pip install -e ".[dev]"
 pip install -e .
 ```
 
-> **Примечание:** Файлы `download_libraries.bat` и `check_deps.py` — legacy-артефакты ранних версий.
-> Рекомендуемый способ установки — через `pip install -e ".[dev]"`.
+> **Рекомендуемый способ установки:** `pip install -e ".[dev]"`
 
 ---
 
@@ -712,7 +710,7 @@ pip install -e .
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (1249 ✅)
+# Запустить все тесты (1312 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
@@ -722,7 +720,7 @@ python -m pytest tests/test_memory.py -v
 python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (1249 тестов)
+### Состав тестового набора (1312 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -742,8 +740,9 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_scheduler.py` | Scheduler (ticks, priorities, adaptive interval) | 11 |
 | `test_storage.py` | SQLite Storage (CRUD, transactions, threads, migration) | 58 |
 | `test_text_encoder.py` | Text Encoder (primary/fallback/failed, semantic, batch, cache) | 80 |
+| `test_utils.py` | text_utils + hash_utils (Phase C DRY) | 63 |
 | `test_vector_retrieval.py` | Vector Retrieval (Vector, Hybrid, cosine similarity) | 39 |
-| | **Итого** | **1249** |
+| | **Итого** | **1312** |
 
 ---
 
@@ -856,6 +855,7 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | P1c | SQLite Persistence | ✅ Завершено | 58 |
 | **MVP A** | **CLI, Docker, ResourceMonitor, mypy** | **✅ Завершено** | **20** |
 | **MVP B** | **Auto-encode, Perception hardening, Golden benchmarks** | **✅ Завершено** | **456** |
+| **MVP C** | **Critical DRY (text_utils, hash_utils)** | **✅ Завершено** | **63** |
 | H | Attention & Resource Control | ⬜ Post-MVP | — |
 | I | Learning Loop | ⬜ Post-MVP | — |
 | J | Vision/Audio Encoders | ⬜ Post-MVP | — |
@@ -880,10 +880,12 @@ brain/
 │   ├── scheduler.py           ← Scheduler (heapq priority queue, adaptive tick
 │   │                             100/500/2000ms, TaskPriority CRITICAL→IDLE,
 │   │                             tick_start/tick_end/task_done/task_failed events)
-│   └── resource_monitor.py    ← ResourceMonitor (psutil, daemon thread,
-│                                 NORMAL/DEGRADED/CRITICAL/EMERGENCY policies,
-│                                 hysteresis soft_blocked/ring2_allowed,
-│                                 inject_state() для тестов)
+│   ├── resource_monitor.py    ← ResourceMonitor (psutil, daemon thread,
+│   │                             NORMAL/DEGRADED/CRITICAL/EMERGENCY policies,
+│   │                             hysteresis soft_blocked/ring2_allowed,
+│   │                             inject_state() для тестов)
+│   ├── text_utils.py          ← detect_language(), parse_fact_pattern() (Phase C canonical)
+│   └── hash_utils.py          ← sha256_text(), sha256_file() (Phase C canonical)
 └── memory/
     ├── working_memory.py       ← WorkingMemory + MemoryItem
     ├── semantic_memory.py      ← SemanticMemory + SemanticNode + Relation
@@ -981,4 +983,5 @@ tests/
 
 **MVP Phase A** ✅ — CLI entrypoint, Docker, ResourceMonitor.snapshot(), mypy без `|| true`.  
 **MVP Phase B** ✅ — Auto-encode, Perception hardening, Retrieval scope docs, README update, Golden-answer benchmarks (414 тестов).  
-**Далее**: Phase C (Critical DRY — detect_language, extract_fact, sha256 в utils.py).
+**MVP Phase C** ✅ — Critical DRY: `detect_language`, `parse_fact_pattern`, `sha256` вынесены в `brain/core/text_utils.py` и `brain/core/hash_utils.py` (63 теста). C.5 (JSON helper) — аудит проведён, дублей нет.  
+**Далее**: Post-MVP Phase D (Retrieval Upgrade).

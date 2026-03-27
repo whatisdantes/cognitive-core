@@ -21,7 +21,6 @@ metadata содержит:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 import time
@@ -32,6 +31,8 @@ import numpy as np
 
 from brain.core.contracts import EncodedPercept, Modality
 from brain.core.events import PerceptEvent
+from brain.core.hash_utils import sha256_text as _sha256
+from brain.core.text_utils import detect_language as _canonical_detect_language
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,6 @@ _STOP_WORDS = _STOP_WORDS_RU | _STOP_WORDS_EN
 
 # ─── Утилиты ─────────────────────────────────────────────────────────────────
 
-def _sha256(text: str) -> str:
-    """SHA256 хеш текста для кэширования."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
 def _l2_normalize(vec: np.ndarray) -> np.ndarray:
     """L2-нормализация вектора. Нулевой вектор остаётся нулевым."""
     norm = np.linalg.norm(vec)
@@ -75,22 +71,11 @@ def _l2_normalize(vec: np.ndarray) -> np.ndarray:
 
 def _detect_language(text: str) -> str:
     """
-    Простая эвристика определения языка по соотношению кириллицы и латиницы.
+    Определение языка — делегирует в каноническую реализацию.
+
     Возвращает: 'ru', 'en', 'mixed', 'unknown'.
     """
-    if not text or not text.strip():
-        return "unknown"
-    cyrillic = len(re.findall(r"[а-яёА-ЯЁ]", text))
-    latin = len(re.findall(r"[a-zA-Z]", text))
-    total = cyrillic + latin
-    if total == 0:
-        return "unknown"
-    ratio_cyr = cyrillic / total
-    if ratio_cyr > 0.7:
-        return "ru"
-    if ratio_cyr < 0.3:
-        return "en"
-    return "mixed"
+    return _canonical_detect_language(text)
 
 
 def _detect_message_type(text: str) -> str:
@@ -225,13 +210,19 @@ class TextEncoder:
     def _try_load_fallback(self) -> None:
         """Попытка загрузить navec как fallback."""
         try:
-            from navec import Navec
             import os
+
+            from navec import Navec
 
             # Ищем navec файл в стандартных местах
             navec_paths = [
-                os.path.join(os.path.dirname(__file__), "..", "data", "navec_hudlit_v1_12B_500K_300d_100q.tar"),
-                os.path.expanduser("~/.navec/navec_hudlit_v1_12B_500K_300d_100q.tar"),
+                os.path.join(
+                    os.path.dirname(__file__), "..", "data",
+                    "navec_hudlit_v1_12B_500K_300d_100q.tar",
+                ),
+                os.path.expanduser(
+                    "~/.navec/navec_hudlit_v1_12B_500K_300d_100q.tar"
+                ),
             ]
             navec_path = None
             for p in navec_paths:
@@ -445,7 +436,8 @@ class TextEncoder:
             return vec, "ok", []
         except Exception as exc:
             logger.warning("TextEncoder primary encode failed: %s", exc)
-            return np.zeros(self._vector_dim, dtype=np.float32), "degraded", [f"primary_error: {exc}"]
+            zeros = np.zeros(self._vector_dim, dtype=np.float32)
+            return zeros, "degraded", [f"primary_error: {exc}"]
 
     def _encode_fallback(self, text: str) -> tuple:
         """Кодирование через navec (mean-pooled token embeddings)."""

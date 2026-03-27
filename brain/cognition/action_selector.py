@@ -23,9 +23,10 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from brain.core.contracts import ContractMixin
+
 from .context import (
-    CognitiveOutcome,
     FAILURE_OUTCOMES,
+    CognitiveOutcome,
     PolicyConstraints,
 )
 from .reasoner import ReasoningTrace

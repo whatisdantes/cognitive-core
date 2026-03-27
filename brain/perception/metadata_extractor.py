@@ -31,6 +31,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from brain.core.text_utils import detect_language as _canonical_detect_language
+
 _logger = logging.getLogger(__name__)
 
 # ─── Константы ───────────────────────────────────────────────────────────────
@@ -40,10 +42,6 @@ _BROKEN_CHARS_RE = re.compile(r'[\ufffd\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 
 # Минимальная длина текста для нормального качества
 _MIN_TEXT_LEN = 50
-
-# Порог кириллицы для определения языка
-_CYRILLIC_RE = re.compile(r'[а-яёА-ЯЁ]')
-_LATIN_RE = re.compile(r'[a-zA-Z]')
 
 
 # ─── MetadataExtractor ───────────────────────────────────────────────────────
@@ -133,30 +131,12 @@ class MetadataExtractor:
         """
         Определить язык текста по доле кириллических и латинских символов.
 
+        Делегирует в каноническую реализацию brain.core.text_utils.detect_language().
+
         Returns:
             'ru' | 'en' | 'mixed' | 'unknown'
         """
-        if not text:
-            return "unknown"
-
-        cyrillic = len(_CYRILLIC_RE.findall(text))
-        latin = len(_LATIN_RE.findall(text))
-        total_letters = cyrillic + latin
-
-        if total_letters == 0:
-            return "unknown"
-
-        cyr_ratio = cyrillic / total_letters
-        lat_ratio = latin / total_letters
-
-        if cyr_ratio > 0.6:
-            return "ru"
-        elif lat_ratio > 0.6:
-            return "en"
-        elif total_letters > 10:
-            return "mixed"
-        else:
-            return "unknown"
+        return _canonical_detect_language(text)
 
     # ─── Оценка качества ─────────────────────────────────────────────────────
 

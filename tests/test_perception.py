@@ -11,11 +11,12 @@ test_perception.py — Smoke-тесты для Этапа D: Text-Only Perceptio
     python test_perception.py
 """
 
+import json
 import os
 import sys
-import json
 import tempfile
 import textwrap
+
 import pytest
 
 # ─── Цвета для вывода ────────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ check(meta["language"] == "ru", f"extract: language='ru' (got {meta['language']}
 section("2. TextIngestor")
 
 try:
-    from brain.perception.text_ingestor import TextIngestor, _split_into_paragraphs, _hard_split
+    from brain.perception.text_ingestor import TextIngestor, _hard_split, _split_into_paragraphs
     ok("TextIngestor импортирован")
 except Exception as e:
     fail("TextIngestor импорт", e)
@@ -378,7 +379,7 @@ finally:
 section("4. Импорт через brain.perception")
 
 try:
-    from brain.perception import MetadataExtractor, TextIngestor, InputRouter
+    from brain.perception import InputRouter, MetadataExtractor, TextIngestor
     ok("from brain.perception import MetadataExtractor, TextIngestor, InputRouter")
 except Exception as e:
     fail("brain.perception импорт", e)

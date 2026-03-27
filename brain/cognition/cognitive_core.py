@@ -29,24 +29,25 @@ from brain.core.contracts import (
     TraceRef,
     TraceStep,
 )
+
+from .action_selector import ActionDecision, ActionSelector, ActionType
 from .context import (
+    FAILURE_OUTCOMES,
     CognitiveContext,
     CognitiveOutcome,
-    FAILURE_OUTCOMES,
     PolicyConstraints,
 )
 from .contradiction_detector import ContradictionDetector
 from .goal_manager import Goal, GoalManager
-from .planner import Planner
 from .hypothesis_engine import HypothesisEngine
+from .planner import Planner
 from .reasoner import Reasoner, ReasoningTrace
 from .retrieval_adapter import (
-    RetrievalAdapter,
-    KeywordRetrievalBackend,
-    VectorRetrievalBackend,
     HybridRetrievalBackend,
+    KeywordRetrievalBackend,
+    RetrievalAdapter,
+    VectorRetrievalBackend,
 )
-from .action_selector import ActionDecision, ActionSelector, ActionType
 from .uncertainty_monitor import UncertaintyMonitor
 
 logger = logging.getLogger(__name__)
@@ -441,7 +442,7 @@ class CognitiveCore:
         if decision.action_type == ActionType.LEARN:
             try:
                 # Извлекаем факт из query (убираем маркеры)
-                fact = self._extract_fact(query)
+                fact = self._strip_learn_markers(query)
                 if fact and hasattr(self._memory, "store"):
                     self._memory.store(fact, importance=0.7)
                     logger.info(
@@ -457,8 +458,8 @@ class CognitiveCore:
                 decision.metadata["store_success"] = False
                 decision.metadata["store_error"] = str(e)
 
-    def _extract_fact(self, query: str) -> str:
-        """Извлечь факт из команды 'запомни: ...'."""
+    def _strip_learn_markers(self, query: str) -> str:
+        """Убрать маркеры команды ('запомни:', 'сохрани:' и т.д.) и вернуть чистый факт."""
         q = query.strip()
         # Убираем маркеры
         markers = [

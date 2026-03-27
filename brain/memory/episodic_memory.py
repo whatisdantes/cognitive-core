@@ -21,7 +21,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 _logger = logging.getLogger(__name__)
 
@@ -547,7 +547,10 @@ class EpisodicMemory:
                         self._index_by_concept[key] = []
                     self._index_by_concept[key].append(ep.episode_id)
 
-            _logger.info("Эпизодическая память загружена (JSON): %d эпизодов <- %s", len(self._episodes), self._data_path)
+            _logger.info(
+                "Эпизодическая память загружена (JSON): %d эпизодов <- %s",
+                len(self._episodes), self._data_path,
+            )
         except Exception as e:
             _logger.warning("Ошибка загрузки эпизодической памяти: %s", e)
 

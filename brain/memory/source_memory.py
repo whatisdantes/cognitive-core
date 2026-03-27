@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -380,7 +380,10 @@ class SourceMemory:
             for sid, rec_dict in data.get("sources", {}).items():
                 self._sources[sid] = SourceRecord.from_dict(rec_dict)
 
-            _logger.info("Память об источниках загружена (JSON): %d источников <- %s", len(self._sources), self._data_path)
+            _logger.info(
+                "Память об источниках загружена (JSON): %d источников <- %s",
+                len(self._sources), self._data_path,
+            )
         except Exception as e:
             _logger.warning("Ошибка загрузки памяти об источниках: %s", e)
 

@@ -6,13 +6,18 @@ DoD: tick_start -> task_run -> tick_end видны в логе/событиях
 import logging
 import subprocess
 import sys
+
 import pytest
 
 logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 
 from brain.core import (  # noqa: E402
-    EventBus, Scheduler, TaskPriority, SchedulerConfig,
-    Task, ResourceState,
+    EventBus,
+    ResourceState,
+    Scheduler,
+    SchedulerConfig,
+    Task,
+    TaskPriority,
 )
 
 PASS = 0
@@ -191,6 +196,7 @@ else:
 
 # ── Тест 11: регрессия памяти ─────────────────────────────────────────────────
 import os  # noqa: E402
+
 env = os.environ.copy()
 env["PYTHONIOENCODING"] = "utf-8"
 r = subprocess.run(

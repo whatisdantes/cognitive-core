@@ -25,12 +25,11 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from brain.memory.memory_manager import MemoryManager
-from brain.cognition.cognitive_core import CognitiveCore
 from brain.cognition.action_selector import ActionType
-from brain.core.contracts import CognitiveResult, TraceChain, BrainOutput
+from brain.cognition.cognitive_core import CognitiveCore
+from brain.core.contracts import BrainOutput, CognitiveResult, TraceChain
+from brain.memory.memory_manager import MemoryManager
 from brain.output.dialogue_responder import OutputPipeline
-
 
 # ===================================================================
 # Load golden questions
@@ -51,9 +50,19 @@ GOLDEN_QUESTIONS = _load_golden()
 GOLDEN_IDS = [q["id"] for q in GOLDEN_QUESTIONS]
 
 # Фильтры по тегам
-LEARN_QUESTIONS = [q for q in GOLDEN_QUESTIONS if "learn" in q["tags"] and "roundtrip" not in q["tags"]]
-STANDARD_QUESTIONS = [q for q in GOLDEN_QUESTIONS if "learn" not in q["tags"] and "roundtrip" not in q["tags"] and "edge_case" not in q["tags"]]
-EDGE_QUESTIONS = [q for q in GOLDEN_QUESTIONS if "edge_case" in q["tags"]]
+LEARN_QUESTIONS = [
+    q for q in GOLDEN_QUESTIONS
+    if "learn" in q["tags"] and "roundtrip" not in q["tags"]
+]
+STANDARD_QUESTIONS = [
+    q for q in GOLDEN_QUESTIONS
+    if "learn" not in q["tags"]
+    and "roundtrip" not in q["tags"]
+    and "edge_case" not in q["tags"]
+]
+EDGE_QUESTIONS = [
+    q for q in GOLDEN_QUESTIONS if "edge_case" in q["tags"]
+]
 ROUNDTRIP_LEARN = next((q for q in GOLDEN_QUESTIONS if q["id"] == "q19_learn"), None)
 ROUNDTRIP_RETRIEVE = next((q for q in GOLDEN_QUESTIONS if q["id"] == "q20_retrieve"), None)
 

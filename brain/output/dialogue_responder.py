@@ -22,11 +22,13 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from brain.core.contracts import BrainOutput, CognitiveResult
-from .trace_builder import ExplainabilityTrace, OutputTraceBuilder
+from brain.core.text_utils import detect_language as _canonical_detect_language
+
 from .response_validator import (
     ResponseValidator,
     ValidationResult,
 )
+from .trace_builder import ExplainabilityTrace, OutputTraceBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -322,24 +324,27 @@ class DialogueResponder:
 
     @staticmethod
     def _detect_language(result: CognitiveResult) -> str:
-        """Определить язык из CognitiveResult."""
+        """
+        Определить язык из CognitiveResult.
+
+        Адаптер: сначала проверяет metadata, затем делегирует
+        в каноническую detect_language() для текстового анализа goal.
+        """
         meta = result.metadata or {}
         lang = meta.get("language", "")
         if lang:
             return lang
 
-        # Эвристика по goal text
+        # Fallback: определить по тексту goal через каноническую функцию
         goal = result.goal or ""
         if not goal:
             return "ru"  # default
 
-        cyrillic = sum(1 for ch in goal if "\u0400" <= ch <= "\u04ff")
-        latin = sum(1 for ch in goal if "a" <= ch.lower() <= "z")
-        total = cyrillic + latin
-        if total == 0:
+        detected = _canonical_detect_language(goal)
+        # Каноническая функция возвращает 'unknown'/'mixed' — для output default 'ru'
+        if detected in ("unknown", "mixed"):
             return "ru"
-
-        return "en" if latin / total > 0.5 else "ru"
+        return detected
 
 
 # ---------------------------------------------------------------------------

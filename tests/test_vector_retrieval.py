@@ -30,19 +30,19 @@ Unit-тесты для VectorRetrievalBackend и HybridRetrievalBackend.
 """
 
 import math
-import pytest
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import pytest
+
 from brain.cognition.context import EvidencePack
 from brain.cognition.retrieval_adapter import (
-    VectorRetrievalBackend,
     HybridRetrievalBackend,
     KeywordRetrievalBackend,
     RetrievalAdapter,
     RetrievalBackend,
+    VectorRetrievalBackend,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers

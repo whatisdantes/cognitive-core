@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import List
 
 from brain.core.contracts import ContractMixin
+
 from .context import ReasoningState, UncertaintyTrend
 
 logger = logging.getLogger(__name__)

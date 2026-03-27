@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import json
 import os
-import time
 import threading
+import time
+
 import pytest
 
-from brain.memory.storage import MemoryDatabase, SCHEMA_VERSION
-
+from brain.memory.storage import SCHEMA_VERSION, MemoryDatabase
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -414,9 +414,18 @@ class TestProcedures:
             "last_used_ts": time.time(),
             "priority": 0.7,
             "steps": [
-                {"action": "detect_language", "params": {"default": "ru"}, "expected_outcome": "lang_detected", "is_optional": False},
-                {"action": "generate_greeting", "params": {}, "expected_outcome": "greeting_text", "is_optional": False},
-                {"action": "add_emoji", "params": {"emoji": "👋"}, "expected_outcome": "", "is_optional": True},
+                {
+                    "action": "detect_language", "params": {"default": "ru"},
+                    "expected_outcome": "lang_detected", "is_optional": False,
+                },
+                {
+                    "action": "generate_greeting", "params": {},
+                    "expected_outcome": "greeting_text", "is_optional": False,
+                },
+                {
+                    "action": "add_emoji", "params": {"emoji": "👋"},
+                    "expected_outcome": "", "is_optional": True,
+                },
             ],
         }
         data.update(overrides)
@@ -817,7 +826,7 @@ class TestMigration:
 
     def test_is_migrated_true_after_migration(self, tmp_path):
         """is_migrated() → True после успешной миграции."""
-        from brain.memory.migrate import migrate_json_to_sqlite, is_migrated
+        from brain.memory.migrate import is_migrated, migrate_json_to_sqlite
 
         # Создаём JSON чтобы триггернуть миграцию
         with open(tmp_path / "semantic.json", "w") as f:

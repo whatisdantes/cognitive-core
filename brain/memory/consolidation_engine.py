@@ -30,12 +30,13 @@ try:
 except ImportError:
     _PSUTIL_AVAILABLE = False
 
-from .working_memory import WorkingMemory, MemoryItem  # noqa: E402
+from brain.core.text_utils import parse_fact_pattern  # noqa: E402
+
 from .episodic_memory import EpisodicMemory  # noqa: E402
+from .procedural_memory import ProceduralMemory  # noqa: E402
 from .semantic_memory import SemanticMemory  # noqa: E402
 from .source_memory import SourceMemory  # noqa: E402
-from .procedural_memory import ProceduralMemory  # noqa: E402
-
+from .working_memory import MemoryItem, WorkingMemory  # noqa: E402
 
 # ─── Конфигурация консолидации ───────────────────────────────────────────────
 
@@ -272,38 +273,18 @@ class ConsolidationEngine:
 
         return True
 
-    def _extract_fact(self, text: str):
+    @staticmethod
+    def _extract_fact(text: str):
         """
         Извлечь факт из текста.
-        Ищет паттерны: "X это Y", "X — Y", "X: Y", "X is Y"
+
+        Делегирует в каноническую parse_fact_pattern() из brain.core.text_utils.
+        Ищет паттерны: "X это Y", "X — Y", "X: Y", "X is Y", "X are Y", "X means Y"
 
         Returns:
             (concept, description) или None
         """
-        text = text.strip()
-        if len(text) < 5 or len(text) > 500:
-            return None
-
-        # Паттерны на русском
-        for sep in [" это ", " — ", " - ", ": "]:
-            if sep in text:
-                parts = text.split(sep, 1)
-                if len(parts) == 2:
-                    concept = parts[0].strip()
-                    description = parts[1].strip()
-                    if 2 <= len(concept) <= 50 and len(description) >= 5:
-                        return concept, description
-
-        # Паттерны на английском
-        for sep in [" is ", " are ", " means "]:
-            if sep in text.lower():
-                idx = text.lower().find(sep)
-                concept = text[:idx].strip()
-                description = text[idx + len(sep):].strip()
-                if 2 <= len(concept) <= 50 and len(description) >= 5:
-                    return concept, description
-
-        return None
+        return parse_fact_pattern(text)
 
     def _cleanup_working_memory(self) -> int:
         """
@@ -451,7 +432,10 @@ class ConsolidationEngine:
             "decay_cycles": self._decay_cycles,
             "save_cycles": self._save_cycles,
             "ram_pct": round(self._get_ram_pct(), 1),
-            "last_consolidation_ago": round(time.time() - self._last_consolidation, 1) if self._last_consolidation else None,
+            "last_consolidation_ago": (
+                round(time.time() - self._last_consolidation, 1)
+                if self._last_consolidation else None
+            ),
         }
 
     def display_status(self):
