@@ -181,7 +181,7 @@ class TestCognitiveOutcome:
         assert len(FAILURE_OUTCOMES) == 4
 
     def test_no_overlap(self):
-        assert NORMAL_OUTCOMES & FAILURE_OUTCOMES == frozenset()
+        assert frozenset() == NORMAL_OUTCOMES & FAILURE_OUTCOMES
 
     def test_all_covered(self):
         all_outcomes = NORMAL_OUTCOMES | FAILURE_OUTCOMES
@@ -1335,7 +1335,12 @@ class TestAutoEncode:
         assert last_goal.context.get("has_percept") is True
 
     def test_auto_encode_learn_fact_with_encoder(self):
-        """Auto-encode работает и для learn_fact запросов."""
+        """Auto-encode работает и для learn_fact запросов.
+
+        encoder.encode() вызывается дважды:
+          1) auto-encode запроса в run()
+          2) инкрементальная векторная индексация факта в _execute_action(LEARN)
+        """
         mm = _make_mock_memory()
         encoder = MagicMock()
         from brain.core.contracts import EncodedPercept, Modality
@@ -1347,7 +1352,11 @@ class TestAutoEncode:
         core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
         result = core.run("запомни: нейрон — клетка")
         assert result.action == ActionType.LEARN.value
-        encoder.encode.assert_called_once()
+        # Вызывается дважды: auto-encode запроса + векторная индексация выученного факта
+        assert encoder.encode.call_count == 2
+        calls = encoder.encode.call_args_list
+        assert calls[0][0][0] == "запомни: нейрон — клетка"  # auto-encode запроса
+        assert calls[1][0][0] == "нейрон — клетка"           # векторная индексация (очищенный факт)
 
     def test_auto_encode_with_zero_vector_handled(self):
         """Auto-encode с нулевым вектором не ломает pipeline."""

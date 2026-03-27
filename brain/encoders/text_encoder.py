@@ -63,10 +63,11 @@ _STOP_WORDS = _STOP_WORDS_RU | _STOP_WORDS_EN
 
 def _l2_normalize(vec: np.ndarray) -> np.ndarray:
     """L2-нормализация вектора. Нулевой вектор остаётся нулевым."""
-    norm = np.linalg.norm(vec)
+    norm = float(np.linalg.norm(vec))
     if norm < 1e-12:
         return vec
-    return vec / norm
+    result: np.ndarray = vec / norm
+    return result
 
 
 def _detect_language(text: str) -> str:
@@ -169,8 +170,8 @@ class TextEncoder:
         self._cache_enabled = cache_enabled
 
         # Состояние
-        self._st_model = None       # sentence-transformers model
-        self._navec = None           # navec model
+        self._st_model: Any = None   # sentence-transformers model
+        self._navec: Any = None      # navec model
         self._mode: str = "failed"   # "primary" | "fallback" | "failed"
         self._vector_dim: int = 0
 

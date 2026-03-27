@@ -3,7 +3,7 @@
 > ⚠️ **HISTORICAL DOCUMENT (v3, 2026-03-23)**
 >
 > Этот файл зафиксировал стратегические решения на момент создания.
-> Актуальный roadmap и статус задач — в [`TODO.md`](TODO.md).
+> Актуальный roadmap и статус задач — в [`TODO.md`](../TODO.md).
 > PLANS.md сохраняется как исторический контекст: Axicor-анализ, роль ARCHITECTURE.md,
 > hot/cold path, CUDA-план, retrieval-стратегия, Definition of Done для Фазы 1.
 

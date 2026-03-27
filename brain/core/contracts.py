@@ -13,9 +13,10 @@ brain/core/contracts.py
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, TypeVar, cast, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, TypeVar, Union, cast, get_type_hints, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Mixin: единый стиль сериализации для всех контрактов
@@ -39,12 +40,81 @@ class ContractMixin:
     def from_dict(cls: type[T], data: Dict[str, Any]) -> T:
         """
         Создаёт экземпляр из dict.
+
+        Рекурсивно восстанавливает:
+          - Enum-поля из строковых значений
+          - Вложенные dataclass-поля из dict (если тип — ContractMixin)
+          - List[dataclass] из списка dict
+          - Optional[dataclass/Enum] — разворачивает обёртку
+
         Неизвестные ключи игнорируются (forward-compatibility).
-        Вложенные dataclass НЕ восстанавливаются автоматически —
-        используйте явный from_dict() вложенного типа при необходимости.
         """
-        known = set(getattr(cls, "__dataclass_fields__", {}).keys())
-        return cls(**{k: v for k, v in data.items() if k in known})
+        known_fields = getattr(cls, "__dataclass_fields__", {})
+        known = set(known_fields.keys())
+        filtered = {k: v for k, v in data.items() if k in known}
+
+        # Получаем resolved type hints для рекурсивного восстановления
+        try:
+            hints = get_type_hints(cls)
+        except Exception:
+            hints = {}
+
+        restored: Dict[str, Any] = {}
+        for key, value in filtered.items():
+            hint = hints.get(key)
+            if hint is not None and value is not None:
+                value = _restore_typed_value(value, hint)
+            restored[key] = value
+
+        return cls(**restored)
+
+
+def _restore_typed_value(value: Any, hint: Any) -> Any:
+    """
+    Рекурсивно восстанавливает значение по type hint:
+      - str → Enum (если hint — подкласс Enum)
+      - dict → dataclass (если hint — ContractMixin dataclass)
+      - list[dict] → list[dataclass]
+      - Optional[X] / Union[X, None] — разворачивает
+    """
+    origin = getattr(hint, "__origin__", None)
+    args = getattr(hint, "__args__", ())
+
+    # --- Optional[X] = Union[X, None] ---
+    if origin is Union:
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            if value is None:
+                return None
+            return _restore_typed_value(value, non_none[0])
+        return value
+
+    # --- List[X] ---
+    if origin is list and args:
+        inner = args[0]
+        if isinstance(value, list):
+            return [_restore_typed_value(item, inner) for item in value]
+        return value
+
+    # --- Enum ---
+    if isinstance(hint, type) and issubclass(hint, Enum):
+        if isinstance(value, str):
+            try:
+                return hint(value)
+            except (ValueError, KeyError):
+                return value
+        return value
+
+    # --- Dataclass (ContractMixin) ---
+    if (
+        isinstance(hint, type)
+        and dataclasses.is_dataclass(hint)
+        and issubclass(hint, ContractMixin)
+        and isinstance(value, dict)
+    ):
+        return hint.from_dict(value)
+
+    return value
 
 
 def _enum_to_str(obj: Any) -> Any:
@@ -224,6 +294,28 @@ class BrainOutput(ContractMixin):
 # ---------------------------------------------------------------------------
 
 @runtime_checkable
+class TextEncoderProtocol(Protocol):
+    """
+    Формальный интерфейс TextEncoder для dependency injection.
+
+    Любой объект с методом encode(text, ...) → EncodedPercept
+    удовлетворяет этому протоколу (structural subtyping).
+    """
+
+    def encode(
+        self,
+        text: str,
+        source: str = "user_input",
+        quality: float = 1.0,
+        trace_id: str = "",
+        session_id: str = "",
+        cycle_id: str = "",
+    ) -> Any:
+        """Кодировать текст → EncodedPercept."""
+        ...
+
+
+@runtime_checkable
 class MemoryManagerProtocol(Protocol):
     """
     Формальный интерфейс MemoryManager для dependency injection.
@@ -267,10 +359,15 @@ class EventBusProtocol(Protocol):
 
     Любой объект с методами publish(), subscribe(), unsubscribe()
     удовлетворяет этому протоколу.
+
+    Сигнатура publish() синхронизирована с реальным EventBus:
+      - payload (не data) — единый naming convention
+      - trace_id — для трассировки
+      - возвращает int (количество вызванных handlers)
     """
 
-    def publish(self, event_type: str, data: Any = None) -> None:
-        """Опубликовать событие."""
+    def publish(self, event_type: str, payload: Any = None, trace_id: str = "") -> int:
+        """Опубликовать событие. Возвращает количество вызванных handlers."""
         ...
 
     def subscribe(self, event_type: str, handler: Any) -> None:

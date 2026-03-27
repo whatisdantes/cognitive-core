@@ -213,10 +213,9 @@ class UncertaintyMonitor:
 
         if abs(delta) < self._stagnation_threshold:
             return UncertaintyTrend.STABLE
-        elif delta > 0:
+        if delta > 0:
             return UncertaintyTrend.RISING
-        else:
-            return UncertaintyTrend.FALLING
+        return UncertaintyTrend.FALLING
 
     def _update_counters(self, trend: UncertaintyTrend, delta: float) -> None:
         """Обновить счётчики stagnation и falling."""

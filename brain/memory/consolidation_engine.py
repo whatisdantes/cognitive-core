@@ -396,7 +396,7 @@ class ConsolidationEngine:
         if not _PSUTIL_AVAILABLE:
             return 0.0
         try:
-            return psutil.virtual_memory().percent
+            return float(psutil.virtual_memory().percent)
         except Exception:
             return 0.0
 

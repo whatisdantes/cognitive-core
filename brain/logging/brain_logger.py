@@ -32,9 +32,10 @@ from __future__ import annotations
 import atexit
 import gzip
 import json
+import shutil
 import threading
 import weakref
-from collections import defaultdict
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -96,6 +97,37 @@ def _detect_category(event: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# BoundedIndex — LRU-ограниченный индекс (P0-E3)
+# ---------------------------------------------------------------------------
+
+class BoundedIndex(OrderedDict):
+    """
+    OrderedDict с ограничением по количеству ключей.
+
+    При превышении max_size автоматически удаляет самые старые записи (FIFO).
+    Используется для _trace_index и _session_index в BrainLogger,
+    чтобы предотвратить OOM при long-running процессах.
+    """
+
+    def __init__(self, max_size: int = 10_000) -> None:
+        super().__init__()
+        self._max = max_size
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        super().__setitem__(key, value)
+        while len(self) > self._max:
+            self.popitem(last=False)
+
+    def append_to(self, key: str, item: Any) -> None:
+        """Добавить элемент в список по ключу (аналог defaultdict(list))."""
+        if key not in self:
+            self[key] = []
+        self[key].append(item)
+        # move_to_end чтобы активные ключи не вытеснялись
+        self.move_to_end(key)
+
+
+# ---------------------------------------------------------------------------
 # BrainLogger
 # ---------------------------------------------------------------------------
 
@@ -131,11 +163,11 @@ class BrainLogger:
         # Открытые файловые дескрипторы: имя → file object
         self._files: Dict[str, Any] = {}
 
-        # In-memory индексы для быстрого поиска
+        # In-memory индексы для быстрого поиска (bounded — P0-E3)
         # trace_id  → list of event dicts
-        self._trace_index: Dict[str, List[dict]] = defaultdict(list)
+        self._trace_index: BoundedIndex = BoundedIndex(max_size=10_000)
         # session_id → list of event dicts
-        self._session_index: Dict[str, List[dict]] = defaultdict(list)
+        self._session_index: BoundedIndex = BoundedIndex(max_size=10_000)
 
         # Открыть основной файл
         self._open_file("brain")
@@ -208,11 +240,11 @@ class BrainLogger:
             category = _detect_category(event)
             if category:
                 self._write_line(category, line)
-            # Обновить индексы
+            # Обновить индексы (bounded — P0-E3)
             if trace_id:
-                self._trace_index[trace_id].append(record)
+                self._trace_index.append_to(trace_id, record)
             if session_id:
-                self._session_index[session_id].append(record)
+                self._session_index.append_to(session_id, record)
 
         if self._echo:
             print(f"[{record['ts']}] {level:8s} {module:20s} {event}")
@@ -315,7 +347,7 @@ class BrainLogger:
         dst = self._log_dir / f"{name}_{ts}.jsonl.gz"
         try:
             with open(src, "rb") as f_in, gzip.open(dst, "wb") as f_out:
-                f_out.write(f_in.read())
+                shutil.copyfileobj(f_in, f_out, length=64 * 1024)
             src.unlink()
         except Exception:
             pass

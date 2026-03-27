@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
@@ -188,7 +189,7 @@ class SemanticNode:
             "deny_count": self.deny_count,
             "created_ts": self.created_ts,
             "updated_ts": self.updated_ts,
-            # embedding не сохраняем в JSON (пересчитывается)
+            "embedding": self.embedding,
         }
 
     @classmethod
@@ -207,6 +208,7 @@ class SemanticNode:
             updated_ts=d.get("updated_ts", time.time()),
         )
         node.relations = [Relation.from_dict(r) for r in d.get("relations", [])]
+        node.embedding = d.get("embedding")
         return node
 
     def __repr__(self) -> str:
@@ -255,6 +257,7 @@ class SemanticMemory:
         else:
             self._backend = storage_backend
 
+        self._lock = threading.RLock()
         self._nodes: Dict[str, SemanticNode] = {}
         self._write_count = 0
         self._load_count = 0
@@ -283,36 +286,37 @@ class SemanticMemory:
         """
         concept = self._normalize(concept)
 
-        if concept in self._nodes:
-            node = self._nodes[concept]
-            # Обновляем существующий узел
-            if description and description != node.description:
-                node.description = description
-            node.confirm(delta=0.02)
-            if source_ref and source_ref not in node.source_refs:
-                node.source_refs.append(source_ref)
-            if tags:
-                for tag in tags:
-                    if tag not in node.tags:
-                        node.tags.append(tag)
-        else:
-            # Создаём новый узел
-            node = SemanticNode(
-                concept=concept,
-                description=description,
-                tags=tags or [],
-                confidence=confidence,
-                importance=importance,
-                source_refs=[source_ref] if source_ref else [],
-            )
-            # Проверяем лимит
-            if len(self._nodes) >= self._max_nodes:
-                self._evict_least_important()
-            self._nodes[concept] = node
+        with self._lock:
+            if concept in self._nodes:
+                node = self._nodes[concept]
+                # Обновляем существующий узел
+                if description and description != node.description:
+                    node.description = description
+                node.confirm(delta=0.02)
+                if source_ref and source_ref not in node.source_refs:
+                    node.source_refs.append(source_ref)
+                if tags:
+                    for tag in tags:
+                        if tag not in node.tags:
+                            node.tags.append(tag)
+            else:
+                # Создаём новый узел
+                node = SemanticNode(
+                    concept=concept,
+                    description=description,
+                    tags=tags or [],
+                    confidence=confidence,
+                    importance=importance,
+                    source_refs=[source_ref] if source_ref else [],
+                )
+                # Проверяем лимит
+                if len(self._nodes) >= self._max_nodes:
+                    self._evict_least_important()
+                self._nodes[concept] = node
 
-        self._write_count += 1
-        self._maybe_autosave()
-        return node
+            self._write_count += 1
+            self._maybe_autosave()
+            return node
 
     def get_fact(self, concept: str) -> Optional[SemanticNode]:
         """
@@ -322,11 +326,12 @@ class SemanticMemory:
             SemanticNode или None если не найдено
         """
         concept = self._normalize(concept)
-        node = self._nodes.get(concept)
-        if node:
-            node.touch()
-            self._load_count += 1
-        return node
+        with self._lock:
+            node = self._nodes.get(concept)
+            if node:
+                node.touch()
+                self._load_count += 1
+            return node
 
     def add_relation(
         self,
@@ -351,35 +356,36 @@ class SemanticMemory:
         concept_a = self._normalize(concept_a)
         concept_b = self._normalize(concept_b)
 
-        # Убеждаемся что оба узла существуют
-        if concept_a not in self._nodes:
-            self.store_fact(concept_a, "", source_ref=source_ref)
-        if concept_b not in self._nodes:
-            self.store_fact(concept_b, "", source_ref=source_ref)
+        with self._lock:
+            # Убеждаемся что оба узла существуют (store_fact is reentrant via RLock)
+            if concept_a not in self._nodes:
+                self.store_fact(concept_a, "", source_ref=source_ref)
+            if concept_b not in self._nodes:
+                self.store_fact(concept_b, "", source_ref=source_ref)
 
-        rel_ab = Relation(
-            target=concept_b,
-            weight=weight,
-            rel_type=rel_type,
-            confidence=confidence,
-            source_ref=source_ref,
-        )
-        self._nodes[concept_a].add_relation(rel_ab)
-
-        if bidirectional:
-            # Обратная связь (симметричная)
-            reverse_type = self._reverse_rel_type(rel_type)
-            rel_ba = Relation(
-                target=concept_a,
+            rel_ab = Relation(
+                target=concept_b,
                 weight=weight,
-                rel_type=reverse_type,
+                rel_type=rel_type,
                 confidence=confidence,
                 source_ref=source_ref,
             )
-            self._nodes[concept_b].add_relation(rel_ba)
+            self._nodes[concept_a].add_relation(rel_ab)
 
-        self._write_count += 1
-        self._maybe_autosave()
+            if bidirectional:
+                # Обратная связь (симметричная)
+                reverse_type = self._reverse_rel_type(rel_type)
+                rel_ba = Relation(
+                    target=concept_a,
+                    weight=weight,
+                    rel_type=reverse_type,
+                    confidence=confidence,
+                    source_ref=source_ref,
+                )
+                self._nodes[concept_b].add_relation(rel_ba)
+
+            self._write_count += 1
+            self._maybe_autosave()
 
     def get_related(
         self,
@@ -401,23 +407,25 @@ class SemanticMemory:
             Список (concept_name, Relation), отсортированных по весу
         """
         concept = self._normalize(concept)
-        node = self._nodes.get(concept)
-        if not node:
-            return []
+        with self._lock:
+            node = self._nodes.get(concept)
+            if not node:
+                return []
 
-        relations = node.relations
-        if rel_type:
-            relations = [r for r in relations if r.rel_type == rel_type]
-        relations = [r for r in relations if r.weight >= min_weight]
-        relations.sort(key=lambda r: r.weight * r.confidence, reverse=True)
+            relations = list(node.relations)  # copy
+            if rel_type:
+                relations = [r for r in relations if r.rel_type == rel_type]
+            relations = [r for r in relations if r.weight >= min_weight]
+            relations.sort(key=lambda r: r.weight * r.confidence, reverse=True)
 
-        return [(r.target, r) for r in relations[:top_n]]
+            return [(r.target, r) for r in relations[:top_n]]
 
     def search(
         self,
         query: str,
         top_n: int = 10,
         min_confidence: float = 0.0,
+        min_importance: float = 0.0,
         tags: Optional[List[str]] = None,
     ) -> List[SemanticNode]:
         """
@@ -426,68 +434,82 @@ class SemanticMemory:
         Ищет вхождение query в concept и description.
         При наличии numpy — дополнительно по косинусному сходству эмбеддингов.
 
+        Args:
+            query:          строка поиска
+            top_n:          максимальное количество результатов
+            min_confidence: минимальная уверенность в факте (truth certainty)
+            min_importance: минимальная важность понятия (value weight)
+            tags:           фильтр по тегам
+
         Returns:
             Список SemanticNode, отсортированных по релевантности
         """
         query_lower = query.lower()
         results = []
 
-        for concept, node in self._nodes.items():
-            if node.confidence < min_confidence:
-                continue
-            if tags and not any(t in node.tags for t in tags):
-                continue
+        with self._lock:
+            for concept, node in self._nodes.items():
+                if node.confidence < min_confidence:
+                    continue
+                if node.importance < min_importance:
+                    continue
+                if tags and not any(t in node.tags for t in tags):
+                    continue
 
-            # Текстовое совпадение
-            score = 0.0
-            if query_lower == concept:
-                score = 1.0
-            elif query_lower in concept:
-                score = 0.8
-            elif query_lower in node.description.lower():
-                score = 0.5
-            elif any(query_lower in tag for tag in node.tags):
-                score = 0.3
+                # Текстовое совпадение
+                score = 0.0
+                if query_lower == concept:
+                    score = 1.0
+                elif query_lower in concept:
+                    score = 0.8
+                elif query_lower in node.description.lower():
+                    score = 0.5
+                elif any(query_lower in tag for tag in node.tags):
+                    score = 0.3
 
-            if score > 0:
-                results.append((score * node.confidence, node))
+                if score > 0:
+                    results.append((score * node.confidence, node))
 
-        results.sort(key=lambda x: x[0], reverse=True)
-        found = [node for _, node in results[:top_n]]
+            results.sort(key=lambda x: x[0], reverse=True)
+            found = [node for _, node in results[:top_n]]
 
-        for node in found:
-            node.touch()
+            for node in found:
+                node.touch()
 
-        return found
+            return found
 
     def search_by_tags(self, tags: List[str], top_n: int = 10) -> List[SemanticNode]:
         """Поиск по тегам."""
-        results = []
-        for node in self._nodes.values():
-            if any(t in node.tags for t in tags):
-                results.append(node)
-        results.sort(key=lambda n: n.importance * n.confidence, reverse=True)
-        return results[:top_n]
+        with self._lock:
+            results = []
+            for node in self._nodes.values():
+                if any(t in node.tags for t in tags):
+                    results.append(node)
+            results.sort(key=lambda n: n.importance * n.confidence, reverse=True)
+            return results[:top_n]
 
     def confirm_fact(self, concept: str, delta: float = 0.05):
         """Подтвердить факт — повысить уверенность."""
         concept = self._normalize(concept)
-        if concept in self._nodes:
-            self._nodes[concept].confirm(delta)
+        with self._lock:
+            if concept in self._nodes:
+                self._nodes[concept].confirm(delta)
 
     def deny_fact(self, concept: str, delta: float = 0.1):
         """Опровергнуть факт — снизить уверенность."""
         concept = self._normalize(concept)
-        if concept in self._nodes:
-            self._nodes[concept].deny(delta)
+        with self._lock:
+            if concept in self._nodes:
+                self._nodes[concept].deny(delta)
 
     def delete_fact(self, concept: str) -> bool:
         """Удалить факт из памяти."""
         concept = self._normalize(concept)
-        if concept in self._nodes:
-            del self._nodes[concept]
-            return True
-        return False
+        with self._lock:
+            if concept in self._nodes:
+                del self._nodes[concept]
+                return True
+            return False
 
     def apply_decay(self, rate: Optional[float] = None):
         """
@@ -495,8 +517,9 @@ class SemanticMemory:
         Вызывается периодически (например, каждые N циклов).
         """
         rate = rate or self._decay_rate
-        for node in self._nodes.values():
-            node.decay(rate)
+        with self._lock:
+            for node in self._nodes.values():
+                node.decay(rate)
 
     # ─── Граф и аналитика ────────────────────────────────────────────────────
 
@@ -510,57 +533,62 @@ class SemanticMemory:
         start = self._normalize(start)
         end = self._normalize(end)
 
-        if start not in self._nodes or end not in self._nodes:
+        with self._lock:
+            if start not in self._nodes or end not in self._nodes:
+                return []
+
+            visited = {start}
+            queue = [[start]]
+
+            while queue:
+                path = queue.pop(0)
+                current = path[-1]
+
+                if current == end:
+                    return path
+
+                if len(path) >= max_depth:
+                    continue
+
+                node = self._nodes.get(current)
+                if not node:
+                    continue
+
+                for rel in node.relations:
+                    if rel.target not in visited:
+                        visited.add(rel.target)
+                        queue.append(path + [rel.target])
+
             return []
-
-        visited = {start}
-        queue = [[start]]
-
-        while queue:
-            path = queue.pop(0)
-            current = path[-1]
-
-            if current == end:
-                return path
-
-            if len(path) >= max_depth:
-                continue
-
-            node = self._nodes.get(current)
-            if not node:
-                continue
-
-            for rel in node.relations:
-                if rel.target not in visited:
-                    visited.add(rel.target)
-                    queue.append(path + [rel.target])
-
-        return []
 
     def get_most_important(self, top_n: int = 20) -> List[SemanticNode]:
         """Получить наиболее важные понятия."""
-        nodes = list(self._nodes.values())
+        with self._lock:
+            nodes = list(self._nodes.values())
         nodes.sort(key=lambda n: n.importance * n.confidence, reverse=True)
         return nodes[:top_n]
 
     def get_most_accessed(self, top_n: int = 20) -> List[SemanticNode]:
         """Получить наиболее часто используемые понятия."""
-        nodes = list(self._nodes.values())
+        with self._lock:
+            nodes = list(self._nodes.values())
         nodes.sort(key=lambda n: n.access_count, reverse=True)
         return nodes[:top_n]
 
     def get_uncertain_facts(self, threshold: float = 0.5) -> List[SemanticNode]:
         """Получить факты с низкой уверенностью (кандидаты на проверку)."""
-        return [n for n in self._nodes.values() if n.confidence < threshold]
+        with self._lock:
+            return [n for n in self._nodes.values() if n.confidence < threshold]
 
     # ─── Персистентность ─────────────────────────────────────────────────────
 
     def save(self, path: Optional[str] = None):
         """Сохранить семантическую память (SQLite или JSON)."""
-        if self._backend == "sqlite" and self._db is not None:
-            self._save_sqlite()
-        else:
-            self._save_json(path)
+        with self._lock:
+            if self._backend == "sqlite" and self._db is not None:
+                self._save_sqlite()
+            else:
+                self._save_json(path)
 
     def _save_json(self, path: Optional[str] = None):
         """Сохранить семантическую память на диск (JSON)."""
@@ -678,21 +706,22 @@ class SemanticMemory:
 
     def status(self) -> Dict[str, Any]:
         """Статус семантической памяти."""
-        confidences = [n.confidence for n in self._nodes.values()]
-        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
-        total_relations = sum(len(n.relations) for n in self._nodes.values())
+        with self._lock:
+            confidences = [n.confidence for n in self._nodes.values()]
+            avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+            total_relations = sum(len(n.relations) for n in self._nodes.values())
 
-        return {
-            "type": "semantic_memory",
-            "node_count": len(self._nodes),
-            "max_nodes": self._max_nodes,
-            "total_relations": total_relations,
-            "avg_confidence": round(avg_conf, 3),
-            "uncertain_facts": len(self.get_uncertain_facts()),
-            "write_count": self._write_count,
-            "load_count": self._load_count,
-            "data_path": self._data_path,
-        }
+            return {
+                "type": "semantic_memory",
+                "node_count": len(self._nodes),
+                "max_nodes": self._max_nodes,
+                "total_relations": total_relations,
+                "avg_confidence": round(avg_conf, 3),
+                "uncertain_facts": len(self.get_uncertain_facts()),
+                "write_count": self._write_count,
+                "load_count": self._load_count,
+                "data_path": self._data_path,
+            }
 
     def display_status(self):
         """Вывести статус в консоль."""
@@ -707,13 +736,16 @@ class SemanticMemory:
         print(f"{'─'*50}\n")
 
     def __len__(self) -> int:
-        return len(self._nodes)
+        with self._lock:
+            return len(self._nodes)
 
     def __contains__(self, concept: str) -> bool:
-        return self._normalize(concept) in self._nodes
+        with self._lock:
+            return self._normalize(concept) in self._nodes
 
     def __repr__(self) -> str:
-        return (
-            f"SemanticMemory(nodes={len(self._nodes)} | "
-            f"relations={sum(len(n.relations) for n in self._nodes.values())})"
-        )
+        with self._lock:
+            return (
+                f"SemanticMemory(nodes={len(self._nodes)} | "
+                f"relations={sum(len(n.relations) for n in self._nodes.values())})"
+            )

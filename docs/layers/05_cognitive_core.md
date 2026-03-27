@@ -1,9 +1,10 @@
 # 🧠 Слой 5: Cognitive Core (Префронтальная кора)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ✅ Реализовано (Этап F + F+)**  
+> **Статус: ✅ Реализовано (Этап F + F+ + P0/P1)**  
 > CognitiveCore orchestrator, GoalManager, Planner, HypothesisEngine, Reasoner,  
-> ContradictionDetector, UncertaintyMonitor, ActionSelector — 182+7 тестов.  
+> ContradictionDetector, UncertaintyMonitor, ActionSelector — 190+7 тестов (unit+integration).  
+> BM25 + Vector + Hybrid retrieval — 60 тестов (`test_vector_retrieval.py`).  
 > SalienceEngine и PolicyLayer — запланированы (Этап H).
 
 ---

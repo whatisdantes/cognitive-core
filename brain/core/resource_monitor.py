@@ -311,8 +311,8 @@ class ResourceMonitor:
             soft_blocked=self._soft_blocked_active,
         )
 
-        old_policy = self._policy
         with self._lock:
+            old_policy = self._policy
             self._state  = new_state
             self._policy = new_policy
 

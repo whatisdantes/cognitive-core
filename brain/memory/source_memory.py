@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -171,6 +172,7 @@ class SourceMemory:
         else:
             self._backend = storage_backend
 
+        self._lock = threading.RLock()
         self._sources: Dict[str, SourceRecord] = {}
         self._write_count = 0
 
@@ -190,24 +192,25 @@ class SourceMemory:
         Returns:
             SourceRecord — созданная или существующая запись
         """
-        if source_id in self._sources:
-            record = self._sources[source_id]
-            record.last_seen_ts = time.time()
+        with self._lock:
+            if source_id in self._sources:
+                record = self._sources[source_id]
+                record.last_seen_ts = time.time()
+                return record
+
+            # Начальное доверие по типу источника
+            initial_trust = self.DEFAULT_TRUST_BY_TYPE.get(source_type, self._default_trust)
+
+            record = SourceRecord(
+                source_id=source_id,
+                source_type=source_type,
+                trust_score=initial_trust,
+                metadata=metadata or {},
+            )
+            self._sources[source_id] = record
+            self._write_count += 1
+            self._maybe_autosave()
             return record
-
-        # Начальное доверие по типу источника
-        initial_trust = self.DEFAULT_TRUST_BY_TYPE.get(source_type, self._default_trust)
-
-        record = SourceRecord(
-            source_id=source_id,
-            source_type=source_type,
-            trust_score=initial_trust,
-            metadata=metadata or {},
-        )
-        self._sources[source_id] = record
-        self._write_count += 1
-        self._maybe_autosave()
-        return record
 
     def get_trust(self, source_id: str) -> float:
         """
@@ -216,16 +219,18 @@ class SourceMemory:
         Returns:
             float: 0.0 — 1.0 (0.5 если источник неизвестен)
         """
-        record = self._sources.get(source_id)
-        if not record:
-            return 0.5  # нейтральное доверие к неизвестному источнику
-        if record.blacklisted:
-            return 0.0
-        return record.trust_score
+        with self._lock:
+            record = self._sources.get(source_id)
+            if not record:
+                return 0.5  # нейтральное доверие к неизвестному источнику
+            if record.blacklisted:
+                return 0.0
+            return record.trust_score
 
     def get_record(self, source_id: str) -> Optional[SourceRecord]:
         """Получить полную запись об источнике."""
-        return self._sources.get(source_id)
+        with self._lock:
+            return self._sources.get(source_id)
 
     def update_trust(
         self,
@@ -241,81 +246,91 @@ class SourceMemory:
             confirmed:  True = подтверждение, False = опровержение
             delta:      величина изменения (None = по умолчанию)
         """
-        if source_id not in self._sources:
-            self.register(source_id)
+        with self._lock:
+            if source_id not in self._sources:
+                self.register(source_id)
 
-        record = self._sources[source_id]
-        if confirmed:
-            record.confirm(delta or 0.05)
-        else:
-            record.contradict(delta or 0.1)
+            record = self._sources[source_id]
+            if confirmed:
+                record.confirm(delta or 0.05)
+            else:
+                record.contradict(delta or 0.1)
 
-        self._write_count += 1
-        self._maybe_autosave()
+            self._write_count += 1
+            self._maybe_autosave()
 
     def add_fact(self, source_id: str):
         """Зафиксировать что из источника получен ещё один факт."""
-        if source_id not in self._sources:
-            self.register(source_id)
-        self._sources[source_id].fact_count += 1
+        with self._lock:
+            if source_id not in self._sources:
+                self.register(source_id)
+            self._sources[source_id].fact_count += 1
 
     def blacklist(self, source_id: str, reason: str = ""):
         """Добавить источник в чёрный список."""
-        if source_id not in self._sources:
-            self.register(source_id)
-        record = self._sources[source_id]
-        record.blacklisted = True
-        record.trust_score = 0.0
-        if reason:
-            record.metadata["blacklist_reason"] = reason
-        self._write_count += 1
-        self._maybe_autosave()
+        with self._lock:
+            if source_id not in self._sources:
+                self.register(source_id)
+            record = self._sources[source_id]
+            record.blacklisted = True
+            record.trust_score = 0.0
+            if reason:
+                record.metadata["blacklist_reason"] = reason
+            self._write_count += 1
+            self._maybe_autosave()
         _logger.warning("Источник занесён в чёрный список: '%s' — %s", source_id, reason)
 
     def whitelist(self, source_id: str):
         """Убрать источник из чёрного списка."""
-        if source_id in self._sources:
-            record = self._sources[source_id]
-            record.blacklisted = False
-            record.trust_score = max(record.trust_score, 0.5)
-            record.metadata.pop("blacklist_reason", None)
+        with self._lock:
+            if source_id in self._sources:
+                record = self._sources[source_id]
+                record.blacklisted = False
+                record.trust_score = max(record.trust_score, 0.5)
+                record.metadata.pop("blacklist_reason", None)
 
     def is_blacklisted(self, source_id: str) -> bool:
         """Проверить, в чёрном ли списке источник."""
-        record = self._sources.get(source_id)
-        return record.blacklisted if record else False
+        with self._lock:
+            record = self._sources.get(source_id)
+            return record.blacklisted if record else False
 
     def apply_decay(self, rate: float = 0.002):
         """Применить затухание доверия ко всем источникам."""
-        for record in self._sources.values():
-            if not record.blacklisted:
-                record.decay(rate)
+        with self._lock:
+            for record in self._sources.values():
+                if not record.blacklisted:
+                    record.decay(rate)
 
     # ─── Аналитика ───────────────────────────────────────────────────────────
 
     def get_reliable_sources(self, threshold: float = 0.7) -> List[SourceRecord]:
         """Получить список надёжных источников."""
-        return [
-            r for r in self._sources.values()
-            if r.is_reliable(threshold)
-        ]
+        with self._lock:
+            return [
+                r for r in self._sources.values()
+                if r.is_reliable(threshold)
+            ]
 
     def get_unreliable_sources(self, threshold: float = 0.4) -> List[SourceRecord]:
         """Получить список ненадёжных источников."""
-        return [
-            r for r in self._sources.values()
-            if r.trust_score < threshold and not r.blacklisted
-        ]
+        with self._lock:
+            return [
+                r for r in self._sources.values()
+                if r.trust_score < threshold and not r.blacklisted
+            ]
 
     def get_most_trusted(self, top_n: int = 10) -> List[SourceRecord]:
         """Получить наиболее доверенные источники."""
-        sources = [r for r in self._sources.values() if not r.blacklisted]
+        with self._lock:
+            sources = [r for r in self._sources.values() if not r.blacklisted]
         sources.sort(key=lambda r: r.trust_score, reverse=True)
         return sources[:top_n]
 
     def get_most_productive(self, top_n: int = 10) -> List[SourceRecord]:
         """Получить источники с наибольшим количеством фактов."""
-        sources = list(self._sources.values())
+        with self._lock:
+            sources = list(self._sources.values())
         sources.sort(key=lambda r: r.fact_count, reverse=True)
         return sources[:top_n]
 
@@ -323,10 +338,11 @@ class SourceMemory:
 
     def save(self, path: Optional[str] = None):
         """Сохранить память об источниках (SQLite или JSON)."""
-        if self._backend == "sqlite" and self._db is not None:
-            self._save_sqlite()
-        else:
-            self._save_json(path)
+        with self._lock:
+            if self._backend == "sqlite" and self._db is not None:
+                self._save_sqlite()
+            else:
+                self._save_json(path)
 
     def _save_json(self, path: Optional[str] = None):
         """Сохранить память об источниках на диск (JSON)."""
@@ -407,25 +423,26 @@ class SourceMemory:
 
     def status(self) -> Dict[str, Any]:
         """Статус памяти об источниках."""
-        records = list(self._sources.values())
-        blacklisted = sum(1 for r in records if r.blacklisted)
-        reliable = sum(1 for r in records if r.is_reliable())
-        avg_trust = sum(r.trust_score for r in records) / len(records) if records else 0.0
+        with self._lock:
+            records = list(self._sources.values())
+            blacklisted = sum(1 for r in records if r.blacklisted)
+            reliable = sum(1 for r in records if r.is_reliable())
+            avg_trust = sum(r.trust_score for r in records) / len(records) if records else 0.0
 
-        type_counts: Dict[str, int] = {}
-        for r in records:
-            type_counts[r.source_type] = type_counts.get(r.source_type, 0) + 1
+            type_counts: Dict[str, int] = {}
+            for r in records:
+                type_counts[r.source_type] = type_counts.get(r.source_type, 0) + 1
 
-        return {
-            "type": "source_memory",
-            "source_count": len(self._sources),
-            "reliable_count": reliable,
-            "blacklisted_count": blacklisted,
-            "avg_trust_score": round(avg_trust, 3),
-            "type_breakdown": type_counts,
-            "write_count": self._write_count,
-            "data_path": self._data_path,
-        }
+            return {
+                "type": "source_memory",
+                "source_count": len(self._sources),
+                "reliable_count": reliable,
+                "blacklisted_count": blacklisted,
+                "avg_trust_score": round(avg_trust, 3),
+                "type_breakdown": type_counts,
+                "write_count": self._write_count,
+                "data_path": self._data_path,
+            }
 
     def display_status(self):
         """Вывести статус в консоль."""
@@ -439,8 +456,10 @@ class SourceMemory:
         print(f"{'─'*50}\n")
 
     def __len__(self) -> int:
-        return len(self._sources)
+        with self._lock:
+            return len(self._sources)
 
     def __repr__(self) -> str:
-        reliable = sum(1 for r in self._sources.values() if r.is_reliable())
-        return f"SourceMemory(sources={len(self._sources)} | reliable={reliable})"
+        with self._lock:
+            reliable = sum(1 for r in self._sources.values() if r.is_reliable())
+            return f"SourceMemory(sources={len(self._sources)} | reliable={reliable})"

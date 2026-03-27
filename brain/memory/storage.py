@@ -259,9 +259,10 @@ class MemoryDatabase:
     # ─── Transaction API ─────────────────────────────────────────────────────
 
     def begin(self):
-        """Начать транзакцию."""
+        """Начать транзакцию (идемпотентно — пропускает если уже в транзакции)."""
         with self._lock:
-            self._conn.execute("BEGIN")
+            if not self._conn.in_transaction:
+                self._conn.execute("BEGIN")
 
     def commit(self):
         """Зафиксировать транзакцию."""
@@ -365,7 +366,7 @@ class MemoryDatabase:
         """Количество узлов."""
         with self._lock:
             row = self._conn.execute("SELECT COUNT(*) as cnt FROM semantic_nodes").fetchone()
-            return row["cnt"]
+            return int(row["cnt"])
 
     # ─── Relations ───────────────────────────────────────────────────────────
 
@@ -504,7 +505,7 @@ class MemoryDatabase:
         """Количество эпизодов."""
         with self._lock:
             row = self._conn.execute("SELECT COUNT(*) as cnt FROM episodes").fetchone()
-            return row["cnt"]
+            return int(row["cnt"])
 
     # ═══════════════════════════════════════════════════════
     # SOURCES
@@ -565,7 +566,7 @@ class MemoryDatabase:
         """Количество источников."""
         with self._lock:
             row = self._conn.execute("SELECT COUNT(*) as cnt FROM sources").fetchone()
-            return row["cnt"]
+            return int(row["cnt"])
 
     # ═══════════════════════════════════════════════════════
     # PROCEDURES
@@ -668,7 +669,7 @@ class MemoryDatabase:
         """Количество процедур."""
         with self._lock:
             row = self._conn.execute("SELECT COUNT(*) as cnt FROM procedures").fetchone()
-            return row["cnt"]
+            return int(row["cnt"])
 
     # ═══════════════════════════════════════════════════════
     # BULK OPERATIONS

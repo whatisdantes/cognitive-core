@@ -606,15 +606,15 @@ class TestResponseValidator:
 
     # --- Пустой ответ ---
 
-    def test_empty_response_critical(self):
-        """Пустой ответ → critical issue + fallback."""
+    def test_empty_response_warning(self):
+        """Пустой ответ → warning issue + fallback (auto-corrected)."""
         result = _make_cognitive_result(response="")
         validator = ResponseValidator()
         vr = validator.validate(result)
 
-        assert vr.is_valid is False  # critical → not valid
+        assert vr.is_valid is True  # warning after autocorrect → valid
         assert any(i.issue_type == "empty" for i in vr.issues)
-        assert any(i.severity == "critical" for i in vr.issues)
+        assert any(i.severity == "warning" for i in vr.issues)
         assert vr.corrected_response != ""
 
     def test_whitespace_response_critical(self):

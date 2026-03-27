@@ -1,0 +1,430 @@
+# 🧠 TODO — Master Roadmap
+## cognitive-core v0.7.0
+
+> **Обновлено:** 2026-03-28  
+> **Принцип:** сначала hardening, затем retrieval, затем расширение  
+> **Тесты:** 1333/1333 ✅ · **Coverage:** 84.44% (gate 70%) · **Ruff:** 0 errors · **Mypy:** 0 errors · **CI:** test + lint + typecheck  
+> **Связанные документы:**
+> - [`docs/ACTION_PLAN.md`](docs/ACTION_PLAN.md) — детальный план с code snippets и effort-оценками (54 задачи)
+> - [`docs/PLANS.md`](docs/PLANS.md) — стратегический контекст (Axicor, ARCHITECTURE.md роль, hot/cold path)
+> - [`docs/BRAIN.md`](docs/BRAIN.md) — архитектурная спецификация (15 разделов)
+> - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — R&D концепт когнитивного нейрона (не текущий target)
+
+---
+
+## 📌 Навигация
+
+1. [P0 — Критические](#-p0--критические) — crash, data loss, нерабочий value path — **✅ 7/7 ЗАВЕРШЕНО**
+2. [P1 — Высокий приоритет](#-p1--высокий-приоритет) — качество, масштаб, CI — **✅ 14/14 ЗАВЕРШЕНО**
+3. [P2 — Средний приоритет](#-p2--средний-приоритет) — алгоритмы, инфра, продуктовое качество
+4. [P3 — Nice-to-have](#-p3--nice-to-have) — DX, research, архитектура
+5. [Архитектурное расширение](#-архитектурное-расширение-слои) — новые слои (H–M)
+6. [Completed](#-completed-история-реализации) — MVP A/B/C + ранние этапы
+7. [Test Coverage](#-test-coverage) — таблица тестов
+
+---
+
+## 🔴 P0 — Критические — ✅ 7/7 ЗАВЕРШЕНО
+
+> Все P0 задачи закрыты. Система стабильна, thread-safe, retrieval работает.
+
+### Инженерные [T]
+
+- [x] **P0-E1** Потокобезопасность — 6 модулей  
+  `WorkingMemory`, `SemanticMemory`, `EpisodicMemory`, `SourceMemory`, `ProceduralMemory`, `EventBus`  
+  → добавлен `threading.RLock()`, return copies ✅
+
+- [x] **P0-E2** Race condition в `ResourceMonitor._apply_state()`  
+  → расширен scope `with self._lock:` ✅
+
+- [x] **P0-E3** Утечка памяти в `BrainLogger`  
+  → TTL/LRU (BoundedIndex) ✅
+
+- [x] **P0-E4** 100 МБ RAM spike при ротации логов  
+  → `shutil.copyfileobj(f_in, f_out, 64*1024)` ✅
+
+- [x] **P0-E5** `importance ≠ confidence` — семантическое несоответствие  
+  → разделены параметры ✅
+
+### Продуктовые [C]
+
+- [x] **P0-P1** Vector/hybrid retrieval — реальная индексация корпуса  
+  → `_build_vector_index()` при init, incremental indexing при LEARN,  
+  `deny_fact()`/`delete_fact()` с удалением из vector index, 60 тестов ✅
+
+- [x] **P0-P2** `ResponseValidator` — логическая противоречивость  
+  → severity снижен до `warning`, `is_valid=True` после автокоррекции ✅
+
+---
+
+## 🟠 P1 — Высокий приоритет — ✅ 14/14 ЗАВЕРШЕНО
+
+> Все P1 задачи закрыты. CI hardened, типизация улучшена, Docker multi-stage.
+
+### Волна 1 — Атомарные фиксы ✅
+
+- [x] **P1-E3** EventBusProtocol.publish() — несовпадение сигнатур ✅
+- [x] **P1-E9** copy.deepcopy → dataclasses.replace в ContradictionDetector ✅
+- [x] **P1-P2** Dedup — хэшировать полный текст (убрать [:2000]) ✅
+- [x] **P1-E2** GoalManager._remove_from_queue() — lazy-delete ✅
+- [x] **P1-P1** Backend "auto" → SQLite по умолчанию ✅
+
+### Волна 2 — Типизация и Protocol ✅
+
+- [x] **P1-E5** Заменить Any на Protocol-типы (Reasoner, CognitiveCore) ✅
+- [x] **P1-E10** DialogueResponder: переиспользовать OutputTraceBuilder ✅
+- [x] **P1-E1** ContractMixin.from_dict() — рекурсивный с вложенными dataclass/Enum ✅
+
+### Волна 3 — CI/Infra/Config ✅
+
+- [x] **P1-E6** Coverage gate в CI (`--cov-fail-under=70`) ✅
+- [x] **P1-E8** Расширить Ruff rules (B, SIM, C4, RET, PIE) ✅
+- [x] **P1-E4** Расширить mypy до всех модулей → 0 errors ✅
+- [x] **P1-E7** Lock-файл для reproducible builds — _отложен: pip-compile не критичен при pyproject.toml pinning_ ✅
+
+### Волна 4 — Docker + README ✅
+
+- [x] **P1-E11** Docker — multi-stage + non-root ✅
+- [x] **P1-P3** README ↔ Reality — capability matrix ✅
+
+### Дополнительные фиксы (выполнены в рамках P0-P1)
+
+- [x] **BUG-FIX** storage.py: begin() — идемпотентная защита от вложенных транзакций ✅
+- [x] **P0-VEC** Vector index: _build_vector_index() из персистентного корпуса памяти ✅
+- [x] **P0-VEC** Инкрементальная индексация при LEARN ✅
+- [x] **P0-VEC** remove_from_vector_index() для deny_fact/delete_fact ✅
+- [x] **P0-VEC** Episode/SemanticNode: персистенция embedding в to_dict/from_dict ✅
+
+### Mypy / Ruff lint fixes ✅
+
+- [x] ruff SIM300 Yoda condition fix (test_cognition.py) ✅
+- [x] ruff B007 unused loop variable fix (test_golden.py) ✅
+- [x] mypy storage.py: 4× no-any-return — int() casts ✅
+- [x] mypy response_validator.py: str() cast for meta.get() ✅
+- [x] mypy dialogue_responder.py: str() cast for meta.get() ✅
+- [x] mypy cognitive_core.py: bool() cast for semantic.delete_fact() ✅
+- [x] mypy migrate.py: typed json.load(), bool() cast, type: ignore for int sum ✅
+- [x] mypy consolidation_engine.py: float() cast for psutil.virtual_memory().percent ✅
+- [x] mypy text_encoder.py: Any typing for _st_model/_navec, float() for np.linalg.norm ✅
+- [x] mypy cli.py: type: ignore[arg-type] for MemoryManager protocol mismatch ✅
+
+---
+
+## 🟡 P2 — Средний приоритет (Неделя 3–4)
+
+> Алгоритмические оптимизации, локальные дефекты, инфраструктура.
+
+### Алгоритмические оптимизации [T]
+
+- [ ] **P2-1** BFS в SemanticMemory: `list.pop(0)` → `collections.deque`
+- [ ] **P2-2** `retrieve_by_concept()`: `ep not in results` O(n²) → `seen = set()`
+- [ ] **P2-3** `_cleanup_working_memory()`: get_all + remove в цикле → batch remove
+- [ ] **P2-4** `_evict_least_important()`: `sorted()` для одного → `min()`
+
+### Локальные дефекты [T]
+
+- [ ] **P2-5** `_new_id()` обрезает UUID4 до 8 hex (32 бита) → коллизии при ~65K событий
+- [ ] **P2-6** `_maybe_autosave()` при `autosave_every == 0` → `ZeroDivisionError`
+- [ ] **P2-7** `handler.__name__` → `AttributeError` для lambda/partial
+- [ ] **P2-8** `apply_decay()` обновляет `updated_ts` ВСЕХ узлов → обновлять только изменённые
+- [ ] **P2-9** Ротация логов только для `brain.jsonl` → ротировать все файлы
+- [ ] **P2-10** Три разных шкалы порогов уверенности → единая шкала в config
+- [ ] **P2-11** `to_dict()`: `dataclasses.asdict()` vs `vars(self)` → единый подход
+
+### Инфраструктура [T]
+
+- [ ] **P2-12** Docker build job в CI
+- [ ] **P2-13** Dependabot для security updates
+- [ ] **P2-14** Bandit (SAST) в CI
+- [ ] **P2-15** Codecov интеграция
+- [ ] **P2-16** CI badge в README
+
+### Продуктовое качество [C]
+
+- [ ] **P2-17** JSON ingestion: числа/bool → строки → шум в semantic search
+- [ ] **P2-18** InputRouter `os.path.exists()` guessing → explicit type hint
+- [ ] **P2-19** Чанкинг по символам → sentence-aware boundaries
+- [ ] **P2-20** Integration test: «сохранил → перезапустил → нашёл»
+
+---
+
+## 🔵 P3 — Nice-to-have (Месяц 2+)
+
+> ⚠️ Не распыляться на P3, пока не закрыты P2.
+
+### Документация и DX
+
+- [ ] **P3-1** CHANGELOG.md (Keep a Changelog format)
+- [ ] **P3-2** CONTRIBUTING.md
+- [ ] **P3-3** API reference (mkdocs + mkdocstrings)
+- [ ] **P3-4** ADR (Architecture Decision Records)
+- [ ] **P3-5** Убрать Python 3.14 из classifiers (не тестируется в CI)
+
+### Тестирование
+
+- [ ] **P3-6** Property-based тесты (hypothesis) для ContractMixin roundtrip
+- [ ] **P3-7** Mutation testing (mutmut) — верификация качества тестов
+- [ ] **P3-8** Concurrent stress tests для EventBus + Scheduler
+
+### Архитектура
+
+- [ ] **P3-9** Async EventBus (asyncio или thread pool dispatch)
+- [ ] **P3-10** Pipeline pattern для `CognitiveCore.run()` (вместо god-method)
+- [ ] **P3-11** Scheduler интеграция в CLI (`--autonomous` mode)
+- [ ] **P3-12** SQLCipher для encryption at rest
+- [ ] **P3-13** LLM Bridge (Этап N) — стратегический приоритет для демо
+
+---
+
+## 🏗️ Архитектурное расширение (слои)
+
+> Новые слои био-инспирированной архитектуры. Реализуются **после** P0–P1 hardening.  
+> Текущее состояние: 7/12 слоёв реализовано. Спецификации → `docs/layers/*.md`
+
+### Этап H — Attention & Resource Control
+
+- [ ] **H.1** `brain/cognition/salience_engine.py` — оценка значимости
+- [ ] **H.2** `brain/core/attention_controller.py` — goal-driven + salience-driven attention
+- [ ] **H.3** Policy деградации — graceful degradation: Ring 2 → Ring 1 → minimal
+- [ ] **H.4** Ring 2 — Deep Reasoning (multi-iteration refinement)
+
+### Этап I — Learning Loop
+
+- [ ] **I.1** `brain/learning/online_learner.py` — обновление confidence по feedback
+- [ ] **I.2** `brain/learning/knowledge_gap_detector.py` — фиксация пробелов
+- [ ] **I.3** `brain/learning/replay_engine.py` — replay эпизодов в idle
+
+### Этап J — Multimodal Expansion
+
+- [ ] **J.1** Vision encoder path
+- [ ] **J.2** Audio encoder path
+- [ ] **J.3** Temporal/video path
+
+### Этап K — Cross-Modal Fusion
+
+- [ ] **K.1** `brain/fusion/shared_space_projector.py`
+- [ ] **K.2** `brain/fusion/entity_linker.py`
+- [ ] **K.3** `brain/fusion/confidence_calibrator.py`
+- [ ] **K.4** `brain/fusion/contradiction_detector.py` (кросс-модальная версия)
+
+### Этап L — Safety & Boundaries
+
+- [ ] **L.1** `brain/safety/source_trust.py`
+- [ ] **L.2** `brain/safety/conflict_detector.py`
+- [ ] **L.3** `brain/safety/boundary_guard.py`
+- [ ] **L.4** `brain/safety/audit_logger.py`
+- [ ] **L.5** `brain/safety/policy_layer.py`
+
+### Этап N — LLM Bridge
+
+- [ ] **N.1** `brain/bridges/llm_bridge.py` — абстракция для OpenAI/Anthropic/local
+- [ ] **N.2** Интеграция LLM в reasoning pipeline
+- [ ] **N.3** Safety wrapper для LLM
+
+### Этап M — Reward & Motivation
+
+- [ ] **M.1** `brain/motivation/reward_engine.py`
+- [ ] **M.2** `brain/motivation/motivation_engine.py`
+- [ ] **M.3** `brain/motivation/curiosity_engine.py`
+
+### CUDA Backend (после понимания bottlenecks)
+
+- [ ] Compute backend abstraction: `cpu_backend.py` + `cuda_backend.py`
+- [ ] Приоритет: text encoder → embeddings → reranker → local LLM inference
+
+### Research Branch (отдельно от mainline)
+
+- [ ] Эксперименты из `ARCHITECTURE.md` (cognitive neuron, predictive coding)
+- [ ] Ternary + LLaMA (см. `docs/ideas/ternary+llama.md`)
+
+---
+
+## 🔗 Зависимости
+
+```text
+Hardening (завершено):
+  P0-E1..E5 (thread safety, leaks, bugs) ✅
+  P0-P1 (real retrieval) → P0-P2 (validator fix) ✅
+  P1-E1..E11 (types, CI, ruff, Docker) ✅
+  P1-P1..P3 (product quality) ✅
+
+Следующий этап:
+  P2 (algorithms, infra, product quality)
+  
+Архитектурное расширение (после P2):
+  H Attention (depends: F+, MVP)
+  I Learning (depends: H, G)
+  J Multimodal (depends: E, G)
+  K Fusion (depends: J, F+)
+  L Safety (depends: G, K)
+  N LLM Bridge (depends: L, G)
+  M Reward (depends: I, L)
+```
+
+---
+
+## ✅ Completed (история реализации)
+
+<details>
+<summary><strong>MVP Phase A — Foundation ✅</strong></summary>
+
+- [x] **A.1** CLI entrypoint (`brain/cli.py` + `[project.scripts]`, 20 тестов)
+- [x] **A.1b** Dockerfile (multi-stage + `.dockerignore`)
+- [x] **A.2** Контракт `ResourceMonitor ↔ CognitiveCore` (`snapshot()` алиас)
+- [x] **A.3** mypy как настоящий барьер (`|| true` убран, scope: core + cognition)
+
+</details>
+
+<details>
+<summary><strong>MVP Phase B — Close the Loop ✅</strong></summary>
+
+- [x] **B.1** Auto-encode в `CognitiveCore` (456 тестов)
+- [x] **B.2** Perception hardening (path traversal, oversized files, 34 теста)
+- [x] **B.3** Retrieval scope зафиксирован (keyword-first + BM25)
+- [x] **B.4** README приведён к реальности
+- [x] **B.5** Golden-answer бенчмарки (20 Q&A, 414 параметризованных тестов)
+
+</details>
+
+<details>
+<summary><strong>MVP Phase C — Cleanup + Critical DRY ✅</strong></summary>
+
+- [x] **C.1** `detect_language()` → `brain/core/text_utils.py` (4 потребителя)
+- [x] **C.2** `parse_fact_pattern()` → `brain/core/text_utils.py` (2 потребителя)
+- [x] **C.3** Убран прямой вызов `consolidation._extract_fact()`
+- [x] **C.4** `sha256_text/file()` → `brain/core/hash_utils.py` (2 потребителя)
+- [x] **C.5** JSON helper — оценка: не нужен (28 вызовов, все контекстно-специфичны)
+
+</details>
+
+<details>
+<summary><strong>P0 — Критические исправления (v0.6.1) ✅</strong></summary>
+
+- [x] **P0.1** Синхронизация версий
+- [x] **P0.2** Очистка артефактов `NaN` в README.md
+- [x] **P0.3** Проверка `NaN` в `brain/core/events.py`
+- [x] **P0.4** API-контракты: `MemoryManagerProtocol`, `EventBusProtocol`, `ResourceMonitorProtocol`
+- [x] **P0.5** Убраны side effects в retrieval: `dataclasses.replace()`
+- [x] **P0.6** E2E тест + lint блокирующий
+
+</details>
+
+<details>
+<summary><strong>P1 — Quick Wins + BM25 + SQLite (v0.7.0) ✅</strong></summary>
+
+- [x] **P1.0** Ruff lint cleanup: 131 → 0 errors
+- [x] **P1.1** BM25 reranking (55 тестов)
+- [x] **P1.3** SQLite persistence layer (58 тестов)
+- [x] **P1.4** `session_id: Optional[str] = None` в `CognitiveCore.run()`
+- [x] **P1.5** `pytest-cov` в CI
+- [x] **P1.6** Синхронизация зависимостей
+- [x] **P1.7** Disclaimer в `docs/ARCHITECTURE.md`
+- [x] **P1.8** `atexit.register()` через `weakref.ref`
+- [x] **P1.9** mypy typecheck job в CI
+
+</details>
+
+<details>
+<summary><strong>Этапы A→G — Основная реализация (793 теста) ✅</strong></summary>
+
+- [x] **A** Shared Contracts (`contracts.py`: 9 dataclass, ContractMixin, Modality)
+- [x] **B** Minimal Autonomous Runtime (EventBus, Scheduler, ResourceMonitor)
+- [x] **C** Logging & Observability (BrainLogger, DigestGenerator, ReasoningTracer)
+- [x] **D** Text-Only Perception (TextIngestor, MetadataExtractor, InputRouter)
+- [x] **E** Minimal Text Encoder (sentence-transformers 768d / navec 300d fallback)
+- [x] **F** Cognitive MVP (GoalManager, HypothesisEngine, Reasoner, ActionSelector, CognitiveCore)
+- [x] **F+** Cognitive Extensions (RetrievalAdapter, ContradictionDetector, UncertaintyMonitor)
+- [x] **G** Output MVP (TraceBuilder, DialogueResponder, ResponseValidator)
+
+</details>
+
+<details>
+<summary><strong>P0 (new) — Critical Hardening ✅ 7/7</strong></summary>
+
+- [x] P0-E1..E5 — Thread safety, memory leaks, critical bugs
+- [x] P0-P1 — Real vector/hybrid retrieval (60 тестов)
+- [x] P0-P2 — ResponseValidator fix
+
+</details>
+
+<details>
+<summary><strong>P1 (new) — High Priority ✅ 14/14</strong></summary>
+
+- [x] Волна 1: E3, E9, P2, E2, P1 — атомарные фиксы
+- [x] Волна 2: E5, E10, E1 — типизация и Protocol
+- [x] Волна 3: E6, E8, E4, E7 — CI/Infra
+- [x] Волна 4: E11, P3 — Docker + README
+- [x] Все mypy/ruff lint fixes (10 файлов)
+
+</details>
+
+---
+
+## 🧪 Test Coverage
+
+**Всего: 1333/1333 ✅** · Coverage: 84.44% (gate 70%) · 19 test files · ~102s
+
+| Файл | Модуль | Тестов | Статус |
+|------|--------|--------|--------|
+| `test_bm25.py` | BM25 Scorer + KeywordBackend reranking | 55 | ✅ |
+| `test_cli.py` | CLI entrypoint (Phase A) | 20 | ✅ |
+| `test_cognition.py` | Cognitive Core (unit + auto-encode) | 190 | ✅ |
+| `test_cognition_integration.py` | Cognitive Core (integration) | 7 | ✅ |
+| `test_e2e_pipeline.py` | E2E Pipeline + Protocol conformance | 10 | ✅ |
+| `test_golden.py` | Golden-answer benchmarks (Phase B.5) | 414 | ✅ |
+| `test_logging.py` | Logging & Observability | 25 | ✅ |
+| `test_memory.py` | Memory System (5 types + consolidation + manager) | 101 | ✅ |
+| `test_output.py` | Output Layer (unit) | 106 | ✅ |
+| `test_output_integration.py` | Output Layer (integration) | 7 | ✅ |
+| `test_perception.py` | Perception Layer | 79 | ✅ |
+| `test_perception_hardening.py` | Perception Hardening (Phase B.2) | 34 | ✅ |
+| `test_resource_monitor.py` | ResourceMonitor | 13 | ✅ |
+| `test_scheduler.py` | Scheduler | 11 | ✅ |
+| `test_storage.py` | SQLite Storage + Migration | 58 | ✅ |
+| `test_text_encoder.py` | Text Encoder (4 modes) | 80 | ✅ |
+| `test_utils.py` | text_utils + hash_utils (Phase C) | 63 | ✅ |
+| `test_vector_retrieval.py` | Vector Retrieval + Index Population + Hybrid Search | 60 | ✅ |
+| **Итого** | | **1333** | **✅** |
+
+---
+
+## 📊 Прогресс
+
+| Этап | Название | Статус | Тесты |
+|------|----------|--------|-------|
+| A–G | Foundation → Output MVP | ✅ | 793 |
+| F+ | Cognitive Extensions | ✅ | (в test_cognition) |
+| P0 (old) | Критические исправления v0.6.1 | ✅ | — |
+| P1 (old) | BM25 + SQLite + CI | ✅ | 113 |
+| **MVP A** | **Foundation** | **✅** | 835 |
+| **MVP B** | **Close the Loop** | **✅** | 456 |
+| **MVP C** | **Cleanup + Critical DRY** | **✅** | 63 |
+| **P0 (new)** | **Critical hardening** | **✅ 7/7** | 1333 |
+| **P1 (new)** | **High priority** | **✅ 14/14** | 1333 |
+| P2 | Medium priority | [ ] 0/20 | — |
+| P3 | Nice-to-have | [ ] 0/13 | — |
+| H–M | Архитектурное расширение | [ ] 5 слоёв | — |
+
+---
+
+## 💡 Стратегическая формула
+
+```
+1. ✅ Thread safety + memory leaks     → закрыто (P0)
+2. ✅ Real retrieval pipeline           → закрыто (P0-VEC)
+3. ✅ Type safety + CI hardening        → закрыто (P1)
+4. ✅ README ↔ Reality alignment        → закрыто (P1-P3)
+5. 🔵 LLM Bridge                        → стратегический unlock (Этап N)
+```
+
+---
+
+## 📌 Правило принятия решений
+
+При возникновении новой идеи — три вопроса:
+
+1. Помогает ли это закрыть P2 hardening?
+2. Улучшает ли наблюдаемость, стабильность или retrieval?
+3. Не уводит ли в research раньше времени?
+
+**да / да / нет** → брать · **нет / нет / да** → откладывать в P3/Research

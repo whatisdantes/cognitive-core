@@ -229,8 +229,8 @@ class ResponseValidator:
 
         issue = ValidationIssue(
             issue_type="empty",
-            severity="critical",
-            description="Response is empty or whitespace-only",
+            severity="warning",
+            description="Response was empty or whitespace-only (auto-corrected with fallback)",
             correction=f"Replaced with fallback: '{fallback[:50]}...'",
         )
 
@@ -382,7 +382,7 @@ class ResponseValidator:
         в каноническую detect_language().
         """
         meta = result.metadata or {}
-        lang = meta.get("language", "")
+        lang: str = str(meta.get("language", "") or "")
         if lang:
             return lang
 
@@ -401,7 +401,7 @@ class ResponseValidator:
         if not text:
             return ""
 
-        detected = _canonical_detect_language(text)
+        detected: str = str(_canonical_detect_language(text))
         if detected in ("unknown", "mixed"):
             return ""
         return detected

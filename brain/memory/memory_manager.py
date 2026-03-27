@@ -177,12 +177,11 @@ class MemoryManager:
         """
         Определить, стоит ли использовать SQLite в режиме 'auto'.
 
-        Логика: если уже есть memory.db — используем SQLite.
-        Иначе — JSON (обратная совместимость).
+        SQLite — предпочтительный бэкенд: атомарные записи, WAL-режим,
+        лучшая производительность при большом объёме данных.
+        JSON используется только при явном storage_backend="json".
         """
-        import os
-        db_path = f"{self._data_dir}/memory.db"
-        return os.path.exists(db_path)
+        return True
 
     # ─── Жизненный цикл ──────────────────────────────────────────────────────
 
@@ -366,7 +365,7 @@ class MemoryManager:
 
         if "semantic" in memory_types:
             result.semantic = self.semantic.search(
-                query, top_n=top_n, min_confidence=min_importance
+                query, top_n=top_n, min_importance=min_importance
             )
 
         if "episodic" in memory_types:

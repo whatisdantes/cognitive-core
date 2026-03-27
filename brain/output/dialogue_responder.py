@@ -104,6 +104,12 @@ class DialogueResponder:
         output = responder.generate(cognitive_result, validation, trace)
     """
 
+    def __init__(
+        self,
+        trace_builder: Optional[OutputTraceBuilder] = None,
+    ) -> None:
+        self._trace_builder = trace_builder or OutputTraceBuilder()
+
     def generate(
         self,
         result: CognitiveResult,
@@ -131,8 +137,7 @@ class DialogueResponder:
         text = self._apply_template(text, result.action, result.confidence, lang)
 
         # --- 4. Digest ---
-        builder = OutputTraceBuilder()
-        digest = builder.to_digest(trace)
+        digest = self._trace_builder.to_digest(trace)
 
         # --- 5. Metadata ---
         metadata = self._build_metadata(result, validation, trace, lang)
@@ -331,7 +336,7 @@ class DialogueResponder:
         в каноническую detect_language() для текстового анализа goal.
         """
         meta = result.metadata or {}
-        lang = meta.get("language", "")
+        lang: str = str(meta.get("language", "") or "")
         if lang:
             return lang
 
@@ -340,7 +345,7 @@ class DialogueResponder:
         if not goal:
             return "ru"  # default
 
-        detected = _canonical_detect_language(goal)
+        detected: str = str(_canonical_detect_language(goal))
         # Каноническая функция возвращает 'unknown'/'mixed' — для output default 'ru'
         if detected in ("unknown", "mixed"):
             return "ru"
@@ -370,7 +375,9 @@ class OutputPipeline:
     ) -> None:
         self._trace_builder = trace_builder or OutputTraceBuilder()
         self._validator = validator or ResponseValidator()
-        self._responder = responder or DialogueResponder()
+        self._responder = responder or DialogueResponder(
+            trace_builder=self._trace_builder,
+        )
 
     def process(self, result: CognitiveResult) -> BrainOutput:
         """

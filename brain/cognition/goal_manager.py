@@ -157,6 +157,9 @@ class GoalManager:
         gm.complete(goal.goal_id)
     """
 
+    # Порог для автоматической компактификации очереди
+    _COMPACT_THRESHOLD: int = 128
+
     def __init__(self) -> None:
         self._goal_tree: Dict[str, Goal] = {}
         # min-heap: (-priority, created_at_float, goal_id)
@@ -164,6 +167,8 @@ class GoalManager:
         self._interrupted_stack: List[str] = []  # goal_ids
         self._completed: List[str] = []
         self._counter: int = 0  # для стабильной сортировки
+        # Множество ID, помеченных для ленивого удаления из очереди
+        self._removed_ids: set[str] = set()
 
     # ------------------------------------------------------------------
     # Основные операции
@@ -250,10 +255,17 @@ class GoalManager:
         """
         Вернуть текущую активную цель (с наивысшим приоритетом).
         Не извлекает из очереди.
+
+        Ленивое удаление: пропускает записи из _removed_ids
+        и терминальные цели.
         """
-        # Пропускаем терминальные цели в голове очереди
         while self._active_queue:
             _, _, gid = self._active_queue[0]
+            # Ленивое удаление: пропускаем помеченные
+            if gid in self._removed_ids:
+                heapq.heappop(self._active_queue)
+                self._removed_ids.discard(gid)
+                continue
             goal = self._goal_tree.get(gid)
             if goal and not goal.is_terminal and goal.status == GoalStatus.ACTIVE:
                 return goal
@@ -375,6 +387,7 @@ class GoalManager:
         self._active_queue.clear()
         self._interrupted_stack.clear()
         self._completed.clear()
+        self._removed_ids.clear()
         self._counter = 0
 
     # ------------------------------------------------------------------
@@ -383,13 +396,35 @@ class GoalManager:
 
     def _remove_from_queue(self, goal_id: str) -> None:
         """
-        Удалить цель из active_queue.
-        Ленивое удаление: помечаем цель как терминальную,
-        peek() пропустит её при следующем вызове.
+        Ленивое удаление цели из active_queue.
+
+        Помечаем goal_id в _removed_ids — peek() пропустит при обходе.
+        При накоплении > _COMPACT_THRESHOLD помеченных записей —
+        пересобираем очередь для освобождения памяти.
         """
-        # Фактическое удаление не нужно — peek() фильтрует.
-        # Но для чистоты можно пересобрать очередь при большом размере.
-        pass
+        self._removed_ids.add(goal_id)
+
+        # Компактификация при большом количестве мёртвых записей
+        if len(self._removed_ids) > self._COMPACT_THRESHOLD:
+            self._compact_queue()
+
+    def _compact_queue(self) -> None:
+        """
+        Пересобрать active_queue, удалив все помеченные записи.
+
+        Вызывается автоматически при превышении _COMPACT_THRESHOLD.
+        """
+        new_queue = [
+            entry for entry in self._active_queue
+            if entry[2] not in self._removed_ids
+        ]
+        heapq.heapify(new_queue)
+        self._active_queue = new_queue
+        self._removed_ids.clear()
+        logger.debug(
+            "[GoalManager] _compact_queue: очередь пересобрана, size=%d",
+            len(self._active_queue),
+        )
 
     def __len__(self) -> int:
         """Общее количество целей в дереве."""

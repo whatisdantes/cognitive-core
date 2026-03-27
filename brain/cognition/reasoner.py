@@ -22,7 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from brain.core.contracts import ContractMixin
+from brain.core.contracts import ContractMixin, MemoryManagerProtocol
 
 from .context import (
     CognitiveOutcome,
@@ -145,7 +145,7 @@ class Reasoner:
 
     def __init__(
         self,
-        memory_manager: Any,
+        memory_manager: MemoryManagerProtocol,
         hypothesis_engine: Optional[HypothesisEngine] = None,
         planner: Optional[Planner] = None,
         retrieval_adapter: Optional[RetrievalAdapter] = None,
@@ -243,7 +243,7 @@ class Reasoner:
                 trace.best_statement = best.statement
                 trace.hypothesis_count = len(scored)
                 trace.evidence_refs = sorted(
-                    set(eid for h in scored for eid in h.evidence_ids)
+                    {eid for h in scored for eid in h.evidence_ids}
                 )
                 trace.final_confidence = best.confidence
 

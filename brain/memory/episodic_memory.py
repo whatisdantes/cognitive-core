@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -105,6 +106,7 @@ class Episode:
     trace_id: str = ""
     session_id: str = ""
     access_count: int = 0
+    embedding: Optional[List[float]] = field(default=None, repr=False)
 
     def touch(self):
         """Зафиксировать обращение."""
@@ -141,6 +143,7 @@ class Episode:
             "trace_id": self.trace_id,
             "session_id": self.session_id,
             "access_count": self.access_count,
+            "embedding": self.embedding,
         }
 
     @classmethod
@@ -158,6 +161,7 @@ class Episode:
             trace_id=d.get("trace_id", ""),
             session_id=d.get("session_id", ""),
             access_count=d.get("access_count", 0),
+            embedding=d.get("embedding"),
         )
         ep.modal_evidence = [ModalEvidence.from_dict(e) for e in d.get("modal_evidence", [])]
         return ep
@@ -210,6 +214,7 @@ class EpisodicMemory:
         else:
             self._backend = storage_backend
 
+        self._lock = threading.RLock()
         self._episodes: List[Episode] = []          # хронологический список
         self._index_by_id: Dict[str, Episode] = {}  # быстрый доступ по ID
         self._index_by_concept: Dict[str, List[str]] = {}  # concept → [episode_ids]
@@ -253,31 +258,33 @@ class EpisodicMemory:
             session_id=session_id,
         )
 
-        # Проверяем лимит
-        if len(self._episodes) >= self._adaptive_max():
-            self._evict_oldest()
+        with self._lock:
+            # Проверяем лимит
+            if len(self._episodes) >= self._adaptive_max():
+                self._evict_oldest()
 
-        self._episodes.append(episode)
-        self._index_by_id[episode.episode_id] = episode
+            self._episodes.append(episode)
+            self._index_by_id[episode.episode_id] = episode
 
-        # Индексируем по концептам
-        for concept in episode.concepts:
-            key = concept.lower().strip()
-            if key not in self._index_by_concept:
-                self._index_by_concept[key] = []
-            self._index_by_concept[key].append(episode.episode_id)
+            # Индексируем по концептам
+            for concept in episode.concepts:
+                key = concept.lower().strip()
+                if key not in self._index_by_concept:
+                    self._index_by_concept[key] = []
+                self._index_by_concept[key].append(episode.episode_id)
 
-        self._write_count += 1
-        self._maybe_autosave()
+            self._write_count += 1
+            self._maybe_autosave()
         return episode
 
     def get_by_id(self, episode_id: str) -> Optional[Episode]:
         """Получить эпизод по ID."""
-        ep = self._index_by_id.get(episode_id)
-        if ep:
-            ep.touch()
-            self._load_count += 1
-        return ep
+        with self._lock:
+            ep = self._index_by_id.get(episode_id)
+            if ep:
+                ep.touch()
+                self._load_count += 1
+            return ep
 
     def get_recent(self, n: int = 10, modality: Optional[str] = None) -> List[Episode]:
         """
@@ -290,14 +297,15 @@ class EpisodicMemory:
         Returns:
             Список эпизодов (новые первые)
         """
-        episodes = self._episodes
-        if modality:
-            episodes = [e for e in episodes if e.modality == modality]
+        with self._lock:
+            episodes = list(self._episodes)  # snapshot
+            if modality:
+                episodes = [e for e in episodes if e.modality == modality]
 
-        result = episodes[-n:][::-1]  # последние N, в обратном порядке
-        for ep in result:
-            ep.touch()
-        return result
+            result = episodes[-n:][::-1]  # последние N, в обратном порядке
+            for ep in result:
+                ep.touch()
+            return result
 
     def retrieve_by_concept(
         self,
@@ -312,26 +320,28 @@ class EpisodicMemory:
             Список эпизодов, отсортированных по важности и времени
         """
         concept_key = concept.lower().strip()
-        episode_ids = self._index_by_concept.get(concept_key, [])
 
-        results = []
-        for ep_id in episode_ids:
-            ep = self._index_by_id.get(ep_id)
-            if ep and ep.importance >= min_importance:
-                results.append(ep)
+        with self._lock:
+            episode_ids = list(self._index_by_concept.get(concept_key, []))
 
-        # Также ищем по тексту
-        for ep in self._episodes:
-            if ep not in results and concept_key in ep.content.lower():
-                if ep.importance >= min_importance:
+            results = []
+            for ep_id in episode_ids:
+                ep = self._index_by_id.get(ep_id)
+                if ep and ep.importance >= min_importance:
                     results.append(ep)
 
-        results.sort(key=lambda e: (e.importance, e.ts), reverse=True)
-        result = results[:top_n]
-        for ep in result:
-            ep.touch()
-        self._load_count += len(result)
-        return result
+            # Также ищем по тексту
+            for ep in self._episodes:
+                if ep not in results and concept_key in ep.content.lower():
+                    if ep.importance >= min_importance:
+                        results.append(ep)
+
+            results.sort(key=lambda e: (e.importance, e.ts), reverse=True)
+            result = results[:top_n]
+            for ep in result:
+                ep.touch()
+            self._load_count += len(result)
+            return result
 
     def retrieve_by_time(
         self,
@@ -351,14 +361,15 @@ class EpisodicMemory:
             Список эпизодов в хронологическом порядке
         """
         end_ts = end_ts or time.time()
-        results = [
-            ep for ep in self._episodes
-            if start_ts <= ep.ts <= end_ts
-            and (modality is None or ep.modality == modality)
-        ]
-        for ep in results:
-            ep.touch()
-        return results
+        with self._lock:
+            results = [
+                ep for ep in self._episodes
+                if start_ts <= ep.ts <= end_ts
+                and (modality is None or ep.modality == modality)
+            ]
+            for ep in results:
+                ep.touch()
+            return results
 
     def search(
         self,
@@ -388,46 +399,49 @@ class EpisodicMemory:
 
         results: List[Tuple[float, Episode]] = []
 
-        for ep in self._episodes:
-            # Временной фильтр
-            if cutoff_ts and ep.ts < cutoff_ts:
-                continue
-            # Фильтр по важности
-            if ep.importance < min_importance:
-                continue
-            # Фильтр по модальности
-            if modality and ep.modality != modality:
-                continue
-            # Фильтр по тегам
-            if tags and not any(t in ep.tags for t in tags):
-                continue
+        with self._lock:
+            for ep in self._episodes:
+                # Временной фильтр
+                if cutoff_ts and ep.ts < cutoff_ts:
+                    continue
+                # Фильтр по важности
+                if ep.importance < min_importance:
+                    continue
+                # Фильтр по модальности
+                if modality and ep.modality != modality:
+                    continue
+                # Фильтр по тегам
+                if tags and not any(t in ep.tags for t in tags):
+                    continue
 
-            # Скоринг
-            score = 0.0
-            if query_lower in ep.content.lower():
-                score += 0.6
-            if any(query_lower in c for c in ep.concepts):
-                score += 0.3
-            if any(query_lower in t for t in ep.tags):
-                score += 0.1
+                # Скоринг
+                score = 0.0
+                if query_lower in ep.content.lower():
+                    score += 0.6
+                if any(query_lower in c for c in ep.concepts):
+                    score += 0.3
+                if any(query_lower in t for t in ep.tags):
+                    score += 0.1
 
-            if score > 0:
-                results.append((score * ep.importance * ep.confidence, ep))
+                if score > 0:
+                    results.append((score * ep.importance * ep.confidence, ep))
 
-        results.sort(key=lambda x: x[0], reverse=True)
-        found = [ep for _, ep in results[:top_n]]
-        for ep in found:
-            ep.touch()
-        self._load_count += len(found)
-        return found
+            results.sort(key=lambda x: x[0], reverse=True)
+            found = [ep for _, ep in results[:top_n]]
+            for ep in found:
+                ep.touch()
+            self._load_count += len(found)
+            return found
 
     def get_by_trace(self, trace_id: str) -> List[Episode]:
         """Найти все эпизоды с данным trace_id."""
-        return [ep for ep in self._episodes if ep.trace_id == trace_id]
+        with self._lock:
+            return [ep for ep in self._episodes if ep.trace_id == trace_id]
 
     def get_by_session(self, session_id: str) -> List[Episode]:
         """Найти все эпизоды сессии."""
-        return [ep for ep in self._episodes if ep.session_id == session_id]
+        with self._lock:
+            return [ep for ep in self._episodes if ep.session_id == session_id]
 
     # ─── Управление памятью ──────────────────────────────────────────────────
 
@@ -475,7 +489,7 @@ class EpisodicMemory:
             ram = psutil.virtual_memory()
             if ram.percent > 85:
                 return max(500, self._max_episodes // 4)
-            elif ram.percent > 75:
+            if ram.percent > 75:
                 return max(1000, self._max_episodes // 2)
         except Exception:
             pass
@@ -485,10 +499,11 @@ class EpisodicMemory:
 
     def save(self, path: Optional[str] = None):
         """Сохранить эпизодическую память (SQLite или JSON)."""
-        if self._backend == "sqlite" and self._db is not None:
-            self._save_sqlite()
-        else:
-            self._save_json(path)
+        with self._lock:
+            if self._backend == "sqlite" and self._db is not None:
+                self._save_sqlite()
+            else:
+                self._save_json(path)
 
     def _save_json(self, path: Optional[str] = None):
         """Сохранить эпизодическую память на диск (JSON)."""
@@ -582,28 +597,29 @@ class EpisodicMemory:
 
     def status(self) -> Dict[str, Any]:
         """Статус эпизодической памяти."""
-        modality_counts: Dict[str, int] = {}
-        for ep in self._episodes:
-            modality_counts[ep.modality] = modality_counts.get(ep.modality, 0) + 1
+        with self._lock:
+            modality_counts: Dict[str, int] = {}
+            for ep in self._episodes:
+                modality_counts[ep.modality] = modality_counts.get(ep.modality, 0) + 1
 
-        protected = sum(1 for ep in self._episodes if ep.importance >= self._importance_threshold)
-        avg_importance = (
-            sum(ep.importance for ep in self._episodes) / len(self._episodes)
-            if self._episodes else 0.0
-        )
+            protected = sum(1 for ep in self._episodes if ep.importance >= self._importance_threshold)
+            avg_importance = (
+                sum(ep.importance for ep in self._episodes) / len(self._episodes)
+                if self._episodes else 0.0
+            )
 
-        return {
-            "type": "episodic_memory",
-            "episode_count": len(self._episodes),
-            "max_episodes": self._max_episodes,
-            "effective_max": self._adaptive_max(),
-            "protected_count": protected,
-            "modality_breakdown": modality_counts,
-            "avg_importance": round(avg_importance, 3),
-            "write_count": self._write_count,
-            "load_count": self._load_count,
-            "data_path": self._data_path,
-        }
+            return {
+                "type": "episodic_memory",
+                "episode_count": len(self._episodes),
+                "max_episodes": self._max_episodes,
+                "effective_max": self._adaptive_max(),
+                "protected_count": protected,
+                "modality_breakdown": modality_counts,
+                "avg_importance": round(avg_importance, 3),
+                "write_count": self._write_count,
+                "load_count": self._load_count,
+                "data_path": self._data_path,
+            }
 
     def display_status(self):
         """Вывести статус в консоль."""
@@ -618,7 +634,9 @@ class EpisodicMemory:
         print(f"{'─'*50}\n")
 
     def __len__(self) -> int:
-        return len(self._episodes)
+        with self._lock:
+            return len(self._episodes)
 
     def __repr__(self) -> str:
-        return f"EpisodicMemory(episodes={len(self._episodes)}/{self._max_episodes})"
+        with self._lock:
+            return f"EpisodicMemory(episodes={len(self._episodes)}/{self._max_episodes})"

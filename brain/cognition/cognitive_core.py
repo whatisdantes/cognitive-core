@@ -25,6 +25,7 @@ from brain.core.contracts import (
     EventBusProtocol,
     MemoryManagerProtocol,
     ResourceMonitorProtocol,
+    TextEncoderProtocol,
     TraceChain,
     TraceRef,
     TraceStep,
@@ -81,7 +82,7 @@ class CognitiveCore:
     def __init__(
         self,
         memory_manager: MemoryManagerProtocol,
-        text_encoder: Any = None,
+        text_encoder: Optional[TextEncoderProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
         resource_monitor: Optional[ResourceMonitorProtocol] = None,
         policy: Optional[PolicyConstraints] = None,
@@ -133,6 +134,9 @@ class CognitiveCore:
 
         # Счётчик циклов
         self._cycle_count: int = 0
+
+        # --- Построение векторного индекса из персистентного корпуса памяти ---
+        self._build_vector_index()
 
     # ------------------------------------------------------------------
     # Основной метод
@@ -297,18 +301,228 @@ class CognitiveCore:
                 )
         return {}
 
+    # ------------------------------------------------------------------
+    # Наполнение векторного индекса (P0-P1)
+    # ------------------------------------------------------------------
+
+    def _build_vector_index(self) -> None:
+        """
+        Наполнить VectorRetrievalBackend из персистентного корпуса памяти.
+
+        Итерирует по узлам SemanticMemory и эпизодам EpisodicMemory,
+        кодирует их текст (если нет кэшированного эмбеддинга) и добавляет
+        в векторный бэкенд. Кэшированные эмбеддинги переиспользуются
+        для избежания повторного кодирования.
+
+        Вызывается один раз при __init__. Безопасен для повторных вызовов
+        (очищает индекс перед построением для предотвращения дубликатов).
+        """
+        if self._vector_backend is None:
+            return
+        if self._encoder is None:
+            logger.debug(
+                "[CognitiveCore] _build_vector_index: no encoder, skipping"
+            )
+            return
+
+        # Очистка для предотвращения дубликатов при повторных вызовах
+        self._vector_backend.clear()
+
+        indexed = 0
+
+        # --- Индексация узлов SemanticMemory ---
+        semantic = getattr(self._memory, "semantic", None)
+        if semantic is not None:
+            try:
+                with semantic._lock:
+                    nodes_snapshot = list(semantic._nodes.items())
+            except AttributeError:
+                nodes_snapshot = []
+
+            for concept, node in nodes_snapshot:
+                # Пропускаем «мёртвые» факты (confidence обнулён)
+                if node.confidence <= 0.0:
+                    continue
+                text = f"{node.concept}: {node.description}" if node.description else node.concept
+                if not text.strip():
+                    continue
+
+                vector = node.embedding
+                if vector is None:
+                    vector = self._encode_text_to_vector(text)
+                    if vector is not None:
+                        node.embedding = vector
+
+                if vector is not None:
+                    self._vector_backend.add(
+                        evidence_id=f"ev_sem_{concept}",
+                        content=text,
+                        vector=list(vector),
+                        memory_type="semantic",
+                        confidence=node.confidence,
+                    )
+                    indexed += 1
+
+        # --- Индексация эпизодов EpisodicMemory ---
+        episodic = getattr(self._memory, "episodic", None)
+        if episodic is not None:
+            try:
+                with episodic._lock:
+                    episodes_snapshot = list(episodic._episodes)
+            except AttributeError:
+                episodes_snapshot = []
+
+            for ep in episodes_snapshot:
+                # Пропускаем «мёртвые» эпизоды (confidence обнулён)
+                if ep.confidence <= 0.0:
+                    continue
+                if not ep.content or not ep.content.strip():
+                    continue
+
+                vector = ep.embedding
+                if vector is None:
+                    vector = self._encode_text_to_vector(ep.content)
+                    if vector is not None:
+                        ep.embedding = vector
+
+                if vector is not None:
+                    self._vector_backend.add(
+                        evidence_id=f"ev_ep_{ep.episode_id}",
+                        content=ep.content,
+                        vector=list(vector),
+                        memory_type="episodic",
+                        confidence=ep.confidence,
+                    )
+                    indexed += 1
+
+        if indexed > 0:
+            logger.info(
+                "[CognitiveCore] _build_vector_index: indexed %d items from memory corpus",
+                indexed,
+            )
+
+    def _encode_text_to_vector(self, text: str) -> Optional[list]:
+        """
+        Кодирование текста в вектор через текстовый энкодер.
+
+        Возвращает список float или None при ошибке кодирования.
+        """
+        if self._encoder is None or not text or not text.strip():
+            return None
+        try:
+            result = self._encoder.encode(text)
+            vector = getattr(result, "vector", None)
+            if vector and isinstance(vector, list) and not all(v == 0.0 for v in vector):
+                return list(vector)
+        except Exception as e:
+            logger.debug(
+                "[CognitiveCore] _encode_text_to_vector failed: %s", e
+            )
+        return None
+
+    def _index_single_text(
+        self,
+        evidence_id: str,
+        text: str,
+        memory_type: str = "semantic",
+        confidence: float = 0.5,
+    ) -> Optional[list]:
+        """
+        Кодирование одного текста и добавление в векторный бэкенд (инкрементальная индексация).
+
+        Возвращает вектор при успехе, None в противном случае.
+        """
+        if self._vector_backend is None or self._encoder is None:
+            return None
+
+        vector = self._encode_text_to_vector(text)
+        if vector is not None:
+            self._vector_backend.add(
+                evidence_id=evidence_id,
+                content=text,
+                vector=vector,
+                memory_type=memory_type,
+                confidence=confidence,
+            )
+        return vector
+
+    def remove_from_vector_index(self, evidence_id: str) -> None:
+        """
+        Удалить элемент из векторного индекса.
+
+        Вызывается при удалении факта, обнулении confidence,
+        или замене при разрешении противоречий.
+        """
+        if self._vector_backend is not None:
+            self._vector_backend.remove(evidence_id)
+
+    # ------------------------------------------------------------------
+    # Публичные методы: управление фактами с синхронизацией вектора
+    # ------------------------------------------------------------------
+
+    def deny_fact(self, concept: str, delta: float = 0.1) -> None:
+        """
+        Опровергнуть факт — снизить confidence в SemanticMemory
+        и удалить из векторного индекса при обнулении.
+
+        Args:
+            concept: ключ понятия
+            delta:   величина снижения confidence
+        """
+        semantic = getattr(self._memory, "semantic", None)
+        if semantic is None:
+            return
+
+        semantic.deny_fact(concept, delta)
+
+        # Проверяем: если confidence упал до 0 — удаляем из вектора
+        node = semantic.get_fact(concept)
+        if node is None or node.confidence <= 0.0:
+            normalized = concept.strip().lower()
+            self.remove_from_vector_index(f"ev_sem_{normalized}")
+            logger.info(
+                "[CognitiveCore] deny_fact: '%s' удалён из векторного индекса (confidence=0)",
+                concept,
+            )
+
+    def delete_fact(self, concept: str) -> bool:
+        """
+        Удалить факт из SemanticMemory и векторного индекса.
+
+        Args:
+            concept: ключ понятия
+
+        Returns:
+            True если факт был удалён, False если не найден
+        """
+        semantic = getattr(self._memory, "semantic", None)
+        if semantic is None:
+            return False
+
+        normalized = concept.strip().lower()
+        deleted: bool = bool(semantic.delete_fact(concept))
+
+        if deleted:
+            self.remove_from_vector_index(f"ev_sem_{normalized}")
+            logger.info(
+                "[CognitiveCore] delete_fact: '%s' удалён из памяти и векторного индекса",
+                concept,
+            )
+
+        return deleted
+
     def _index_percept_vector(
         self,
         encoded_percept: Optional[EncodedPercept] = None,
         query: str = "",
     ) -> Optional[list]:
         """
-        Index the vector from EncodedPercept into VectorRetrievalBackend
-        and return the query vector for hybrid search.
+        Индексация вектора из EncodedPercept в VectorRetrievalBackend
+        и возврат query-вектора для гибридного поиска.
 
-        This bridges TextEncoder → Memory retrieval:
-          - EncodedPercept.vector is stored in the vector index
-          - The same vector is returned for use as query_vector in hybrid search
+        Мост TextEncoder → Memory retrieval:
+          - EncodedPercept.vector сохраняется в векторном индексе
+          - Тот же вектор возвращается для использования как query_vector в гибридном поиске
         """
         if encoded_percept is None:
             return None
@@ -317,7 +531,7 @@ class CognitiveCore:
         if not vector or (isinstance(vector, list) and all(v == 0.0 for v in vector)):
             return None
 
-        # Store in vector backend for future retrieval
+        # Сохраняем в векторный бэкенд для будущего поиска
         if self._vector_backend is not None:
             percept_id = getattr(encoded_percept, "percept_id", "") or f"enc_{id(encoded_percept)}"
             text = getattr(encoded_percept, "text", query)
@@ -436,7 +650,7 @@ class CognitiveCore:
         """
         Выполнить действие (side effects).
 
-        MVP: только LEARN → memory_manager.store().
+        LEARN → memory_manager.store() + инкрементальная векторная индексация.
         Остальные действия — без side effects (ответ формируется в result).
         """
         if decision.action_type == ActionType.LEARN:
@@ -451,6 +665,14 @@ class CognitiveCore:
                     )
                     decision.metadata["stored_fact"] = fact
                     decision.metadata["store_success"] = True
+
+                    # Инкрементальная векторная индексация (P0-P1)
+                    self._index_single_text(
+                        evidence_id=f"ev_learn_{self._cycle_count}",
+                        text=fact,
+                        memory_type="learned_fact",
+                        confidence=0.7,
+                    )
             except Exception as e:
                 logger.warning(
                     "[CognitiveCore] LEARN store error: %s", e

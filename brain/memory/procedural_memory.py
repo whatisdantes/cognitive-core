@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -198,6 +199,7 @@ class ProceduralMemory:
         else:
             self._backend = storage_backend
 
+        self._lock = threading.RLock()
         self._procedures: Dict[str, Procedure] = {}
         self._write_count = 0
 
@@ -238,33 +240,35 @@ class ProceduralMemory:
             for s in steps
         ]
 
-        if name in self._procedures:
-            # Обновляем существующую процедуру
-            proc = self._procedures[name]
-            proc.steps = procedure_steps
-            proc.description = description or proc.description
-            proc.trigger_pattern = trigger_pattern or proc.trigger_pattern
-            if tags:
-                proc.tags = list(set(proc.tags + tags))
-            proc.priority = priority
-        else:
-            proc = Procedure(
-                name=name,
-                description=description,
-                steps=procedure_steps,
-                trigger_pattern=trigger_pattern,
-                tags=tags or [],
-                priority=priority,
-            )
-            self._procedures[name] = proc
+        with self._lock:
+            if name in self._procedures:
+                # Обновляем существующую процедуру
+                proc = self._procedures[name]
+                proc.steps = procedure_steps
+                proc.description = description or proc.description
+                proc.trigger_pattern = trigger_pattern or proc.trigger_pattern
+                if tags:
+                    proc.tags = list(set(proc.tags + tags))
+                proc.priority = priority
+            else:
+                proc = Procedure(
+                    name=name,
+                    description=description,
+                    steps=procedure_steps,
+                    trigger_pattern=trigger_pattern,
+                    tags=tags or [],
+                    priority=priority,
+                )
+                self._procedures[name] = proc
 
-        self._write_count += 1
-        self._maybe_autosave()
-        return proc
+            self._write_count += 1
+            self._maybe_autosave()
+            return proc
 
     def get(self, name: str) -> Optional[Procedure]:
         """Получить процедуру по имени."""
-        return self._procedures.get(name)
+        with self._lock:
+            return self._procedures.get(name)
 
     def retrieve(
         self,
@@ -288,59 +292,64 @@ class ProceduralMemory:
         query_lower = query.lower()
         results = []
 
-        for proc in self._procedures.values():
-            if proc.success_rate < min_success_rate:
-                continue
-            if tags and not any(t in proc.tags for t in tags):
-                continue
+        with self._lock:
+            for proc in self._procedures.values():
+                if proc.success_rate < min_success_rate:
+                    continue
+                if tags and not any(t in proc.tags for t in tags):
+                    continue
 
-            score = 0.0
-            if query_lower in proc.name.lower():
-                score += 0.5
-            if query_lower in proc.description.lower():
-                score += 0.3
-            if query_lower in proc.trigger_pattern.lower():
-                score += 0.4
-            if any(query_lower in t for t in proc.tags):
-                score += 0.2
+                score = 0.0
+                if query_lower in proc.name.lower():
+                    score += 0.5
+                if query_lower in proc.description.lower():
+                    score += 0.3
+                if query_lower in proc.trigger_pattern.lower():
+                    score += 0.4
+                if any(query_lower in t for t in proc.tags):
+                    score += 0.2
 
-            if score > 0:
-                results.append((score * proc.effectiveness_score(), proc))
+                if score > 0:
+                    results.append((score * proc.effectiveness_score(), proc))
 
         results.sort(key=lambda x: x[0], reverse=True)
         return [proc for _, proc in results[:top_n]]
 
     def get_best(self, top_n: int = 5) -> List[Procedure]:
         """Получить наиболее эффективные процедуры."""
-        procs = list(self._procedures.values())
+        with self._lock:
+            procs = list(self._procedures.values())
         procs.sort(key=lambda p: p.effectiveness_score(), reverse=True)
         return procs[:top_n]
 
     def record_result(self, name: str, success: bool, duration_ms: float = 0.0):
         """Зафиксировать результат применения процедуры."""
-        if name in self._procedures:
-            self._procedures[name].record_use(success, duration_ms)
-            self._write_count += 1
-            self._maybe_autosave()
+        with self._lock:
+            if name in self._procedures:
+                self._procedures[name].record_use(success, duration_ms)
+                self._write_count += 1
+                self._maybe_autosave()
 
     def delete(self, name: str) -> bool:
         """Удалить процедуру."""
-        if name in self._procedures:
-            del self._procedures[name]
-            return True
-        return False
+        with self._lock:
+            if name in self._procedures:
+                del self._procedures[name]
+                return True
+            return False
 
     def prune_ineffective(self, min_success_rate: float = 0.2, min_uses: int = 5):
         """
         Удалить неэффективные процедуры.
         Удаляет только те, что использовались достаточно раз и показали плохой результат.
         """
-        to_delete = [
-            name for name, proc in self._procedures.items()
-            if proc.use_count >= min_uses and proc.success_rate < min_success_rate
-        ]
-        for name in to_delete:
-            del self._procedures[name]
+        with self._lock:
+            to_delete = [
+                name for name, proc in self._procedures.items()
+                if proc.use_count >= min_uses and proc.success_rate < min_success_rate
+            ]
+            for name in to_delete:
+                del self._procedures[name]
         if to_delete:
             _logger.info("Удалено %d неэффективных процедур", len(to_delete))
         return len(to_delete)
@@ -349,10 +358,11 @@ class ProceduralMemory:
 
     def save(self, path: Optional[str] = None):
         """Сохранить процедурную память (SQLite или JSON)."""
-        if self._backend == "sqlite" and self._db is not None:
-            self._save_sqlite()
-        else:
-            self._save_json(path)
+        with self._lock:
+            if self._backend == "sqlite" and self._db is not None:
+                self._save_sqlite()
+            else:
+                self._save_json(path)
 
     def _save_json(self, path: Optional[str] = None):
         """Сохранить процедурную память на диск (JSON)."""
@@ -433,18 +443,19 @@ class ProceduralMemory:
 
     def status(self) -> Dict[str, Any]:
         """Статус процедурной памяти."""
-        procs = list(self._procedures.values())
-        avg_success = sum(p.success_rate for p in procs) / len(procs) if procs else 0.0
-        total_uses = sum(p.use_count for p in procs)
+        with self._lock:
+            procs = list(self._procedures.values())
+            avg_success = sum(p.success_rate for p in procs) / len(procs) if procs else 0.0
+            total_uses = sum(p.use_count for p in procs)
 
-        return {
-            "type": "procedural_memory",
-            "procedure_count": len(self._procedures),
-            "avg_success_rate": round(avg_success, 3),
-            "total_uses": total_uses,
-            "write_count": self._write_count,
-            "data_path": self._data_path,
-        }
+            return {
+                "type": "procedural_memory",
+                "procedure_count": len(self._procedures),
+                "avg_success_rate": round(avg_success, 3),
+                "total_uses": total_uses,
+                "write_count": self._write_count,
+                "data_path": self._data_path,
+            }
 
     def display_status(self):
         """Вывести статус в консоль."""
@@ -457,7 +468,9 @@ class ProceduralMemory:
         print(f"{'─'*50}\n")
 
     def __len__(self) -> int:
-        return len(self._procedures)
+        with self._lock:
+            return len(self._procedures)
 
     def __repr__(self) -> str:
-        return f"ProceduralMemory(procedures={len(self._procedures)})"
+        with self._lock:
+            return f"ProceduralMemory(procedures={len(self._procedures)})"

@@ -47,14 +47,13 @@ def _detect_modality(source: str) -> str:
     ext = Path(source).suffix.lower()
     if ext in _TEXT_EXTS:
         return "text"
-    elif ext in _IMAGE_EXTS:
+    if ext in _IMAGE_EXTS:
         return "image"
-    elif ext in _AUDIO_EXTS:
+    if ext in _AUDIO_EXTS:
         return "audio"
-    elif ext in _VIDEO_EXTS:
+    if ext in _VIDEO_EXTS:
         return "video"
-    else:
-        return "unknown"
+    return "unknown"
 
 
 # _sha256 и _sha256_file импортированы из brain.core.hash_utils
@@ -163,9 +162,8 @@ class InputRouter:
 
         if is_file:
             return self._route_file(source, session_id, trace_id, force)
-        else:
-            # Считаем source строкой текста
-            return self.route_text(source, source="user_input", session_id=session_id, trace_id=trace_id)
+        # Считаем source строкой текста
+        return self.route_text(source, source="user_input", session_id=session_id, trace_id=trace_id)
 
     def route_file(
         self,
@@ -218,7 +216,7 @@ class InputRouter:
 
         # Дедупликация
         if self._dedup and not force:
-            h = sha256_text(text[:2000], truncate=16)  # хэшируем первые 2000 символов
+            h = sha256_text(text, truncate=16)  # хэшируем полный текст
             if h in self._seen_hashes:
                 _logger.debug("InputRouter: дубликат text source='%s' hash=%s", source, h)
                 self._stats.duplicates_skipped += 1

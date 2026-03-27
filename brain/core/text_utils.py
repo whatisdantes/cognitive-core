@@ -57,12 +57,11 @@ def detect_language(text: str) -> str:
 
     if cyr_ratio > 0.6:
         return "ru"
-    elif lat_ratio > 0.6:
+    if lat_ratio > 0.6:
         return "en"
-    elif total_letters > 10:
+    if total_letters > 10:
         return "mixed"
-    else:
-        return "unknown"
+    return "unknown"
 
 
 # ─── parse_fact_pattern ──────────────────────────────────────────────────────

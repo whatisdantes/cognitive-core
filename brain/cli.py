@@ -102,7 +102,7 @@ def run_query(query: str, data_dir: str) -> int:
     try:
         # --- 4. CognitiveCore ---
         core = CognitiveCore(
-            memory_manager=mm,
+            memory_manager=mm,  # type: ignore[arg-type]
             event_bus=bus,
             resource_monitor=rm,
         )

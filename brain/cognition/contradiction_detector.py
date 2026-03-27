@@ -20,10 +20,9 @@ brain/cognition/contradiction_detector.py
 
 from __future__ import annotations
 
-import copy
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, List, Optional, Tuple
 
 from brain.core.contracts import ContractMixin
@@ -181,7 +180,12 @@ class ContradictionDetector:
         """
         if not contradictions:
             # Всё равно возвращаем копии для consistency
-            return [copy.deepcopy(ev) for ev in evidence]
+            # dataclasses.replace — shallow copy, но для EvidencePack
+            # достаточно: мутабельные поля (списки) копируются явно
+            return [
+                replace(ev, contradiction_flags=list(ev.contradiction_flags))
+                for ev in evidence
+            ]
 
         # Собрать флаги для каждого evidence_id
         flags_map: Dict[str, List[str]] = {}
@@ -190,14 +194,16 @@ class ContradictionDetector:
             flags_map.setdefault(c.evidence_a_id, []).append(flag)
             flags_map.setdefault(c.evidence_b_id, []).append(flag)
 
-        # Создать копии с обновлёнными flags
+        # Создать копии с обновлёнными flags (copy-on-write через replace)
         result = []
         for ev in evidence:
-            new_ev = copy.deepcopy(ev)
             extra_flags = flags_map.get(ev.evidence_id, [])
+            # Новый список: существующие flags + новые (без дубликатов)
+            merged_flags = list(ev.contradiction_flags)
             for f in extra_flags:
-                if f not in new_ev.contradiction_flags:
-                    new_ev.contradiction_flags.append(f)
+                if f not in merged_flags:
+                    merged_flags.append(f)
+            new_ev = replace(ev, contradiction_flags=merged_flags)
             result.append(new_ev)
 
         return result
@@ -217,8 +223,8 @@ class ContradictionDetector:
         Returns:
             (True, first_shared_concept) или (False, "")
         """
-        refs_a = set(r.lower().strip() for r in a.concept_refs if r)
-        refs_b = set(r.lower().strip() for r in b.concept_refs if r)
+        refs_a = {r.lower().strip() for r in a.concept_refs if r}
+        refs_b = {r.lower().strip() for r in b.concept_refs if r}
 
         overlap = refs_a & refs_b
         if overlap:

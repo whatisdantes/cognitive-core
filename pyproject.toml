@@ -86,4 +86,15 @@ target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "B", "SIM", "C4", "RET", "PIE"]
+ignore = [
+    "RET504",   # unnecessary-assign — стилистическое предпочтение
+    "SIM102",   # collapsible-if — ухудшает читаемость
+    "SIM103",   # needless-bool — ложные срабатывания
+    "SIM105",   # suppressible-exception — contextlib.suppress не всегда лучше
+    "SIM108",   # if-else-block-instead-of-if-exp — ухудшает читаемость
+    "SIM110",   # reimplemented-builtin — ложные срабатывания
+    "SIM115",   # open-file-with-context-handler — не всегда применимо
+    "SIM905",   # split-static-string — микрооптимизация
+    "B905",     # zip-without-explicit-strict — Python 3.10+ strict kwarg
+]

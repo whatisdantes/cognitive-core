@@ -1,35 +1,54 @@
-# GitHub Actions CI/CD for cognitive-core
-# Runs on every push and pull request to main
-# Python 3.11+ / CPU-only / pytest + coverage + mypy + ruff
+# ============================================================
+# CI Pipeline — cognitive-core v0.7.0
+# Python 3.11/3.12/3.13 · pytest + coverage gate · ruff · mypy
+# ============================================================
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-
 jobs:
-  # ── Tests + Coverage ────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: python -m ruff check brain/ tests/
+
+      - name: Mypy type check
+        run: python -m mypy brain/ --ignore-missing-imports
+
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
 
       - name: Install dependencies
         run: |
@@ -38,56 +57,17 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          python -m pytest tests/ -q --tb=short --strict-markers \
-            --cov=brain --cov-report=term-missing --cov-report=xml
+          python -m pytest tests/ \
+            --cov=brain \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=70 \
+            -q --tb=short
 
-      - name: Check imports (smoke test)
-        run: |
-          python -c "from brain.cognition import CognitiveCore; print('CognitiveCore OK')"
-          python -c "from brain.encoders import TextEncoder; print('TextEncoder OK')"
-          python -c "from brain.perception import TextIngestor; print('TextIngestor OK')"
-          python -c "from brain.memory import MemoryManager; print('MemoryManager OK')"
-
-  # ── Lint (ruff) ─────────────────────────────────────────────────────
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
         with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run ruff (linter)
-        run: |
-          ruff check brain/ tests/ --select E,F,W --ignore E501
-
-  # ── Type checking (mypy) ────────────────────────────────────────────
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run mypy
-        run: |
-          mypy brain/core brain/cognition --ignore-missing-imports --no-error-summary
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30

@@ -7,8 +7,8 @@
 > **Что реализовано (v0.7.0):**
 > - ✅ Perception Layer (текст: txt/md/pdf/docx/json) — Этап B
 > - ✅ Text Encoder (sentence-transformers 768d, fallback navec 300d) — Этап E
-> - ✅ Memory System (5 типов памяти + SQLite WAL persistence) — Этапы D + P1c
-> - ✅ Cognitive Core (10-step pipeline, BM25 retrieval, planning, reasoning) — Этапы F/F+/P1b
+> - ✅ Memory System (5 типов памяти + SQLite WAL persistence + embedding persistence) — Этапы D + P0/P1
+> - ✅ Cognitive Core (10-step pipeline, BM25 + Vector + Hybrid retrieval, planning, reasoning) — Этапы F/F+/P0/P1
 > - ✅ Output Layer (trace, validation, dialogue, pipeline) — Этап G
 > - ✅ Logging & Observability (JSONL, categories, rotation, atexit) — Этап C
 > - ✅ Core Infrastructure (EventBus, ResourceMonitor, Scheduler, Contracts) — Этап A
@@ -22,7 +22,7 @@
 > - ⬜ CuriosityEngine, MotivationEngine, SalienceEngine — post-MVP
 > - ⬜ brain/motivation/ директория — не существует
 >
-> Актуальный roadmap: [`docs/TODO.md`](TODO.md)
+> Актуальный roadmap: [`TODO.md`](../TODO.md)
 
 ---
 
@@ -294,7 +294,7 @@ MULTIMODAL BRAIN
 ## 12) Roadmap реализации (под CPU-only, media-aware архитектуру)
 
 > **Примечание:** Этот roadmap — оригинальный vision из BRAIN.md.
-> Актуальный roadmap с точными статусами: [`docs/TODO.md`](TODO.md).
+> Актуальный roadmap с точными статусами: [`TODO.md`](../TODO.md).
 > Ниже — обновлённые статусы по состоянию на v0.7.0.
 
 ### Фаза A — Multimodal Perception

@@ -273,17 +273,15 @@ class DigestGenerator:
         """Дописать дайджест цикла в файл текущего дня."""
         date_str = _today_str()
         path = self._dir / f"{date_str}.txt"
-        with self._lock:
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(text)
+        with self._lock, open(path, "a", encoding="utf-8") as f:
+            f.write(text)
 
     def _write_session_file(self, session_id: str, text: str) -> None:
         """Записать (перезаписать) дайджест сессии."""
         safe_id = session_id.replace("/", "_").replace("\\", "_")
         path = self._dir / f"session_{safe_id}.txt"
-        with self._lock:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(text)
+        with self._lock, open(path, "w", encoding="utf-8") as f:
+            f.write(text)
 
     def __repr__(self) -> str:
         return f"DigestGenerator(digest_dir={self._dir!r})"

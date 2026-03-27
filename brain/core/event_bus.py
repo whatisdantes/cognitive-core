@@ -13,6 +13,7 @@ Typed publish/subscribe шина событий для межмодульног�
 from __future__ import annotations
 
 import logging
+import threading
 import traceback
 from collections import defaultdict
 from dataclasses import dataclass
@@ -58,6 +59,7 @@ class EventBus:
     """
 
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         # event_type → список handlers
         self._handlers: Dict[str, List[Handler]] = defaultdict(list)
         self._stats = BusStats()
@@ -71,29 +73,32 @@ class EventBus:
         Подписать handler на event_type.
         Повторная подписка одного и того же handler игнорируется.
         """
-        if handler not in self._handlers[event_type]:
-            self._handlers[event_type].append(handler)
-            logger.debug("EventBus: subscribed %s → %s", event_type, handler.__name__)
+        with self._lock:
+            if handler not in self._handlers[event_type]:
+                self._handlers[event_type].append(handler)
+                logger.debug("EventBus: subscribed %s → %s", event_type, handler.__name__)
 
     def unsubscribe(self, event_type: str, handler: Handler) -> None:
         """
         Отписать handler от event_type.
         Если handler не был подписан — молча игнорируется.
         """
-        handlers = self._handlers.get(event_type, [])
-        if handler in handlers:
-            handlers.remove(handler)
-            logger.debug("EventBus: unsubscribed %s → %s", event_type, handler.__name__)
+        with self._lock:
+            handlers = self._handlers.get(event_type, [])
+            if handler in handlers:
+                handlers.remove(handler)
+                logger.debug("EventBus: unsubscribed %s → %s", event_type, handler.__name__)
 
     def unsubscribe_all(self, event_type: Optional[str] = None) -> None:
         """
         Удалить все подписки для event_type.
         Если event_type=None — очистить всю шину.
         """
-        if event_type is None:
-            self._handlers.clear()
-        else:
-            self._handlers.pop(event_type, None)
+        with self._lock:
+            if event_type is None:
+                self._handlers.clear()
+            else:
+                self._handlers.pop(event_type, None)
 
     # ------------------------------------------------------------------
     # Публикация
@@ -112,32 +117,40 @@ class EventBus:
         wildcard-handlers ("*"). Ошибка одного handler логируется
         и не прерывает остальных.
 
+        Snapshot pattern: копируем список handlers под lock,
+        вызываем вне lock — предотвращает deadlock при re-entrant publish.
+
         Returns:
             Количество успешно вызванных handlers.
         """
-        self._stats.published_count += 1
+        # --- snapshot under lock ---
+        with self._lock:
+            self._stats.published_count += 1
 
-        specific = list(self._handlers.get(event_type, []))
-        wildcard = list(self._handlers.get("*", []))
+            specific = list(self._handlers.get(event_type, []))
+            wildcard = list(self._handlers.get("*", []))
 
-        # Wildcard не должен дублироваться если подписан и на конкретный тип
-        all_handlers = specific + [h for h in wildcard if h not in specific]
+            # Wildcard не должен дублироваться если подписан и на конкретный тип
+            all_handlers = specific + [h for h in wildcard if h not in specific]
 
-        if not all_handlers:
-            self._stats.dropped_count += 1
-            logger.debug(
-                "EventBus: no handlers for '%s' (trace=%s)", event_type, trace_id
-            )
-            return 0
+            if not all_handlers:
+                self._stats.dropped_count += 1
+                logger.debug(
+                    "EventBus: no handlers for '%s' (trace=%s)", event_type, trace_id
+                )
+                return 0
 
+        # --- call handlers outside lock (snapshot pattern) ---
         success = 0
         for handler in all_handlers:
             try:
                 handler(event_type, payload, trace_id)
-                self._stats.handled_count += 1
+                with self._lock:
+                    self._stats.handled_count += 1
                 success += 1
             except Exception:
-                self._stats.error_count += 1
+                with self._lock:
+                    self._stats.error_count += 1
                 logger.error(
                     "EventBus: handler '%s' raised on event '%s' (trace=%s):\n%s",
                     handler.__name__,
@@ -155,28 +168,31 @@ class EventBus:
     @property
     def stats(self) -> BusStats:
         """Текущая статистика шины (read-only snapshot)."""
-        return BusStats(
-            published_count=self._stats.published_count,
-            handled_count=self._stats.handled_count,
-            error_count=self._stats.error_count,
-            dropped_count=self._stats.dropped_count,
-        )
+        with self._lock:
+            return BusStats(
+                published_count=self._stats.published_count,
+                handled_count=self._stats.handled_count,
+                error_count=self._stats.error_count,
+                dropped_count=self._stats.dropped_count,
+            )
 
     def status(self) -> Dict[str, Any]:
         """Словарь для логирования/observability."""
-        return {
-            "subscribed_types": list(self._handlers.keys()),
-            "total_handlers": sum(len(v) for v in self._handlers.values()),
-            "published_count": self._stats.published_count,
-            "handled_count": self._stats.handled_count,
-            "error_count": self._stats.error_count,
-            "dropped_count": self._stats.dropped_count,
-        }
+        with self._lock:
+            return {
+                "subscribed_types": list(self._handlers.keys()),
+                "total_handlers": sum(len(v) for v in self._handlers.values()),
+                "published_count": self._stats.published_count,
+                "handled_count": self._stats.handled_count,
+                "error_count": self._stats.error_count,
+                "dropped_count": self._stats.dropped_count,
+            }
 
     def __repr__(self) -> str:
-        s = self._stats
-        return (
-            f"EventBus(types={len(self._handlers)}, "
-            f"pub={s.published_count}, ok={s.handled_count}, "
-            f"err={s.error_count}, drop={s.dropped_count})"
-        )
+        with self._lock:
+            s = self._stats
+            return (
+                f"EventBus(types={len(self._handlers)}, "
+                f"pub={s.published_count}, ok={s.handled_count}, "
+                f"err={s.error_count}, drop={s.dropped_count})"
+            )

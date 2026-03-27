@@ -252,7 +252,7 @@ class HypothesisEngine:
             if len(evs) < 2:
                 continue
 
-            ev_ids = sorted(set(e.evidence_id for e in evs))
+            ev_ids = sorted({e.evidence_id for e in evs})
             avg_confidence = sum(e.confidence for e in evs) / len(evs)
             avg_relevance = sum(e.relevance_score for e in evs) / len(evs)
             total_contradictions = sum(
@@ -320,7 +320,7 @@ class HypothesisEngine:
             if len(evs) < 2:
                 continue
 
-            ev_ids = sorted(set(e.evidence_id for e in evs))
+            ev_ids = sorted({e.evidence_id for e in evs})
             avg_confidence = sum(e.confidence for e in evs) / len(evs)
             avg_relevance = sum(e.relevance_score for e in evs) / len(evs)
 
@@ -518,8 +518,8 @@ class HypothesisEngine:
             return True
 
         # Непересекающиеся concept_refs
-        refs_a = set(r.lower().strip() for r in a.concept_refs if r)
-        refs_b = set(r.lower().strip() for r in b.concept_refs if r)
+        refs_a = {r.lower().strip() for r in a.concept_refs if r}
+        refs_b = {r.lower().strip() for r in b.concept_refs if r}
         if refs_a and refs_b and not (refs_a & refs_b):
             return True
 

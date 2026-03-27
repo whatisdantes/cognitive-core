@@ -4,7 +4,7 @@
 > **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 1312/1312 ✅ — `test_bm25.py` (55) · `test_cli.py` (20) · `test_cognition.py` (190) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_golden.py` (414) · `test_logging.py` (25) · `test_memory.py` (101) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_perception.py` (79) · `test_perception_hardening.py` (34) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_text_encoder.py` (80) · `test_utils.py` (63) · `test_vector_retrieval.py` (39)
+> **Тесты:** 1333/1333 ✅ — `test_bm25.py` (55) · `test_cli.py` (20) · `test_cognition.py` (190) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_golden.py` (414) · `test_logging.py` (25) · `test_memory.py` (101) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_perception.py` (79) · `test_perception_hardening.py` (34) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_text_encoder.py` (80) · `test_utils.py` (63) · `test_vector_retrieval.py` (60)
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -47,7 +47,7 @@ pip install -e ".[dev]"
 # 2. Задать вопрос через CLI
 cognitive-core "Что такое нейропластичность?"
 
-# 3. Запустить все тесты (1312 ✅)
+# 3. Запустить все тесты (1333 ✅)
 python -m pytest tests/ -v
 
 # 4. Docker (опционально)
@@ -78,12 +78,33 @@ print(output.text)
 mm.stop()
 ```
 
-> ⚠️ **Retrieval scope (v0.7.0):** поиск по памяти использует keyword BM25 + in-memory cosine similarity.
-> Persisted ANN/FAISS индексы запланированы на Post-MVP (Фаза D).
+> ⚠️ **Retrieval scope (v0.7.0):** поиск по памяти использует keyword BM25 + hybrid vector retrieval (in-memory cosine similarity).
+> При инициализации CognitiveCore автоматически строит vector index из персистентного корпуса памяти (SemanticMemory + EpisodicMemory).
+> Новые факты индексируются инкрементально при LEARN. Persisted ANN/FAISS индексы запланированы на Post-MVP.
 > Без предварительно загруженных данных в памяти ответы будут шаблонными.
 
+### Матрица возможностей (v0.7.0)
+
+| Возможность | Статус | Описание |
+|-------------|--------|----------|
+| Текстовый ввод (txt/md/pdf/docx/json) | ✅ Реализовано | Полный pipeline восприятия |
+| Text Encoder (sentence-transformers/navec) | ✅ Реализовано | 768d/300d векторизация |
+| Hybrid Retrieval (BM25 + Vector) | ✅ Реализовано | Keyword + cosine similarity |
+| 5 видов памяти (WM/SM/EM/Source/Procedural) | ✅ Реализовано | JSON + SQLite persistence |
+| Когнитивное ядро (Goal→Plan→Reason→Act) | ✅ Реализовано | 10-step pipeline |
+| Обнаружение противоречий | ✅ Реализовано | ContradictionDetector |
+| Мониторинг неопределённости | ✅ Реализовано | UncertaintyMonitor |
+| Output Layer (trace + validation + dialogue) | ✅ Реализовано | Template MVP |
+| CLI entrypoint | ✅ Реализовано | `cognitive-core "вопрос"` |
+| Docker (multi-stage + non-root) | ✅ Реализовано | Python 3.12-slim |
+| CI/CD (GitHub Actions) | ✅ Реализовано | pytest + coverage + ruff + mypy |
+| Vision/Audio Encoders | 🔮 Planned | Post-MVP (Этап J) |
+| Cross-Modal Fusion | 🔮 Planned | Post-MVP (Этап K) |
+| Learning Loop | 🔮 Planned | Post-MVP (Этап I) |
+| Reward & Motivation | 🔮 Planned | Post-MVP (Этап M) |
+
 > 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
-> 📋 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](docs/TODO.md)  
+> 📋 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](TODO.md)  
 > 🗂️ Документация по слоям: [`docs/layers/`](docs/layers/)
 
 ---
@@ -341,7 +362,7 @@ cognitive-core/
 ├── examples/                           # Примеры использования
 │   └── demo.py                         # ✅ Демо: полный pipeline в 30 строк
 │
-├── tests/                              # Тесты (pytest-совместимые, 1312 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 1333 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -360,13 +381,13 @@ cognitive-core/
 │   ├── test_storage.py                # ✅ 58/58 тестов SQLite Storage + Migration
 │   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
 │   ├── test_utils.py                  # ✅ 63/63 тестов text_utils + hash_utils (Phase C)
-│   └── test_vector_retrieval.py       # ✅ 39/39 тестов Vector Retrieval
+│   └── test_vector_retrieval.py       # ✅ 60/60 тестов Vector Retrieval + Index Population
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
-│   ├── TODO.md                         # План реализации (14 фаз, 35+ задач)
-│   ├── ARCHITECTURE.md                 # Архитектурные решения
-│   ├── PLANS.md                        # Стратегический план
+│   ├── ACTION_PLAN.md                  # Детальный план с code snippets и effort-оценками
+│   ├── ARCHITECTURE.md                 # R&D концепт когнитивного нейрона
+│   ├── PLANS.md                        # Стратегический контекст (исторический)
 │   └── layers/                         # Описание каждого слоя (12 файлов)
 │       ├── 00_autonomous_loop.md       # Ствол мозга — always-on цикл
 │       ├── 01_perception_layer.md      # Таламус — восприятие и маршрутизация
@@ -710,7 +731,7 @@ pip install -e .
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (1312 ✅)
+# Запустить все тесты (1333 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
@@ -720,7 +741,7 @@ python -m pytest tests/test_memory.py -v
 python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (1312 тестов)
+### Состав тестового набора (1333 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -741,8 +762,8 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_storage.py` | SQLite Storage (CRUD, transactions, threads, migration) | 58 |
 | `test_text_encoder.py` | Text Encoder (primary/fallback/failed, semantic, batch, cache) | 80 |
 | `test_utils.py` | text_utils + hash_utils (Phase C DRY) | 63 |
-| `test_vector_retrieval.py` | Vector Retrieval (Vector, Hybrid, cosine similarity) | 39 |
-| | **Итого** | **1312** |
+| `test_vector_retrieval.py` | Vector Retrieval (Vector, Hybrid, cosine similarity, corpus population) | 60 |
+| | **Итого** | **1333** |
 
 ---
 
@@ -822,7 +843,7 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | [`02_modality_encoders.md`](docs/layers/02_modality_encoders.md) | Modality Encoders | Сенсорная кора | ✅ Реализовано (Этап E, text-only, 80/80) |
 | [`03_cross_modal_fusion.md`](docs/layers/03_cross_modal_fusion.md) | Cross-Modal Fusion | Ассоциативная кора | 📄 Спецификация (Этап K) |
 | [`04_memory_system.md`](docs/layers/04_memory_system.md) | Memory System | Гиппокамп + Кора | ✅ Реализовано (101/101) |
-| [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | ✅ Реализовано (Этап F+F+, 182+7) |
+| [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | ✅ Реализовано (Этап F+F+, 190+7) |
 | [`06_learning_loop.md`](docs/layers/06_learning_loop.md) | Learning Loop | Мозжечок + Гиппокамп | 📄 Спецификация (Этап I) |
 | [`07_output_layer.md`](docs/layers/07_output_layer.md) | Output Layer | Речевые зоны Брока/Вернике | ✅ Реализовано (Этап G, 106+7) |
 | [`08_attention_resource.md`](docs/layers/08_attention_resource.md) | Attention & Resources | Таламус + Гипоталамус | 📄 Спецификация (Этап H) |
@@ -831,14 +852,14 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | 📄 Спецификация (Этап M) |
 
 Архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md) (15 разделов)  
-**Единый план реализации (MVP + Post-MVP):** [`TODO.md`](docs/TODO.md)
+**Единый план реализации (MVP + Post-MVP):** [`TODO.md`](TODO.md)
 
 ---
 
 ## ✅ Прогресс реализации
 
 > **Примечание:** Нумерация этапов ниже — историческая (из BRAIN.md).
-> Актуальный roadmap с MVP-фазами: [`docs/TODO.md`](docs/TODO.md).
+> Актуальный roadmap с MVP-фазами: [`TODO.md`](TODO.md).
 
 | Этап | Название | Статус | Тестов |
 |------|----------|--------|--------|
@@ -856,6 +877,8 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | **MVP A** | **CLI, Docker, ResourceMonitor, mypy** | **✅ Завершено** | **20** |
 | **MVP B** | **Auto-encode, Perception hardening, Golden benchmarks** | **✅ Завершено** | **456** |
 | **MVP C** | **Critical DRY (text_utils, hash_utils)** | **✅ Завершено** | **63** |
+| **P0 (new)** | **Critical Hardening (thread safety, vector retrieval)** | **✅ Завершено 7/7** | **1333** |
+| **P1 (new)** | **High Priority (CI, types, Docker, lint)** | **✅ Завершено 14/14** | **1333** |
 | H | Attention & Resource Control | ⬜ Post-MVP | — |
 | I | Learning Loop | ⬜ Post-MVP | — |
 | J | Vision/Audio Encoders | ⬜ Post-MVP | — |
@@ -955,9 +978,9 @@ brain/cognition/
 └── __init__.py             ← экспорты 30 классов
 
 tests/
-├── test_cognition.py           ← 182/182 unit тестов ✅
+├── test_cognition.py           ← 190/190 unit тестов ✅
 ├── test_cognition_integration.py ← 7/7 integration smoke тестов ✅
-└── test_vector_retrieval.py    ← 39/39 тестов ✅
+└── test_vector_retrieval.py    ← 60/60 тестов ✅
 
 brain/output/
 ├── trace_builder.py        ← ExplainabilityTrace (dataclass, ContractMixin),
@@ -979,9 +1002,11 @@ tests/
 
 ### Следующий шаг
 
-> 📋 Единый план реализации: [`docs/TODO.md`](docs/TODO.md)
+> 📋 Единый план реализации: [`TODO.md`](TODO.md)
 
 **MVP Phase A** ✅ — CLI entrypoint, Docker, ResourceMonitor.snapshot(), mypy без `|| true`.  
 **MVP Phase B** ✅ — Auto-encode, Perception hardening, Retrieval scope docs, README update, Golden-answer benchmarks (414 тестов).  
-**MVP Phase C** ✅ — Critical DRY: `detect_language`, `parse_fact_pattern`, `sha256` вынесены в `brain/core/text_utils.py` и `brain/core/hash_utils.py` (63 теста). C.5 (JSON helper) — аудит проведён, дублей нет.  
-**Далее**: Post-MVP Phase D (Retrieval Upgrade).
+**MVP Phase C** ✅ — Critical DRY: `detect_language`, `parse_fact_pattern`, `sha256` вынесены в `brain/core/text_utils.py` и `brain/core/hash_utils.py` (63 теста).  
+**P0 Hardening** ✅ — Thread safety (6 модулей), memory leaks, real vector/hybrid retrieval (60 тестов).  
+**P1 Hardening** ✅ — CI coverage gate 70%, ruff rules (B/SIM/C4/RET/PIE), mypy 0 errors, Docker multi-stage + non-root, Protocol types.  
+**Далее**: P2 (алгоритмические оптимизации, инфраструктура). Roadmap: [`TODO.md`](TODO.md).

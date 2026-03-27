@@ -641,6 +641,472 @@ class TestRetrievalAdapterHybrid:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# CognitiveCore: Vector Index Population Tests (P0-P1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestVectorIndexPopulation:
+    """
+    Тесты наполнения векторного индекса из персистентного корпуса памяти.
+
+    Покрытие:
+      - _build_vector_index: индексация SemanticMemory + EpisodicMemory
+      - Кэширование эмбеддингов (повторный вызов не перекодирует)
+      - Дедупликация при повторном вызове _build_vector_index
+      - Пропуск «мёртвых» фактов (confidence ≤ 0)
+      - Инкрементальная индексация при LEARN
+      - deny_fact / delete_fact — удаление из вектора
+      - Episode/SemanticNode embedding round-trip (to_dict/from_dict)
+    """
+
+    def _make_mock_encoder(self, dim: int = 4):
+        """Создать мок-энкодер, возвращающий детерминированный вектор."""
+        import uuid
+        from unittest.mock import MagicMock
+
+        from brain.core.contracts import EncodedPercept, Modality
+
+        def encode_side_effect(text):
+            # Детерминированный вектор на основе длины текста
+            base = float(len(text) % 10 + 1)
+            vec = [base + i * 0.1 for i in range(dim)]
+            return EncodedPercept(
+                percept_id=f"mock_{uuid.uuid4().hex[:8]}",
+                modality=Modality.TEXT,
+                text=text,
+                vector=vec,
+                vector_dim=dim,
+                encoder_model="mock",
+                quality=0.9,
+            )
+
+        encoder = MagicMock()
+        encoder.encode = MagicMock(side_effect=encode_side_effect)
+        return encoder
+
+    def _make_memory_with_semantic(self, facts: dict, tmp_path):
+        """Создать MemoryManager с предзаполненной SemanticMemory."""
+        from brain.memory.memory_manager import MemoryManager
+
+        mm = MemoryManager(data_dir=str(tmp_path))
+        for concept, desc in facts.items():
+            mm.semantic.store_fact(concept, desc)
+        return mm
+
+    def _make_memory_with_episodes(self, contents: list, tmp_path):
+        """Создать MemoryManager с предзаполненной EpisodicMemory."""
+        from brain.memory.memory_manager import MemoryManager
+
+        mm = MemoryManager(data_dir=str(tmp_path))
+        for content in contents:
+            mm.episodic.store(content=content, importance=0.5)
+        return mm
+
+    def test_build_vector_index_from_semantic(self, tmp_path):
+        """_build_vector_index индексирует узлы SemanticMemory."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка нервной системы", "синапс": "связь между нейронами"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+
+        # Вектор бэкенд должен содержать 2 записи
+        assert core._vector_backend is not None
+        assert core._vector_backend.size >= 2
+
+    def test_build_vector_index_from_episodic(self, tmp_path):
+        """_build_vector_index индексирует эпизоды EpisodicMemory."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_episodes(
+            ["нейрон — клетка мозга", "синапс передаёт сигнал"],
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+
+        assert core._vector_backend is not None
+        assert core._vector_backend.size >= 2
+
+    def test_build_vector_index_caches_embeddings(self, tmp_path):
+        """Повторный _build_vector_index использует кэшированные эмбеддинги."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка нервной системы"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        first_call_count = encoder.encode.call_count
+
+        # Повторный вызов — эмбеддинг уже кэширован в node.embedding
+        core._build_vector_index()
+        second_call_count = encoder.encode.call_count
+
+        # Не должно быть дополнительных вызовов encode
+        assert second_call_count == first_call_count
+
+    def test_build_vector_index_dedup_on_rebuild(self, tmp_path):
+        """Повторный _build_vector_index не дублирует записи (clear перед rebuild)."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        size_after_first = core._vector_backend.size
+
+        core._build_vector_index()
+        size_after_second = core._vector_backend.size
+
+        assert size_after_second == size_after_first
+
+    def test_build_vector_index_skips_dead_facts(self, tmp_path):
+        """_build_vector_index пропускает факты с confidence ≤ 0."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка", "мёртвый_факт": "удалённый"},
+            tmp_path,
+        )
+
+        # Обнуляем confidence у одного факта
+        mm.semantic.deny_fact("мёртвый_факт", delta=1.0)
+        node = mm.semantic.get_fact("мёртвый_факт")
+        assert node is not None
+        assert node.confidence <= 0.0
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+
+        # Только живой факт должен быть проиндексирован
+        assert core._vector_backend.size == 1
+
+    def test_build_vector_index_no_encoder_skips(self, tmp_path):
+        """_build_vector_index без энкодера не индексирует ничего."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=None)
+
+        # Без энкодера вектор бэкенд пуст
+        assert core._vector_backend is not None
+        assert core._vector_backend.size == 0
+
+    def test_incremental_indexing_on_learn(self, tmp_path):
+        """LEARN action добавляет факт в векторный индекс инкрементально."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic({}, tmp_path)
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        initial_size = core._vector_backend.size
+
+        # Запускаем LEARN
+        core.run("запомни: митохондрия — энергетическая станция клетки")
+
+        # Должна появиться новая запись в индексе
+        assert core._vector_backend.size > initial_size
+
+    def test_delete_fact_removes_from_vector(self, tmp_path):
+        """delete_fact удаляет факт из SemanticMemory и векторного индекса."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка", "синапс": "связь"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        assert core._vector_backend.size >= 2
+
+        # Удаляем факт
+        deleted = core.delete_fact("нейрон")
+        assert deleted is True
+
+        # Факт удалён из SemanticMemory
+        assert mm.semantic.get_fact("нейрон") is None
+
+        # Проверяем что вектор удалён — поиск по вектору не должен найти ev_sem_нейрон
+        results = core._vector_backend.search_by_vector(
+            [1.0, 0.1, 0.2, 0.3], top_n=100,
+        )
+        ev_ids = [r.evidence_id for r in results]
+        assert "ev_sem_нейрон" not in ev_ids
+
+    def test_delete_fact_nonexistent_returns_false(self, tmp_path):
+        """delete_fact для несуществующего факта возвращает False."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic({}, tmp_path)
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        assert core.delete_fact("несуществующий") is False
+
+    def test_deny_fact_removes_from_vector_on_zero_confidence(self, tmp_path):
+        """deny_fact удаляет из вектора когда confidence падает до 0."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        assert core._vector_backend.size >= 1
+
+        # Опровергаем факт до нуля (delta=1.0 гарантирует обнуление)
+        core.deny_fact("нейрон", delta=1.0)
+
+        # Факт остаётся в SemanticMemory но с confidence=0
+        node = mm.semantic.get_fact("нейрон")
+        assert node is not None
+        assert node.confidence <= 0.0
+
+        # Вектор должен быть удалён
+        results = core._vector_backend.search_by_vector(
+            [1.0, 0.1, 0.2, 0.3], top_n=100,
+        )
+        ev_ids = [r.evidence_id for r in results]
+        assert "ev_sem_нейрон" not in ev_ids
+
+    def test_deny_fact_keeps_vector_if_confidence_positive(self, tmp_path):
+        """deny_fact НЕ удаляет из вектора если confidence > 0."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        encoder = self._make_mock_encoder()
+        mm = self._make_memory_with_semantic(
+            {"нейрон": "клетка"},
+            tmp_path,
+        )
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+        initial_size = core._vector_backend.size
+
+        # Маленькое опровержение — confidence остаётся > 0
+        core.deny_fact("нейрон", delta=0.01)
+
+        node = mm.semantic.get_fact("нейрон")
+        assert node is not None
+        assert node.confidence > 0.0
+
+        # Вектор должен остаться
+        assert core._vector_backend.size == initial_size
+
+    def test_remove_from_vector_index_nonexistent_no_error(self, tmp_path):
+        """remove_from_vector_index для несуществующего ID не вызывает ошибку."""
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        mm = self._make_memory_with_semantic({}, tmp_path)
+        core = CognitiveCore(memory_manager=mm)
+
+        # Не должно вызывать исключение
+        core.remove_from_vector_index("ev_nonexistent")
+
+    def test_deny_fact_no_semantic_memory_no_error(self, tmp_path):
+        """deny_fact без SemanticMemory не вызывает ошибку."""
+        from unittest.mock import MagicMock
+
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        # Мок без атрибута semantic
+        mm = MagicMock()
+        mm.retrieve = MagicMock(return_value=MagicMock(working=[], semantic=[], episodic=[]))
+        del mm.semantic
+
+        core = CognitiveCore(memory_manager=mm)
+        # Не должно вызывать исключение
+        core.deny_fact("нейрон", delta=0.5)
+
+    def test_delete_fact_no_semantic_memory_returns_false(self, tmp_path):
+        """delete_fact без SemanticMemory возвращает False."""
+        from unittest.mock import MagicMock
+
+        from brain.cognition.cognitive_core import CognitiveCore
+
+        mm = MagicMock()
+        mm.retrieve = MagicMock(return_value=MagicMock(working=[], semantic=[], episodic=[]))
+        del mm.semantic
+
+        core = CognitiveCore(memory_manager=mm)
+        assert core.delete_fact("нейрон") is False
+
+
+class TestEmbeddingRoundTrip:
+    """
+    Тесты round-trip сериализации эмбеддингов в Episode и SemanticNode.
+    """
+
+    def test_semantic_node_embedding_roundtrip(self):
+        """SemanticNode.embedding сохраняется и восстанавливается через to_dict/from_dict."""
+        from brain.memory.semantic_memory import SemanticNode
+
+        embedding = [0.1, 0.2, 0.3, 0.4, 0.5]
+        node = SemanticNode(
+            concept="нейрон",
+            description="клетка нервной системы",
+            embedding=embedding,
+        )
+
+        d = node.to_dict()
+        assert d["embedding"] == embedding
+
+        restored = SemanticNode.from_dict(d)
+        assert restored.embedding == embedding
+
+    def test_semantic_node_embedding_none_roundtrip(self):
+        """SemanticNode без embedding сохраняет None."""
+        from brain.memory.semantic_memory import SemanticNode
+
+        node = SemanticNode(concept="синапс", description="связь")
+        d = node.to_dict()
+        assert d["embedding"] is None
+
+        restored = SemanticNode.from_dict(d)
+        assert restored.embedding is None
+
+    def test_episode_embedding_roundtrip(self):
+        """Episode.embedding сохраняется и восстанавливается через to_dict/from_dict."""
+        from brain.memory.episodic_memory import Episode
+
+        embedding = [1.0, 2.0, 3.0]
+        ep = Episode(content="нейрон — клетка мозга", embedding=embedding)
+
+        d = ep.to_dict()
+        assert d["embedding"] == embedding
+
+        restored = Episode.from_dict(d)
+        assert restored.embedding == embedding
+
+    def test_episode_embedding_none_roundtrip(self):
+        """Episode без embedding сохраняет None."""
+        from brain.memory.episodic_memory import Episode
+
+        ep = Episode(content="тест")
+        d = ep.to_dict()
+        assert d.get("embedding") is None
+
+        restored = Episode.from_dict(d)
+        assert restored.embedding is None
+
+    def test_semantic_node_embedding_persisted_after_build_index(self, tmp_path):
+        """После _build_vector_index эмбеддинг кэшируется в SemanticNode."""
+        from unittest.mock import MagicMock
+
+        from brain.cognition.cognitive_core import CognitiveCore
+        from brain.core.contracts import EncodedPercept
+        from brain.memory.memory_manager import MemoryManager
+
+        mm = MemoryManager(data_dir=str(tmp_path))
+        mm.semantic.store_fact("нейрон", "клетка нервной системы")
+
+        # Убеждаемся что embedding ещё None
+        node_before = mm.semantic.get_fact("нейрон")
+        assert node_before.embedding is None
+
+        # Создаём энкодер
+        def encode_fn(text):
+            import uuid as _uuid
+
+            from brain.core.contracts import Modality
+            return EncodedPercept(
+                percept_id=f"mock_{_uuid.uuid4().hex[:8]}",
+                modality=Modality.TEXT,
+                text=text, vector=[1.0, 2.0, 3.0], vector_dim=3,
+                encoder_model="mock", quality=0.9,
+            )
+
+        encoder = MagicMock()
+        encoder.encode = MagicMock(side_effect=encode_fn)
+
+        _core = CognitiveCore(memory_manager=mm, text_encoder=encoder)  # noqa: F841 — triggers _build_vector_index
+
+        # После init эмбеддинг должен быть кэширован
+        node_after = mm.semantic.get_fact("нейрон")
+        assert node_after.embedding is not None
+        assert isinstance(node_after.embedding, list)
+        assert len(node_after.embedding) == 3
+
+
+class TestHybridSearchFromCorpus:
+    """
+    Тесты гибридного поиска по персистентному корпусу памяти.
+    """
+
+    def _make_mock_encoder(self, dim: int = 4):
+        """Создать мок-энкодер."""
+        import uuid
+        from unittest.mock import MagicMock
+
+        from brain.core.contracts import EncodedPercept, Modality
+
+        def encode_side_effect(text):
+            base = float(len(text) % 10 + 1)
+            vec = [base + i * 0.1 for i in range(dim)]
+            return EncodedPercept(
+                percept_id=f"mock_{uuid.uuid4().hex[:8]}",
+                modality=Modality.TEXT,
+                text=text, vector=vec, vector_dim=dim,
+                encoder_model="mock", quality=0.9,
+            )
+
+        encoder = MagicMock()
+        encoder.encode = MagicMock(side_effect=encode_side_effect)
+        return encoder
+
+    def test_hybrid_search_finds_persisted_facts(self, tmp_path):
+        """Гибридный поиск находит факты из персистентного корпуса."""
+        from brain.cognition.cognitive_core import CognitiveCore
+        from brain.memory.memory_manager import MemoryManager
+
+        encoder = self._make_mock_encoder()
+        mm = MemoryManager(data_dir=str(tmp_path))
+        mm.semantic.store_fact("нейрон", "клетка нервной системы")
+        mm.semantic.store_fact("синапс", "связь между нейронами")
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+
+        # Запускаем когнитивный цикл — должен найти факты
+        result = core.run("что такое нейрон?")
+        assert result is not None
+        assert result.confidence >= 0.0
+
+    def test_vector_backend_searchable_after_init(self, tmp_path):
+        """После init вектор бэкенд содержит данные и поддерживает поиск."""
+        from brain.cognition.cognitive_core import CognitiveCore
+        from brain.memory.memory_manager import MemoryManager
+
+        encoder = self._make_mock_encoder()
+        mm = MemoryManager(data_dir=str(tmp_path))
+        mm.semantic.store_fact("нейрон", "клетка нервной системы")
+
+        core = CognitiveCore(memory_manager=mm, text_encoder=encoder)
+
+        # Поиск по вектору должен вернуть результаты
+        query_vec = [1.0, 0.1, 0.2, 0.3]
+        results = core._vector_backend.search_by_vector(query_vec, top_n=10)
+        assert len(results) >= 1
+        assert any("нейрон" in r.content for r in results)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Protocol Compliance
 # ═══════════════════════════════════════════════════════════════════════════
 

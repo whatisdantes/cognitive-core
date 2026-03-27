@@ -546,7 +546,7 @@ class TestGoldenSummary:
         confidence_sum = 0.0
         total = len(golden_results)
 
-        for qid, result in golden_results.items():
+        for _qid, result in golden_results.items():
             action_counts[result.action] = action_counts.get(result.action, 0) + 1
             confidence_sum += result.confidence
 

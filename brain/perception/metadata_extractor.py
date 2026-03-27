@@ -205,10 +205,9 @@ class MetadataExtractor:
         """
         if quality >= 0.7:
             return "normal"
-        elif quality >= 0.4:
+        if quality >= 0.4:
             return "warning"
-        else:
-            return "low_priority"
+        return "low_priority"
 
     @staticmethod
     def should_reject(text: str) -> tuple[bool, str]:

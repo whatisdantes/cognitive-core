@@ -83,7 +83,8 @@ def _load_json_safe(path: str) -> Optional[Dict[str, Any]]:
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data: Dict[str, Any] = json.load(f)
+            return data
     except Exception as e:
         _logger.warning("Не удалось загрузить %s: %s", path, e)
         return None
@@ -243,7 +244,11 @@ def migrate_json_to_sqlite(
             db.commit()
 
             result["status"] = "success"
-            total = sum(result[k] for k in ("semantic", "episodes", "sources", "procedures"))
+            _sem: int = result["semantic"]  # type: ignore[assignment]
+            _eps: int = result["episodes"]  # type: ignore[assignment]
+            _src: int = result["sources"]  # type: ignore[assignment]
+            _prc: int = result["procedures"]  # type: ignore[assignment]
+            total: int = _sem + _eps + _src + _prc
             _logger.info(
                 "Миграция завершена: %d записей (semantic=%d, episodes=%d, sources=%d, procedures=%d)",
                 total, result["semantic"], result["episodes"],
@@ -306,7 +311,7 @@ def auto_migrate_if_needed(
     # Выполняем миграцию
     try:
         result = migrate_json_to_sqlite(data_dir, db_path, backup=True, force=False)
-        return result["status"] == "success"
+        return bool(result["status"] == "success")
     except Exception as e:
         _logger.error("Автомиграция не удалась: %s. JSON файлы сохранены.", e)
         return False
