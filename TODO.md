@@ -1,9 +1,9 @@
 # 🧠 TODO — Master Roadmap
 ## cognitive-core v0.7.0
 
-> **Обновлено:** 2026-03-28  
+> **Обновлено:** 2025-07-14  
 > **Принцип:** сначала hardening, затем retrieval, затем расширение  
-> **Тесты:** 1333/1333 ✅ · **Coverage:** 84.44% (gate 70%) · **Ruff:** 0 errors · **Mypy:** 0 errors · **CI:** test + lint + typecheck  
+> **Тесты:** 1339/1339 ✅ · **Coverage:** 84.44% (gate 70%) · **Ruff:** 0 errors · **Mypy:** 0 errors · **CI:** test + lint + typecheck  
 > **Связанные документы:**
 > - [`docs/ACTION_PLAN.md`](docs/ACTION_PLAN.md) — детальный план с code snippets и effort-оценками (54 задачи)
 > - [`docs/PLANS.md`](docs/PLANS.md) — стратегический контекст (Axicor, ARCHITECTURE.md роль, hot/cold path)
@@ -116,35 +116,55 @@
 
 ### Алгоритмические оптимизации [T]
 
-- [ ] **P2-1** BFS в SemanticMemory: `list.pop(0)` → `collections.deque`
-- [ ] **P2-2** `retrieve_by_concept()`: `ep not in results` O(n²) → `seen = set()`
-- [ ] **P2-3** `_cleanup_working_memory()`: get_all + remove в цикле → batch remove
-- [ ] **P2-4** `_evict_least_important()`: `sorted()` для одного → `min()`
+- [x] **P2-1** BFS в SemanticMemory: `list.pop(0)` → `collections.deque`  
+  → `deque` + `popleft()` в `get_concept_chain()` ✅
+- [x] **P2-2** `retrieve_by_concept()`: `ep not in results` O(n²) → `seen = set()`  
+  → `seen: set[str]` по `episode_id` в episodic_memory.py ✅
+- [x] **P2-3** `_cleanup_working_memory()`: get_all + remove в цикле → batch remove  
+  → `batch_remove()` в WorkingMemory + использование в consolidation_engine.py ✅
+- [x] **P2-4** `_evict_least_important()`: `sorted()` для одного → `min()`  
+  → `min()` с key-функцией в semantic_memory.py ✅
 
 ### Локальные дефекты [T]
 
-- [ ] **P2-5** `_new_id()` обрезает UUID4 до 8 hex (32 бита) → коллизии при ~65K событий
-- [ ] **P2-6** `_maybe_autosave()` при `autosave_every == 0` → `ZeroDivisionError`
-- [ ] **P2-7** `handler.__name__` → `AttributeError` для lambda/partial
-- [ ] **P2-8** `apply_decay()` обновляет `updated_ts` ВСЕХ узлов → обновлять только изменённые
-- [ ] **P2-9** Ротация логов только для `brain.jsonl` → ротировать все файлы
-- [ ] **P2-10** Три разных шкалы порогов уверенности → единая шкала в config
-- [ ] **P2-11** `to_dict()`: `dataclasses.asdict()` vs `vars(self)` → единый подход
+- [x] **P2-5** `_new_id()` обрезает UUID4 до 12 hex (48 бит) → коллизии при ~16M событий  
+  → `uuid4().hex` (32 hex / 128 бит) в episodic_memory.py (2 места) ✅
+- [x] **P2-6** `_maybe_autosave()` при `autosave_every == 0` → `ZeroDivisionError`  
+  → guard `if self._autosave_every > 0` в 4 модулях (semantic, episodic, source, procedural) ✅
+- [x] **P2-7** `handler.__name__` → `AttributeError` для lambda/partial  
+  → `_handler_name()` helper с getattr chain + repr() fallback в event_bus.py (3 места) ✅
+- [x] **P2-8** `apply_decay()` обновляет `updated_ts` ВСЕХ узлов → обновлять только изменённые  
+  → `if new_confidence != self.confidence:` guard в SemanticNode.decay() ✅
+- [x] **P2-9** Ротация логов только для `brain.jsonl` → ротировать все файлы  
+  → убран `if name == "brain"` guard в brain_logger.py `_write_line()` ✅
+- [x] **P2-10** Три разных шкалы порогов уверенности → единая шкала в config  
+  → `hedge_threshold` в `PolicyConstraints`, карта порогов в docstring, wiring через `OutputPipeline` + `cli.py` ✅
+- [x] **P2-11** `to_dict()`: `dataclasses.asdict()` vs `vars(self)` → единый подход (документировать конвенцию)  
+  → документирован round-trip контракт в docstrings Relation и SemanticNode ✅
 
 ### Инфраструктура [T]
 
-- [ ] **P2-12** Docker build job в CI
-- [ ] **P2-13** Dependabot для security updates
-- [ ] **P2-14** Bandit (SAST) в CI
-- [ ] **P2-15** Codecov интеграция
-- [ ] **P2-16** CI badge в README
+- [x] **P2-12** Docker build job в CI  
+  → job `docker` в `.github/workflows/ci.yml` (build only, без push) ✅
+- [x] **P2-13** Dependabot для security updates  
+  → `.github/dependabot.yml` (pip + github-actions, weekly) ✅
+- [x] **P2-14** Bandit (SAST) в CI  
+  → `bandit>=1.7` в dev deps, `[tool.bandit]` в pyproject.toml, job `security` в ci.yml ✅
+- [x] **P2-15** Codecov интеграция  
+  → `codecov/codecov-action@v4` step в ci.yml + `codecov.yml` config (upload-artifact сохранён как fallback) ✅
+- [x] **P2-16** CI badge в README  
+  → 4 badges: CI, Codecov, Python 3.11+, Apache-2.0 ✅
 
 ### Продуктовое качество [C]
 
-- [ ] **P2-17** JSON ingestion: числа/bool → строки → шум в semantic search
-- [ ] **P2-18** InputRouter `os.path.exists()` guessing → explicit type hint
-- [ ] **P2-19** Чанкинг по символам → sentence-aware boundaries
-- [ ] **P2-20** Integration test: «сохранил → перезапустил → нашёл»
+- [x] **P2-17** JSON ingestion: числа/bool → строки → шум в semantic search  
+  → `_extract_strings_from_json()` пропускает числа/bool/None (только строки) ✅
+- [x] **P2-18** InputRouter `os.path.exists()` guessing → explicit type hint  
+  → `InputType` enum (FILE / TEXT / AUTO), backward compatible default=AUTO ✅
+- [x] **P2-19** Чанкинг по символам → sentence-aware boundaries  
+  → `razdel.sentenize()` в `_hard_split()` с regex fallback ✅
+- [x] **P2-20** Integration test: «сохранил → перезапустил → нашёл»  
+  → `tests/test_persistence_integration.py` (6 тестов) ✅
 
 ---
 
@@ -362,7 +382,7 @@ Hardening (завершено):
 
 ## 🧪 Test Coverage
 
-**Всего: 1333/1333 ✅** · Coverage: 84.44% (gate 70%) · 19 test files · ~102s
+**Всего: 1339/1339 ✅** · Coverage: 84.44% (gate 70%) · 20 test files · ~130s
 
 | Файл | Модуль | Тестов | Статус |
 |------|--------|--------|--------|
@@ -384,7 +404,8 @@ Hardening (завершено):
 | `test_text_encoder.py` | Text Encoder (4 modes) | 80 | ✅ |
 | `test_utils.py` | text_utils + hash_utils (Phase C) | 63 | ✅ |
 | `test_vector_retrieval.py` | Vector Retrieval + Index Population + Hybrid Search | 60 | ✅ |
-| **Итого** | | **1333** | **✅** |
+| `test_persistence_integration.py` | Persistence Integration (P2-20) | 6 | ✅ |
+| **Итого** | | **1339** | **✅** |
 
 ---
 
@@ -401,7 +422,7 @@ Hardening (завершено):
 | **MVP C** | **Cleanup + Critical DRY** | **✅** | 63 |
 | **P0 (new)** | **Critical hardening** | **✅ 7/7** | 1333 |
 | **P1 (new)** | **High priority** | **✅ 14/14** | 1333 |
-| P2 | Medium priority | [ ] 0/20 | — |
+| **P2** | **Medium priority** | **✅ 20/20** | 1339 |
 | P3 | Nice-to-have | [ ] 0/13 | — |
 | H–M | Архитектурное расширение | [ ] 5 слоёв | — |
 

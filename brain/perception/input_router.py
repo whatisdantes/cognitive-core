@@ -19,6 +19,7 @@ MVP: text-only routing.
 
 from __future__ import annotations
 
+import enum
 import logging
 import os
 from pathlib import Path
@@ -30,6 +31,25 @@ from brain.core.hash_utils import sha256_text
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import check_file_size, validate_file_path
+
+# ─── Тип входных данных ──────────────────────────────────────────────────────
+
+class InputType(enum.Enum):
+    """
+    Явный тип входных данных для InputRouter.
+
+    FILE  — источник — путь к файлу на диске
+    TEXT  — источник — строка текста (user input, API, etc.)
+    AUTO  — автоопределение по os.path.exists() (backward compatible default)
+
+    Использование:
+        router.route("docs/report.pdf", input_type=InputType.FILE)
+        router.route("Нейрон — это клетка", input_type=InputType.TEXT)
+        router.route(source, input_type=InputType.AUTO)  # default
+    """
+    FILE = "file"
+    TEXT = "text"
+    AUTO = "auto"
 
 _logger = logging.getLogger(__name__)
 
@@ -142,6 +162,7 @@ class InputRouter:
         session_id: str = "",
         trace_id: str = "",
         force: bool = False,
+        input_type: InputType = InputType.AUTO,
     ) -> List[PerceptEvent]:
         """
         Маршрутизировать входящий источник (файл или строка текста).
@@ -151,16 +172,18 @@ class InputRouter:
             session_id: ID сессии
             trace_id:   ID трассировки
             force:      игнорировать дедупликацию (default: False)
+            input_type: явный тип входных данных (FILE / TEXT / AUTO)
 
         Returns:
             List[PerceptEvent] — пустой список при дубликате/reject/ошибке
         """
-        # Определяем: это файл или прямой текст?
-        is_file = os.path.exists(source) or Path(source).suffix.lower() in (
-            _TEXT_EXTS | _IMAGE_EXTS | _AUDIO_EXTS | _VIDEO_EXTS
-        )
+        if input_type == InputType.FILE:
+            return self._route_file(source, session_id, trace_id, force)
+        if input_type == InputType.TEXT:
+            return self.route_text(source, source="user_input", session_id=session_id, trace_id=trace_id)
 
-        if is_file:
+        # AUTO: определяем по наличию файла на диске
+        if os.path.exists(source):
             return self._route_file(source, session_id, trace_id, force)
         # Считаем source строкой текста
         return self.route_text(source, source="user_input", session_id=session_id, trace_id=trace_id)

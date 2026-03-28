@@ -93,7 +93,7 @@ class Episode:
         session_id      — ID сессии
         access_count    — сколько раз обращались
     """
-    episode_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
+    episode_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     ts: float = field(default_factory=time.time)
     content: str = ""
     modality: str = "text"
@@ -149,7 +149,7 @@ class Episode:
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Episode":
         ep = cls(
-            episode_id=d.get("episode_id", str(uuid.uuid4())[:12]),
+            episode_id=d.get("episode_id", uuid.uuid4().hex),
             ts=d.get("ts", time.time()),
             content=d.get("content", ""),
             modality=d.get("modality", "text"),
@@ -324,17 +324,20 @@ class EpisodicMemory:
         with self._lock:
             episode_ids = list(self._index_by_concept.get(concept_key, []))
 
-            results = []
+            results: List[Episode] = []
+            seen: set[str] = set()
             for ep_id in episode_ids:
                 ep = self._index_by_id.get(ep_id)
                 if ep and ep.importance >= min_importance:
                     results.append(ep)
+                    seen.add(ep.episode_id)
 
-            # Также ищем по тексту
+            # Также ищем по тексту (O(1) проверка дубликатов через seen)
             for ep in self._episodes:
-                if ep not in results and concept_key in ep.content.lower():
+                if ep.episode_id not in seen and concept_key in ep.content.lower():
                     if ep.importance >= min_importance:
                         results.append(ep)
+                        seen.add(ep.episode_id)
 
             results.sort(key=lambda e: (e.importance, e.ts), reverse=True)
             result = results[:top_n]
@@ -589,8 +592,8 @@ class EpisodicMemory:
             _logger.warning("Ошибка загрузки эпизодической памяти из SQLite: %s", e)
 
     def _maybe_autosave(self):
-        """Автосохранение каждые N операций."""
-        if self._write_count % self._autosave_every == 0:
+        """Автосохранение каждые N операций. autosave_every=0 отключает."""
+        if self._autosave_every > 0 and self._write_count % self._autosave_every == 0:
             self.save()
 
     # ─── Статистика ──────────────────────────────────────────────────────────

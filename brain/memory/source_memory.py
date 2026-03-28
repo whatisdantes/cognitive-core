@@ -416,7 +416,8 @@ class SourceMemory:
             _logger.warning("Ошибка загрузки памяти об источниках из SQLite: %s", e)
 
     def _maybe_autosave(self):
-        if self._write_count % self._autosave_every == 0:
+        """Автосохранение каждые N операций. autosave_every=0 отключает."""
+        if self._autosave_every > 0 and self._write_count % self._autosave_every == 0:
             self.save()
 
     # ─── Статистика ──────────────────────────────────────────────────────────

@@ -372,9 +372,19 @@ class OutputPipeline:
         trace_builder: Optional[OutputTraceBuilder] = None,
         validator: Optional[ResponseValidator] = None,
         responder: Optional[DialogueResponder] = None,
+        hedge_threshold: Optional[float] = None,
     ) -> None:
         self._trace_builder = trace_builder or OutputTraceBuilder()
-        self._validator = validator or ResponseValidator()
+        # Если передан hedge_threshold и нет кастомного validator — создаём
+        # ResponseValidator с указанным порогом. Иначе — дефолт (0.6).
+        if validator is not None:
+            self._validator = validator
+        elif hedge_threshold is not None:
+            self._validator = ResponseValidator(
+                hedge_confidence_threshold=hedge_threshold,
+            )
+        else:
+            self._validator = ResponseValidator()
         self._responder = responder or DialogueResponder(
             trace_builder=self._trace_builder,
         )

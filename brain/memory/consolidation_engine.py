@@ -316,9 +316,8 @@ class ConsolidationEngine:
                 and item.importance < threshold_importance)
         ]
 
-        for item in items_to_remove:
-            self._working.remove(item)
-            cleared += 1
+        if items_to_remove:
+            cleared = self._working.batch_remove(items_to_remove)
 
         return cleared
 

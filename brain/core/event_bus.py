@@ -31,6 +31,11 @@ Handler = Callable[[str, Any, str], None]
 """
 
 
+def _handler_name(handler: Handler) -> str:
+    """Безопасное извлечение имени handler (lambda, partial, callable-объект)."""
+    return getattr(handler, "__name__", None) or getattr(handler, "__qualname__", None) or repr(handler)
+
+
 @dataclass
 class BusStats:
     """Статистика шины событий."""
@@ -76,7 +81,7 @@ class EventBus:
         with self._lock:
             if handler not in self._handlers[event_type]:
                 self._handlers[event_type].append(handler)
-                logger.debug("EventBus: subscribed %s → %s", event_type, handler.__name__)
+                logger.debug("EventBus: subscribed %s → %s", event_type, _handler_name(handler))
 
     def unsubscribe(self, event_type: str, handler: Handler) -> None:
         """
@@ -87,7 +92,7 @@ class EventBus:
             handlers = self._handlers.get(event_type, [])
             if handler in handlers:
                 handlers.remove(handler)
-                logger.debug("EventBus: unsubscribed %s → %s", event_type, handler.__name__)
+                logger.debug("EventBus: unsubscribed %s → %s", event_type, _handler_name(handler))
 
     def unsubscribe_all(self, event_type: Optional[str] = None) -> None:
         """
@@ -153,7 +158,7 @@ class EventBus:
                     self._stats.error_count += 1
                 logger.error(
                     "EventBus: handler '%s' raised on event '%s' (trace=%s):\n%s",
-                    handler.__name__,
+                    _handler_name(handler),
                     event_type,
                     trace_id,
                     traceback.format_exc(),

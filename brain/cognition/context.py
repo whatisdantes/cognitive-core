@@ -162,11 +162,51 @@ class PolicyConstraints(ContractMixin):
     """
     Ограничения поведения для текущего цикла.
 
-    min_confidence: минимальная уверенность для прямого ответа.
-    max_retries:    максимум повторов replan().
-    goal_limits:    stop conditions для текущего типа цели.
+    Атрибуты:
+        min_confidence:  минимальная уверенность для прямого ответа (ActionSelector).
+        hedge_threshold: порог ниже которого ResponseValidator добавляет оговорку.
+        max_retries:     максимум повторов replan().
+        goal_limits:     stop conditions для текущего типа цели.
+
+    ── Карта порогов уверенности системы ──────────────────────────────────
+
+    Централизованные (живут здесь, в PolicyConstraints + GoalTypeLimits):
+
+      GoalTypeLimits.confidence_threshold  (0.70–0.80)
+          Когда остановить reasoning loop. Разный для каждого типа цели:
+          answer_question=0.75, verify_claim=0.80, explore_topic=0.70,
+          learn_fact=0.70. Используется в planner.py.
+
+      PolicyConstraints.min_confidence  (0.4)
+          Порог для ActionSelector: >= min_confidence → RESPOND_DIRECT,
+          >= min_confidence * 0.6 → RESPOND_HEDGED, ниже → ASK/REFUSE.
+
+      PolicyConstraints.hedge_threshold  (0.6)
+          Порог для ResponseValidator: если confidence < hedge_threshold
+          и ответ не содержит маркеров оговорки — добавить "Возможно, ".
+          Должен быть >= min_confidence для согласованности.
+
+    Доменно-специфичные (живут в своих модулях, не централизованы):
+
+      ContradictionDetector.confidence_gap_threshold  (0.50)
+          Другой домен: сравнение пар доказательств между собой.
+          Не связан с порогами принятия решений.
+          → brain/cognition/contradiction_detector.py
+
+      OutputTraceBuilder._compute_uncertainty_level  (0.85/0.65/0.45/0.25)
+          Метки для отображения уровня неопределённости (display-only).
+          Не влияют на логику принятия решений.
+          → brain/output/trace_builder.py
+
+      DialogueResponder.HEDGING_PHRASES  (0.75/0.60/0.45/0.30)
+          Шаблоны фраз-оговорок по диапазонам confidence.
+          Применяются только к уже принятому решению RESPOND_HEDGED.
+          → brain/output/dialogue_responder.py
+
+    ───────────────────────────────────────────────────────────────────────
     """
     min_confidence: float = 0.4
+    hedge_threshold: float = 0.6
     max_retries: int = 2
     goal_limits: GoalTypeLimits = field(
         default_factory=lambda: GoalTypeLimits()
@@ -176,6 +216,7 @@ class PolicyConstraints(ContractMixin):
         """Сериализация с вложенным GoalTypeLimits."""
         d = {
             "min_confidence": self.min_confidence,
+            "hedge_threshold": self.hedge_threshold,
             "max_retries": self.max_retries,
             "goal_limits": self.goal_limits.to_dict(),
         }
@@ -192,6 +233,7 @@ class PolicyConstraints(ContractMixin):
         )
         return cls(
             min_confidence=data.get("min_confidence", 0.4),
+            hedge_threshold=data.get("hedge_threshold", 0.6),
             max_retries=data.get("max_retries", 2),
             goal_limits=goal_limits,
         )

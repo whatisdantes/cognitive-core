@@ -17,6 +17,7 @@ from pathlib import Path
 
 from brain import __version__
 from brain.cognition.cognitive_core import CognitiveCore
+from brain.cognition.context import PolicyConstraints
 from brain.core.event_bus import EventBus
 from brain.core.resource_monitor import ResourceMonitor, ResourceMonitorConfig
 from brain.memory.memory_manager import MemoryManager
@@ -100,21 +101,25 @@ def run_query(query: str, data_dir: str) -> int:
     mm.start()
 
     try:
-        # --- 4. CognitiveCore ---
+        # --- 4. PolicyConstraints (единый источник порогов) ---
+        policy = PolicyConstraints()
+
+        # --- 5. CognitiveCore ---
         core = CognitiveCore(
             memory_manager=mm,  # type: ignore[arg-type]
             event_bus=bus,
             resource_monitor=rm,
+            policy=policy,
         )
 
-        # --- 5. Run cognitive cycle ---
+        # --- 6. Run cognitive cycle ---
         result = core.run(query)
 
-        # --- 6. OutputPipeline ---
-        pipeline = OutputPipeline()
+        # --- 7. OutputPipeline (hedge_threshold из policy) ---
+        pipeline = OutputPipeline(hedge_threshold=policy.hedge_threshold)
         output = pipeline.process(result)
 
-        # --- 7. Print result ---
+        # --- 8. Print result ---
         print(output.text)
 
         logger.info(
@@ -124,7 +129,7 @@ def run_query(query: str, data_dir: str) -> int:
             output.trace_id,
         )
 
-        # --- 8. Save memory ---
+        # --- 9. Save memory ---
         mm.save_all()
 
         return 0

@@ -20,6 +20,7 @@ import math
 import os
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
@@ -55,6 +56,11 @@ class Relation:
         confidence  — уверенность в связи (0.0 — 1.0)
         source_ref  — откуда взята связь
         ts          — время создания
+
+    Сериализация (to_dict / from_dict):
+        Контракт round-trip: ``Relation.from_dict(r.to_dict())`` воспроизводит
+        все поля. weight и confidence округляются до 4 знаков после запятой
+        при сериализации (потеря точности >1e-4 — by design для компактности JSON).
     """
     target: str
     weight: float = 0.5
@@ -106,6 +112,13 @@ class SemanticNode:
         created_ts      — время создания
         updated_ts      — время последнего обновления
         embedding       — векторное представление (опционально)
+
+    Сериализация (to_dict / from_dict):
+        Контракт round-trip: ``SemanticNode.from_dict(node.to_dict())`` воспроизводит
+        все поля, включая вложенные Relation. confidence и importance округляются
+        до 4 знаков после запятой при сериализации (потеря точности >1e-4 — by design).
+        embedding сохраняется как Optional[List[float]] без округления.
+        Вложенные relations сериализуются через Relation.to_dict/from_dict.
     """
     concept: str
     description: str = ""
@@ -142,10 +155,13 @@ class SemanticNode:
         """
         Затухание уверенности со временем (если не подтверждается).
         Важные факты затухают медленнее.
+        updated_ts обновляется только при реальном изменении confidence.
         """
         effective_rate = rate * (1.0 - self.importance * 0.5)
-        self.confidence = max(0.0, self.confidence - effective_rate)
-        self.updated_ts = time.time()
+        new_confidence = max(0.0, self.confidence - effective_rate)
+        if new_confidence != self.confidence:
+            self.confidence = new_confidence
+            self.updated_ts = time.time()
 
     def add_relation(self, relation: Relation):
         """Добавить или обновить связь."""
@@ -538,10 +554,10 @@ class SemanticMemory:
                 return []
 
             visited = {start}
-            queue = [[start]]
+            queue: deque[list[str]] = deque([[start]])
 
             while queue:
-                path = queue.pop(0)
+                path = queue.popleft()
                 current = path[-1]
 
                 if current == end:
@@ -661,8 +677,8 @@ class SemanticMemory:
             _logger.warning("Ошибка загрузки семантической памяти из SQLite: %s", e)
 
     def _maybe_autosave(self):
-        """Автосохранение каждые N операций записи."""
-        if self._write_count % self._autosave_every == 0:
+        """Автосохранение каждые N операций записи. autosave_every=0 отключает."""
+        if self._autosave_every > 0 and self._write_count % self._autosave_every == 0:
             self.save()
 
     # ─── Вспомогательные методы ──────────────────────────────────────────────
@@ -693,13 +709,15 @@ class SemanticMemory:
         """Вытеснить наименее важный и редко используемый узел."""
         if not self._nodes:
             return
-        # Сортируем по score = importance * confidence * log(access_count + 1)
-        scored = [
-            (n.importance * n.confidence * math.log(n.access_count + 1), k)
-            for k, n in self._nodes.items()
-        ]
-        scored.sort(key=lambda x: x[0])
-        worst_key = scored[0][1]
+        # Находим узел с минимальным score = importance * confidence * log(access_count + 1)
+        worst_key = min(
+            self._nodes,
+            key=lambda k: (
+                self._nodes[k].importance
+                * self._nodes[k].confidence
+                * math.log(self._nodes[k].access_count + 1)
+            ),
+        )
         del self._nodes[worst_key]
 
     # ─── Статистика ──────────────────────────────────────────────────────────

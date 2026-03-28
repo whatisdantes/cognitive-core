@@ -325,14 +325,13 @@ class BrainLogger:
             self._open_file(name)
         fh = self._files[name]
         fh.write(line + "\n")
-        # Ротация
-        if name == "brain":
-            try:
-                size = self._log_dir.joinpath(f"{name}.jsonl").stat().st_size
-                if size >= self._max_bytes:
-                    self._rotate(name)
-            except OSError:
-                pass
+        # Ротация — проверяем все файлы, не только "brain"
+        try:
+            size = self._log_dir.joinpath(f"{name}.jsonl").stat().st_size
+            if size >= self._max_bytes:
+                self._rotate(name)
+        except OSError:
+            pass
 
     def _rotate(self, name: str) -> None:
         """Переименовать текущий файл в архив и открыть новый."""

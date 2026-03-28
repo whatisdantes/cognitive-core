@@ -11,7 +11,7 @@ perception — Слой восприятия (аналог Таламуса).
     audio_ingestor.py   — ASR + временные метки → PerceptEvent
 """
 
-from brain.perception.input_router import InputRouter
+from brain.perception.input_router import InputRouter, InputType
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import MAX_FILE_SIZE_MB, check_file_size, validate_file_path
@@ -20,6 +20,7 @@ __all__ = [
     "MetadataExtractor",
     "TextIngestor",
     "InputRouter",
+    "InputType",
     "validate_file_path",
     "check_file_size",
     "MAX_FILE_SIZE_MB",

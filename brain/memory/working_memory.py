@@ -259,6 +259,31 @@ class WorkingMemory:
                 pass
             return False
 
+    def batch_remove(self, items: List[MemoryItem]) -> int:
+        """
+        Удалить несколько элементов за один проход (O(n) вместо O(n*k)).
+
+        Returns:
+            Количество фактически удалённых элементов.
+        """
+        if not items:
+            return 0
+        to_remove = {id(item) for item in items}
+        removed = 0
+        with self._lock:
+            old_len = len(self._items)
+            self._items = deque(
+                item for item in self._items if id(item) not in to_remove
+            )
+            removed += old_len - len(self._items)
+
+            old_prot = len(self._protected)
+            self._protected = [
+                item for item in self._protected if id(item) not in to_remove
+            ]
+            removed += old_prot - len(self._protected)
+        return removed
+
     # ─── Внутренние методы ───────────────────────────────────────────────────
 
     def _evict_oldest(self):

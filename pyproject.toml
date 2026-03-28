@@ -37,6 +37,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4.0",
     "mypy>=1.10",
+    "bandit>=1.7",
 ]
 nlp = [
     "pymorphy3>=1.0.0",
@@ -80,6 +81,10 @@ warn_unused_configs = true
 ignore_missing_imports = true
 check_untyped_defs = false
 disallow_untyped_defs = false
+
+[tool.bandit]
+exclude_dirs = ["tests", "examples", "docs"]
+skips = ["B101"]  # assert используется в контрактах (ContractMixin)
 
 [tool.ruff]
 target-version = "py311"

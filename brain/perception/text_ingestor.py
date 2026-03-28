@@ -47,6 +47,13 @@ except ImportError:
     _DOCX_AVAILABLE = False
     _logger.debug("python-docx не установлен — DOCX будет читаться как plain text")
 
+try:
+    from razdel import sentenize as _sentenize  # sentence tokenizer для русского/английского
+    _RAZDEL_AVAILABLE = True
+except ImportError:
+    _RAZDEL_AVAILABLE = False
+    _logger.debug("razdel не установлен — sentence-aware chunking будет использовать regex fallback")
+
 # ─── Константы чанкинга ──────────────────────────────────────────────────────
 
 CHUNK_MIN_CHARS = 1000   # минимальный размер чанка
@@ -487,8 +494,81 @@ def _split_into_paragraphs(text: str) -> List[str]:
 
 def _hard_split(text: str, max_chars: int, overlap: int) -> List[str]:
     """
-    Жёсткое разбиение длинного текста на чанки фиксированного размера с overlap.
-    Пытается резать по границам предложений (. ! ?), иначе — по символам.
+    Sentence-aware разбиение длинного текста на чанки с overlap.
+
+    Стратегия:
+      1. Если доступен razdel — разбить на предложения, накапливать до max_chars
+      2. Fallback (regex) — искать границы предложений (.!?) в последних 200 символах
+      3. Если предложение не найдено — резать по символам
+    """
+    if _RAZDEL_AVAILABLE:
+        return _sentence_aware_split(text, max_chars, overlap)
+    return _regex_fallback_split(text, max_chars, overlap)
+
+
+def _sentence_aware_split(text: str, max_chars: int, overlap: int) -> List[str]:
+    """
+    Разбиение по предложениям через razdel.sentenize().
+
+    Накапливает предложения в буфер до max_chars, затем сбрасывает чанк.
+    Overlap формируется из последних предложений предыдущего чанка.
+    """
+    sentences = [s.text for s in _sentenize(text)]
+    if not sentences:
+        return [text.strip()] if text.strip() else []
+
+    chunks: List[str] = []
+    buffer: List[str] = []
+    buffer_len = 0
+
+    for sent in sentences:
+        sent = sent.strip()
+        if not sent:
+            continue
+
+        # Если одно предложение длиннее max_chars — режем его regex-fallback'ом
+        if len(sent) > max_chars:
+            # Сбрасываем буфер
+            if buffer:
+                chunks.append(" ".join(buffer))
+                buffer = []
+                buffer_len = 0
+            # Режем длинное предложение
+            sub_chunks = _regex_fallback_split(sent, max_chars, overlap)
+            chunks.extend(sub_chunks)
+            continue
+
+        # Если добавление предложения превысит лимит — сбросить буфер
+        new_len = buffer_len + len(sent) + (1 if buffer else 0)
+        if new_len > max_chars and buffer:
+            chunk_text = " ".join(buffer)
+            chunks.append(chunk_text)
+
+            # Overlap: берём последние предложения из буфера, пока <= overlap символов
+            overlap_sents: List[str] = []
+            overlap_len = 0
+            for s in reversed(buffer):
+                if overlap_len + len(s) + 1 > overlap:
+                    break
+                overlap_sents.insert(0, s)
+                overlap_len += len(s) + 1
+
+            buffer = overlap_sents + [sent]
+            buffer_len = sum(len(s) for s in buffer) + len(buffer) - 1
+        else:
+            buffer.append(sent)
+            buffer_len = new_len
+
+    # Остаток буфера
+    if buffer:
+        chunks.append(" ".join(buffer))
+
+    return [c for c in chunks if c.strip()]
+
+
+def _regex_fallback_split(text: str, max_chars: int, overlap: int) -> List[str]:
+    """
+    Fallback: жёсткое разбиение по символам с поиском границ предложений через regex.
     """
     chunks: List[str] = []
     start = 0
@@ -536,7 +616,5 @@ def _extract_strings_from_json(obj: Any, max_depth: int = 10) -> List[str]:
         for item in obj:
             result.extend(_extract_strings_from_json(item, max_depth - 1))
         return result
-    # Числа, bool, None — конвертируем в строку
-    if obj is not None:
-        return [str(obj)]
+    # Числа, bool, None — пропускаем (шум для semantic search)
     return []

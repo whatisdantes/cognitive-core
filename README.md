@@ -1,5 +1,10 @@
 # 🧠 Cognitive Core
 
+[![CI](https://github.com/whatisdantes/cognitive-core/actions/workflows/ci.yml/badge.svg)](https://github.com/whatisdantes/cognitive-core/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/whatisdantes/cognitive-core/graph/badge.svg)](https://codecov.io/gh/whatisdantes/cognitive-core)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+
 > **Версия:** 0.7.0  
 > **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
