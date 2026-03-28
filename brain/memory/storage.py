@@ -734,7 +734,7 @@ class MemoryDatabase:
             counts = {}
             for table in ("semantic_nodes", "relations", "episodes",
                           "modal_evidence", "sources", "procedures", "procedure_steps"):
-                row = self._conn.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()  # noqa: S608
+                row = self._conn.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()  # noqa: S608  # nosec B608
                 counts[table] = row["cnt"]
             return counts
 

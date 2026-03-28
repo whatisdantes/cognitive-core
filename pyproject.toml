@@ -84,7 +84,7 @@ disallow_untyped_defs = false
 
 [tool.bandit]
 exclude_dirs = ["tests", "examples", "docs"]
-skips = ["B101"]  # assert используется в контрактах (ContractMixin)
+skips = ["B101", "B110"]  # B101: assert в контрактах; B110: try/except/pass в cleanup/teardown
 
 [tool.ruff]
 target-version = "py311"
