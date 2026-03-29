@@ -7,9 +7,18 @@ MemoryDatabase — единая точка доступа к SQLite:
   - RLock для thread safety
   - Транзакционный API (begin/commit/rollback)
   - Schema versioning через _meta таблицу
+  - Опциональное шифрование через SQLCipher (P3-12)
 
 Использование:
+    # Обычная база данных
     db = MemoryDatabase("brain/data/memory/memory.db")
+
+    # Зашифрованная база данных (требует pip install cognitive-core[encrypted])
+    db = MemoryDatabase(
+        "brain/data/memory/secure.db",
+        encryption_key="my-secret-key",
+    )
+
     db.upsert_semantic_node(concept, data_dict)
     db.commit()
     db.close()
@@ -24,6 +33,16 @@ import sqlite3
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
+
+# ─── Опциональный импорт SQLCipher ───────────────────────────────────────────
+
+try:
+    import sqlcipher3 as _sqlcipher3_mod  # type: ignore[import-untyped]
+
+    _SQLCIPHER_AVAILABLE = True
+except ImportError:
+    _sqlcipher3_mod = None  # type: ignore[assignment]
+    _SQLCIPHER_AVAILABLE = False
 
 _logger = logging.getLogger(__name__)
 
@@ -176,28 +195,54 @@ class MemoryDatabase:
 
     Thread-safe через RLock. WAL mode для concurrent reads.
     Единый .db файл для всех видов памяти.
+    Опциональное шифрование через SQLCipher (P3-12).
 
     Параметры:
-        db_path:  путь к файлу базы данных (или ":memory:" для тестов)
-        wal_mode: включить WAL mode (рекомендуется для production)
+        db_path:        путь к файлу базы данных (или ":memory:" для тестов)
+        wal_mode:       включить WAL mode (рекомендуется для production)
+        encryption_key: ключ шифрования для SQLCipher (None = без шифрования).
+                        Требует установки: pip install cognitive-core[encrypted]
     """
 
-    def __init__(self, db_path: str = "brain/data/memory/memory.db", wal_mode: bool = True):
+    def __init__(
+        self,
+        db_path: str = "brain/data/memory/memory.db",
+        wal_mode: bool = True,
+        encryption_key: Optional[str] = None,
+    ):
         self._db_path = db_path
         self._lock = threading.RLock()
         self._closed = False
+        self._encryption_key = encryption_key
 
         # Создаём директорию если нужно
         if db_path != ":memory:":
             os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
 
+        # Выбираем backend: sqlcipher3 (если ключ задан) или sqlite3
+        if encryption_key:
+            if not _SQLCIPHER_AVAILABLE:
+                raise ImportError(
+                    "sqlcipher3 не установлен. "
+                    "Для шифрования базы данных установите: "
+                    "pip install cognitive-core[encrypted]"
+                )
+            _db_module = _sqlcipher3_mod
+        else:
+            _db_module = sqlite3
+
         # Открываем соединение
-        self._conn = sqlite3.connect(
+        self._conn = _db_module.connect(  # type: ignore[union-attr]
             db_path,
             check_same_thread=False,
             timeout=10.0,
         )
         self._conn.row_factory = sqlite3.Row
+
+        # Применяем ключ шифрования (должно быть первым PRAGMA)
+        if encryption_key:
+            self._conn.execute(f"PRAGMA key = '{encryption_key}'")  # nosec B608
+
         self._conn.execute("PRAGMA foreign_keys = ON")
 
         if wal_mode and db_path != ":memory:":
@@ -206,7 +251,12 @@ class MemoryDatabase:
         # Создаём таблицы
         self._init_schema()
 
-        _logger.info("MemoryDatabase открыта: %s (schema v%d)", db_path, SCHEMA_VERSION)
+        _logger.info(
+            "MemoryDatabase открыта: %s (schema v%d, encrypted=%s)",
+            db_path,
+            SCHEMA_VERSION,
+            bool(encryption_key),
+        )
 
     # ─── Schema ──────────────────────────────────────────────────────────────
 
@@ -738,12 +788,18 @@ class MemoryDatabase:
                 counts[table] = row["cnt"]
             return counts
 
+    @property
+    def is_encrypted(self) -> bool:
+        """Возвращает True если база данных зашифрована через SQLCipher."""
+        return bool(self._encryption_key)
+
     def status(self) -> Dict[str, Any]:
         """Полный статус базы данных."""
         return {
             "db_path": self._db_path,
             "schema_version": self.schema_version,
             "closed": self._closed,
+            "encrypted": self.is_encrypted,
             "counts": self.table_counts(),
         }
 

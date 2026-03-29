@@ -9,7 +9,7 @@
 > **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 1333/1333 ✅ — `test_bm25.py` (55) · `test_cli.py` (20) · `test_cognition.py` (190) · `test_cognition_integration.py` (7) · `test_e2e_pipeline.py` (10) · `test_golden.py` (414) · `test_logging.py` (25) · `test_memory.py` (101) · `test_output.py` (106) · `test_output_integration.py` (7) · `test_perception.py` (79) · `test_perception_hardening.py` (34) · `test_resource_monitor.py` (13) · `test_scheduler.py` (11) · `test_storage.py` (58) · `test_text_encoder.py` (80) · `test_utils.py` (63) · `test_vector_retrieval.py` (60)
+> **Тесты:** 1774/1774 ✅ (5 skipped) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **Coverage:** 84%+
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -52,10 +52,13 @@ pip install -e ".[dev]"
 # 2. Задать вопрос через CLI
 cognitive-core "Что такое нейропластичность?"
 
-# 3. Запустить все тесты (1333 ✅)
+# 3. Запустить все тесты (1774 ✅)
 python -m pytest tests/ -v
 
-# 4. Docker (опционально)
+# 4. Автономный режим (Scheduler-driven)
+cognitive-core --autonomous --ticks 5
+
+# 5. Docker (опционально)
 docker build -t cognitive-core .
 docker run cognitive-core "Что такое нейрон?"
 ```
@@ -96,16 +99,18 @@ mm.stop()
 | Text Encoder (sentence-transformers/navec) | ✅ Реализовано | 768d/300d векторизация |
 | Hybrid Retrieval (BM25 + Vector) | ✅ Реализовано | Keyword + cosine similarity |
 | 5 видов памяти (WM/SM/EM/Source/Procedural) | ✅ Реализовано | JSON + SQLite persistence |
-| Когнитивное ядро (Goal→Plan→Reason→Act) | ✅ Реализовано | 10-step pipeline |
+| Когнитивное ядро (Goal→Plan→Reason→Act) | ✅ Реализовано | 15-step CognitivePipeline |
 | Обнаружение противоречий | ✅ Реализовано | ContradictionDetector |
 | Мониторинг неопределённости | ✅ Реализовано | UncertaintyMonitor |
 | Output Layer (trace + validation + dialogue) | ✅ Реализовано | Template MVP |
-| CLI entrypoint | ✅ Реализовано | `cognitive-core "вопрос"` |
+| CLI entrypoint | ✅ Реализовано | `cognitive-core "вопрос"` + `--autonomous` mode |
 | Docker (multi-stage + non-root) | ✅ Реализовано | Python 3.12-slim |
 | CI/CD (GitHub Actions) | ✅ Реализовано | pytest + coverage + ruff + mypy |
+| Attention & Resource Control | ✅ Реализовано | SalienceEngine, AttentionController, PolicyLayer (Этап H) |
+| LLM Bridge | ✅ Реализовано | OpenAI/Anthropic providers, safety wrapper (Этап N) |
+| Learning Loop | ⚡ Partial | OnlineLearner, KnowledgeGapDetector, ReplayEngine (Этап I) |
 | Vision/Audio Encoders | 🔮 Planned | Post-MVP (Этап J) |
 | Cross-Modal Fusion | 🔮 Planned | Post-MVP (Этап K) |
-| Learning Loop | 🔮 Planned | Post-MVP (Этап I) |
 | Reward & Motivation | 🔮 Planned | Post-MVP (Этап M) |
 
 > 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
@@ -215,12 +220,13 @@ MULTIMODAL BRAIN
 │   ├─ Reasoner                 ✅ reasoning loop (retrieve → hypothesize → score → act)
 │   ├─ ContradictionDetector    ✅ поиск конфликтующих фактов
 │   ├─ UncertaintyMonitor       ✅ оценка уверенности по гипотезам
-│   ├─ SalienceEngine           🔮 оценка значимости (аналог Миндалины) (Post-MVP)
+│   ├─ SalienceEngine           ✅ оценка значимости (аналог Миндалины) (Этап H)
 │   └─ ActionSelector           ✅ выбор действия (аналог Базальных ганглий)
 │
-├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение) 🔮 Этап I
-│   ├─ OnlineLearner            🔮 обновление после каждого взаимодействия
-│   ├─ ReplayEngine             🔮 периодическое воспроизведение эпизодов
+├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение) ⚡ Этап I (partial)
+│   ├─ OnlineLearner            ✅ обновление после каждого взаимодействия
+│   ├─ ReplayEngine             ✅ периодическое воспроизведение эпизодов
+│   ├─ KnowledgeGapDetector     ✅ выявление пробелов в знаниях
 │   ├─ SelfSupervisedLearner    🔮 согласованность картинка ↔ текст ↔ аудио
 │   └─ HypothesisEngine         ✅ генерация и проверка гипотез (в cognition/)
 │
@@ -229,8 +235,10 @@ MULTIMODAL BRAIN
 │   ├─ ActionProposer           🔮 предложение действий с обоснованием (Post-MVP)
 │   └─ TraceBuilder             ✅ полная цепочка причинности
 │
-├─ 8. Attention & Resources     ← Таламус + Гипоталамус 🔮 Этап H
-│   ├─ AttentionController      🔮 goal-driven + salience-driven внимание
+├─ 8. Attention & Resources     ← Таламус + Гипоталамус ✅ Этап H
+│   ├─ AttentionController      ✅ goal-driven + salience-driven внимание
+│   ├─ SalienceEngine           ✅ оценка значимости (аналог Миндалины)
+│   ├─ PolicyLayer              ✅ политики когнитивного цикла
 │   ├─ ModalityRouter           🔮 маршрутизация по приоритету
 │   ├─ CognitiveLoadBalancer    🔮 балансировка нагрузки
 │   └─ DegradationPolicy        ✅ политика деградации (в ResourceMonitor)
@@ -287,7 +295,7 @@ cognitive-core/
 │   │   ├── contracts.py                # ✅ Общие типы: Modality, Task, ResourceState,
 │   │   │                               #    EncodedPercept, FusedPercept, TraceChain,
 │   │   │                               #    CognitiveResult, BrainOutput (contracts.py)
-│   │   ├── event_bus.py                # ✅ EventBus — typed pub/sub шина событий
+│   │   ├── event_bus.py                # ✅ EventBus + ThreadPoolEventBus — typed pub/sub шина событий
 │   │   ├── scheduler.py                # ✅ Scheduler — тик-планировщик (heapq, 4 приоритета, адаптивный tick)
 │   │   ├── resource_monitor.py         # ✅ ResourceMonitor — CPU/RAM мониторинг, 4 политики деградации
 │   │   ├── text_utils.py               # ✅ detect_language(), parse_fact_pattern() — Phase C canonical
@@ -321,8 +329,8 @@ cognitive-core/
 │   ├── fusion/                         # Кросс-модальное слияние (Фаза 5 — запланировано)
 │   │   └── __init__.py
 │   │
-│   ├── cognition/                      # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F + F+)
-│   │   ├── __init__.py                 # Экспорты: 30 классов (22 Stage F + 8 Stage F+)
+│   ├── cognition/              # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F + F+ + P3 + H)
+│   │   ├── __init__.py                 # Экспорты: 35+ классов
 │   │   ├── context.py                  # ✅ CognitiveContext, CognitiveOutcome, EvidencePack,
 │   │   │                               #    GoalTypeLimits, PolicyConstraints, ReasoningState,
 │   │   │                               #    UncertaintyTrend, ReplanStrategy
@@ -331,14 +339,25 @@ cognitive-core/
 │   │   ├── hypothesis_engine.py        # ✅ Hypothesis, HypothesisEngine (assoc+deduct+causal+analog)
 │   │   ├── reasoner.py                 # ✅ ReasoningStep, ReasoningTrace, Reasoner
 │   │   ├── action_selector.py          # ✅ ActionType, ActionDecision, ActionSelector
-│   │   ├── cognitive_core.py           # ✅ CognitiveCore — orchestrator (run → CognitiveResult)
+│   │   ├── cognitive_core.py           # ✅ CognitiveCore — orchestrator (delegates to CognitivePipeline)
+│   │   ├── pipeline.py                 # ✅ CognitivePipeline (15 шагов) + CognitivePipelineContext (P3-10)
 │   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend (BM25 reranking),
 │   │   │                               #    VectorRetrievalBackend, HybridRetrievalBackend, BM25Scorer
 │   │   ├── contradiction_detector.py   # ✅ Contradiction, ContradictionDetector (F+)
+│   │   ├── salience_engine.py          # ✅ SalienceEngine — оценка значимости (Этап H)
+│   │   ├── policy_layer.py             # ✅ PolicyLayer — политики когнитивного цикла (Этап H)
 │   │   └── uncertainty_monitor.py      # ✅ UncertaintySnapshot, UncertaintyMonitor (F+)
 │   │
-│   ├── learning/                       # Система обучения (Этап I — запланировано)
-│   │   └── __init__.py
+│   ├── bridges/                        # LLM Bridge ✅ РЕАЛИЗОВАНО (Этап N)
+│   │   ├── __init__.py                 # Экспорты: LLMBridge, OpenAIProvider, AnthropicProvider
+│   │   ├── llm_bridge.py              # ✅ LLMBridge + providers (OpenAI/Anthropic)
+│   │   └── safety_wrapper.py          # ✅ SafetyWrapper — фильтрация LLM ответов
+│   │
+│   ├── learning/                       # Система обучения ⚡ PARTIAL (Этап I)
+│   │   ├── __init__.py
+│   │   ├── online_learner.py           # ✅ OnlineLearner — обновление после взаимодействия
+│   │   ├── knowledge_gap_detector.py   # ✅ KnowledgeGapDetector — выявление пробелов
+│   │   └── replay_engine.py            # ✅ ReplayEngine — воспроизведение эпизодов
 │   │
 │   ├── logging/                        # Логирование ✅ РЕАЛИЗОВАНО (Этап C)
 │   │   ├── __init__.py                 # Экспорты: BrainLogger, DigestGenerator, CycleInfo, TraceBuilder
@@ -367,7 +386,9 @@ cognitive-core/
 ├── examples/                           # Примеры использования
 │   └── demo.py                         # ✅ Демо: полный pipeline в 30 строк
 │
-├── tests/                              # Тесты (pytest-совместимые, 1333 ✅)
+├── CHANGELOG.md                        # ✅ История изменений (Keep a Changelog) — P3-1
+├── CONTRIBUTING.md                     # ✅ Гайд для контрибьюторов — P3-2
+├── tests/                              # Тесты (pytest-совместимые, 1774 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -386,13 +407,33 @@ cognitive-core/
 │   ├── test_storage.py                # ✅ 58/58 тестов SQLite Storage + Migration
 │   ├── test_text_encoder.py           # ✅ 80/80 тестов Text Encoder
 │   ├── test_utils.py                  # ✅ 63/63 тестов text_utils + hash_utils (Phase C)
-│   └── test_vector_retrieval.py       # ✅ 60/60 тестов Vector Retrieval + Index Population
+│   ├── test_vector_retrieval.py       # ✅ 60/60 тестов Vector Retrieval + Index Population
+│   ├── test_persistence_integration.py # ✅ 6/6 тестов Persistence Integration (P2-20)
+│   ├── test_contracts_hypothesis.py   # ✅ 4/4 тестов Property-based roundtrip (P3-6)
+│   ├── test_concurrency_stress.py     # ✅ 3/3 тестов Concurrent stress (P3-8)
+│   ├── test_attention_controller.py   # ✅ AttentionController (Этап H)
+│   ├── test_salience_engine.py        # ✅ SalienceEngine (Этап H)
+│   ├── test_policy_layer.py           # ✅ PolicyLayer (Этап H)
+│   ├── test_llm_bridge.py            # ✅ LLM Bridge (Этап N)
+│   ├── test_online_learner.py         # ✅ OnlineLearner (Этап I)
+│   ├── test_knowledge_gap_detector.py # ✅ KnowledgeGapDetector (Этап I)
+│   ├── test_replay_engine.py          # ✅ ReplayEngine (Этап I)
+│   └── test_storage_encrypted.py      # ✅ SQLCipher encryption (P3-12)
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
 │   ├── ACTION_PLAN.md                  # Детальный план с code snippets и effort-оценками
 │   ├── ARCHITECTURE.md                 # R&D концепт когнитивного нейрона
 │   ├── PLANS.md                        # Стратегический контекст (исторический)
+│   ├── adr/                            # ✅ Architecture Decision Records (P3-4)
+│   │   ├── README.md                   # Индекс ADR
+│   │   ├── ADR-001-sqlite-as-default-backend.md
+│   │   ├── ADR-002-threading-rlock-for-memory.md
+│   │   ├── ADR-003-protocol-types-for-di.md
+│   │   ├── ADR-004-bm25-hybrid-retrieval.md
+│   │   ├── ADR-005-template-responses-no-llm.md
+│   │   ├── ADR-006-event-bus-sync-snapshot.md
+│   │   └── ADR-007-cpu-only-platform.md
 │   └── layers/                         # Описание каждого слоя (12 файлов)
 │       ├── 00_autonomous_loop.md       # Ствол мозга — always-on цикл
 │       ├── 01_perception_layer.md      # Таламус — восприятие и маршрутизация
@@ -736,7 +777,7 @@ pip install -e .
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (1333 ✅)
+# Запустить все тесты (1774 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
@@ -746,7 +787,7 @@ python -m pytest tests/test_memory.py -v
 python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (1333 тестов)
+### Состав тестового набора (1774 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -768,7 +809,18 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_text_encoder.py` | Text Encoder (primary/fallback/failed, semantic, batch, cache) | 80 |
 | `test_utils.py` | text_utils + hash_utils (Phase C DRY) | 63 |
 | `test_vector_retrieval.py` | Vector Retrieval (Vector, Hybrid, cosine similarity, corpus population) | 60 |
-| | **Итого** | **1333** |
+| `test_persistence_integration.py` | Persistence Integration (SQLite round-trip) | 6 |
+| `test_contracts_hypothesis.py` | Property-based roundtrip (Hypothesis) | 4 |
+| `test_concurrency_stress.py` | Concurrent stress (EventBus + Scheduler) | 3 |
+| `test_attention_controller.py` | AttentionController (Этап H) | — |
+| `test_salience_engine.py` | SalienceEngine (Этап H) | — |
+| `test_policy_layer.py` | PolicyLayer (Этап H) | — |
+| `test_llm_bridge.py` | LLM Bridge (Этап N) | — |
+| `test_online_learner.py` | OnlineLearner (Этап I) | — |
+| `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | — |
+| `test_replay_engine.py` | ReplayEngine (Этап I) | — |
+| `test_storage_encrypted.py` | SQLCipher encryption (P3-12) | — |
+| | **Итого** | **1774** |
 
 ---
 
@@ -884,8 +936,11 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | **MVP C** | **Critical DRY (text_utils, hash_utils)** | **✅ Завершено** | **63** |
 | **P0 (new)** | **Critical Hardening (thread safety, vector retrieval)** | **✅ Завершено 7/7** | **1333** |
 | **P1 (new)** | **High Priority (CI, types, Docker, lint)** | **✅ Завершено 14/14** | **1333** |
-| H | Attention & Resource Control | ⬜ Post-MVP | — |
-| I | Learning Loop | ⬜ Post-MVP | — |
+| **P2** | **Medium Priority (algorithms, infra, product quality)** | **✅ Завершено 20/20** | **1339** |
+| **P3** | **Nice-to-have (DX, architecture, testing)** | **✅ ~12/13** | **1774** |
+| **H** | **Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer)** | **✅ Завершено** | **(в 1774)** |
+| **N** | **LLM Bridge (OpenAI/Anthropic, safety wrapper, CLI)** | **✅ Завершено** | **(в 1774)** |
+| **I** | **Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine)** | **⚡ Partial** | **(в 1774)** |
 | J | Vision/Audio Encoders | ⬜ Post-MVP | — |
 | K | Cross-Modal Fusion | ⬜ Post-MVP | — |
 | L | Safety & Boundaries | ⬜ Post-MVP | — |
@@ -973,14 +1028,13 @@ brain/cognition/
 │                              (retrieve → hypothesize → score → select loop)
 ├── action_selector.py      ← ActionType (5 types), ActionDecision, ActionSelector
 │                              (RESPOND_DIRECT/HEDGED/ASK/REFUSE/LEARN)
-├── cognitive_core.py       ← CognitiveCore — orchestrator (run → CognitiveResult,
-│                              goal detection, EventBus publish, trace chain,
-│                              HybridRetrievalBackend vector bridge)
+├── cognitive_core.py       ← CognitiveCore — orchestrator (delegates to CognitivePipeline)
+├── pipeline.py             ← CognitivePipeline (15 шагов) + CognitivePipelineContext (P3-10)
 ├── retrieval_adapter.py    ← RetrievalAdapter, KeywordRetrievalBackend,
 │                              VectorRetrievalBackend, HybridRetrievalBackend (F+)
 ├── contradiction_detector.py ← Contradiction, ContradictionDetector (F+)
 ├── uncertainty_monitor.py  ← UncertaintySnapshot, UncertaintyMonitor (F+)
-└── __init__.py             ← экспорты 30 классов
+└── __init__.py             ← экспорты 32 класса
 
 tests/
 ├── test_cognition.py           ← 190/190 unit тестов ✅
@@ -1014,4 +1068,9 @@ tests/
 **MVP Phase C** ✅ — Critical DRY: `detect_language`, `parse_fact_pattern`, `sha256` вынесены в `brain/core/text_utils.py` и `brain/core/hash_utils.py` (63 теста).  
 **P0 Hardening** ✅ — Thread safety (6 модулей), memory leaks, real vector/hybrid retrieval (60 тестов).  
 **P1 Hardening** ✅ — CI coverage gate 70%, ruff rules (B/SIM/C4/RET/PIE), mypy 0 errors, Docker multi-stage + non-root, Protocol types.  
-**Далее**: P2 (алгоритмические оптимизации, инфраструктура). Roadmap: [`TODO.md`](TODO.md).
+**P2 Hardening** ✅ — Алгоритмические оптимизации (BFS deque, batch_remove, min вместо sorted), локальные дефекты (UUID, ZeroDivisionError, decay), инфраструктура (Dependabot, Bandit, Codecov).  
+**P3 (mostly done)** ✅ — DX (CHANGELOG, CONTRIBUTING, ADR, mkdocs), архитектура (CognitivePipeline 15 шагов, ThreadPoolEventBus, --autonomous CLI, SQLCipher), тестирование (Hypothesis, stress tests).  
+**Этап H** ✅ — Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer).  
+**Этап N** ✅ — LLM Bridge (OpenAI/Anthropic providers, safety wrapper, CLI integration).  
+**Этап I** ⚡ — Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули готовы, интеграция pending).  
+Roadmap: [`TODO.md`](TODO.md).

@@ -5,6 +5,7 @@ brain/cli.py — CLI entrypoint для cognitive-core.
     cognitive-core "Что такое нейропластичность?"
     cognitive-core "Запомни: солнце встает на востоке"
     cognitive-core --verbose "вопрос"
+    cognitive-core --autonomous --ticks 20
     cognitive-core --version
 """
 
@@ -16,10 +17,14 @@ import sys
 from pathlib import Path
 
 from brain import __version__
+from brain.bridges.llm_bridge import LLMBridge, LLMProvider
+from brain.bridges.safety_wrapper import LLMSafetyWrapper
 from brain.cognition.cognitive_core import CognitiveCore
 from brain.cognition.context import PolicyConstraints
+from brain.core.contracts import Task
 from brain.core.event_bus import EventBus
 from brain.core.resource_monitor import ResourceMonitor, ResourceMonitorConfig
+from brain.core.scheduler import Scheduler, TaskPriority
 from brain.memory.memory_manager import MemoryManager
 from brain.output.dialogue_responder import OutputPipeline
 
@@ -66,6 +71,47 @@ def build_parser() -> argparse.ArgumentParser:
         help="Директория данных памяти (по умолчанию: brain/data/memory)",
     )
 
+    parser.add_argument(
+        "--autonomous",
+        action="store_true",
+        default=False,
+        help="Автономный режим: Scheduler управляет когнитивными циклами",
+    )
+
+    parser.add_argument(
+        "--ticks",
+        type=int,
+        default=10,
+        metavar="N",
+        help="Количество тиков в автономном режиме (0 = бесконечно, по умолчанию: 10)",
+    )
+
+    # --- LLM Bridge (Этап N) ---
+    parser.add_argument(
+        "--llm-provider",
+        default=None,
+        choices=["openai", "anthropic", "mock"],
+        metavar="PROVIDER",
+        help="LLM провайдер: openai | anthropic | mock (по умолчанию: нет LLM)",
+    )
+
+    parser.add_argument(
+        "--llm-api-key",
+        default=None,
+        metavar="KEY",
+        help="API ключ для LLM провайдера (или переменная окружения OPENAI_API_KEY / ANTHROPIC_API_KEY)",
+    )
+
+    parser.add_argument(
+        "--llm-model",
+        default=None,
+        metavar="MODEL",
+        help=(
+            "Модель LLM провайдера "
+            "(openai: gpt-4o-mini, anthropic: claude-3-haiku-20240307)"
+        ),
+    )
+
     return parser
 
 
@@ -79,7 +125,226 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-def run_query(query: str, data_dir: str) -> int:
+# Предустановленные запросы для автономного режима
+_AUTONOMOUS_QUERIES: list[str] = [
+    "Что такое нейропластичность?",
+    "Как работает рабочая память?",
+    "Что такое когнитивный цикл?",
+    "Как устроена семантическая память?",
+    "Что такое эпизодическая память?",
+]
+
+
+def _build_llm_provider(
+    provider_name: str | None,
+    api_key: str | None,
+    model: str | None,
+) -> LLMProvider | None:
+    """
+    Создать LLM провайдера по имени и параметрам.
+
+    Возвращает LLMSafetyWrapper(provider) или None если провайдер не указан.
+    Ошибки импорта (нет openai/anthropic) логируются как WARNING.
+    """
+    if not provider_name:
+        return None
+
+    try:
+        if provider_name == "mock":
+            from brain.bridges.llm_bridge import MockProvider  # type: ignore[attr-defined]
+            raw = MockProvider()
+            bridge = LLMBridge(provider=raw)
+            wrapped = LLMSafetyWrapper(bridge=bridge)
+            logger.info("[CLI] LLM провайдер: mock")
+            return wrapped
+        if provider_name == "openai":
+            if not api_key:
+                logger.warning(
+                    "[CLI] LLM провайдер 'openai' требует api_key (передайте --llm-api-key)"
+                )
+                return None
+            from brain.bridges.llm_bridge import OpenAIProvider  # type: ignore[attr-defined]
+            raw = OpenAIProvider(  # type: ignore[assignment]
+                api_key=api_key,
+                model=model or "gpt-4o-mini",
+            )
+            bridge = LLMBridge(provider=raw)
+            wrapped = LLMSafetyWrapper(bridge=bridge)
+            logger.info("[CLI] LLM провайдер: %s (модель=%s)", provider_name, model)
+            return wrapped
+        if provider_name == "anthropic":
+            if not api_key:
+                logger.warning(
+                    "[CLI] LLM провайдер 'anthropic' требует api_key (передайте --llm-api-key)"
+                )
+                return None
+            from brain.bridges.llm_bridge import AnthropicProvider  # type: ignore[attr-defined]
+            raw = AnthropicProvider(  # type: ignore[assignment]
+                api_key=api_key,
+                model=model or "claude-3-haiku-20240307",
+            )
+            bridge = LLMBridge(provider=raw)
+            wrapped = LLMSafetyWrapper(bridge=bridge)
+            logger.info("[CLI] LLM провайдер: %s (модель=%s)", provider_name, model)
+            return wrapped
+        logger.warning("[CLI] Неизвестный LLM провайдер: %s", provider_name)
+        return None
+
+    except ImportError as e:
+        logger.warning(
+            "[CLI] LLM провайдер '%s' недоступен (нет зависимости): %s",
+            provider_name, e,
+        )
+        print(
+            f"Предупреждение: LLM провайдер '{provider_name}' недоступен. "
+            f"Установите: pip install cognitive-core[{provider_name}]",
+            file=sys.stderr,
+        )
+        return None
+    except Exception as e:
+        logger.warning("[CLI] Ошибка создания LLM провайдера: %s", e)
+        return None
+
+
+def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None = None) -> int:
+    """
+    Запустить автономный режим когнитивного ядра через Scheduler.
+
+    Режим: Scheduler управляет тиками, каждый тик выполняет когнитивный цикл.
+    Задачи: cognitive_cycle (NORMAL) + consolidate_memory (LOW).
+
+    Args:
+        data_dir: директория данных памяти
+        ticks:    максимальное количество тиков (0 = бесконечно)
+
+    Returns:
+        0 при успехе, 1 при ошибке.
+    """
+    # --- 1. EventBus ---
+    bus = EventBus()
+
+    # --- 2. ResourceMonitor ---
+    rm = ResourceMonitor(bus, ResourceMonitorConfig(sample_interval_s=10.0))
+
+    # --- 3. MemoryManager ---
+    data_path = Path(data_dir)
+    data_path.mkdir(parents=True, exist_ok=True)
+    mm = MemoryManager(data_dir=str(data_path))
+    mm.start()
+
+    try:
+        # --- 4. PolicyConstraints ---
+        policy = PolicyConstraints()
+
+        # --- 5. CognitiveCore ---
+        core = CognitiveCore(
+            memory_manager=mm,  # type: ignore[arg-type]
+            event_bus=bus,
+            resource_monitor=rm,
+            policy=policy,
+            llm_provider=llm_provider,
+        )
+
+        # --- 6. OutputPipeline ---
+        output_pipeline = OutputPipeline(hedge_threshold=policy.hedge_threshold)
+
+        # --- 7. Scheduler ---
+        scheduler = Scheduler(bus)
+
+        # --- 8. Регистрация обработчиков ---
+
+        def handle_cognitive_cycle(task: Task) -> dict:
+            """Обработчик когнитивного цикла."""
+            query: str = task.payload.get("query", "Что нового в памяти?")
+            result = core.run(query)
+            output = output_pipeline.process(result)
+            print(f"[autonomous] {output.text}")
+            logger.info(
+                "[autonomous] cycle=%d action=%s confidence=%.3f",
+                core.cycle_count, result.action, result.confidence,
+            )
+            return {
+                "action": result.action,
+                "confidence": result.confidence,
+                "cycle": core.cycle_count,
+            }
+
+        def handle_consolidate_memory(task: Task) -> dict:
+            """Обработчик консолидации памяти."""
+            mm.save_all()
+            logger.info("[autonomous] memory consolidated and saved")
+            return {"status": "consolidated"}
+
+        scheduler.register_handler("cognitive_cycle", handle_cognitive_cycle)
+        scheduler.register_handler("consolidate_memory", handle_consolidate_memory)
+
+        # --- 9. Начальные задачи ---
+        for i, q in enumerate(_AUTONOMOUS_QUERIES):
+            scheduler.enqueue(
+                Task(
+                    task_id=f"auto_cycle_{i + 1:03d}",
+                    task_type="cognitive_cycle",
+                    payload={"query": q},
+                ),
+                TaskPriority.NORMAL,
+            )
+
+        # Задача консолидации памяти (низкий приоритет — выполнится последней)
+        scheduler.enqueue(
+            Task(
+                task_id="auto_consolidate_001",
+                task_type="consolidate_memory",
+            ),
+            TaskPriority.LOW,
+        )
+
+        # --- 10. Запуск ---
+        max_ticks: int | None = ticks if ticks > 0 else None
+        print(
+            f"[autonomous] Запуск автономного режима. "
+            f"ticks={max_ticks if max_ticks is not None else '∞'} "
+            f"queue={scheduler.queue_size()}"
+        )
+
+        def _resource_provider():
+            """Провайдер состояния ресурсов для адаптации интервала тика."""
+            try:
+                snap = rm.snapshot()
+                if hasattr(snap, "cpu_pct"):
+                    return snap
+            except Exception:
+                pass
+            return None
+
+        scheduler.run(
+            max_ticks=max_ticks,
+            resource_provider=_resource_provider,
+        )
+
+        # --- 11. Сохранение памяти ---
+        mm.save_all()
+
+        # --- 12. Статистика ---
+        stats = scheduler.stats
+        print(
+            f"[autonomous] Завершено. "
+            f"ticks={stats.ticks} "
+            f"executed={stats.tasks_executed} "
+            f"failed={stats.tasks_failed}"
+        )
+
+        return 0
+
+    except Exception as exc:
+        logger.error("Ошибка автономного режима: %s", exc, exc_info=True)
+        print(f"Ошибка: {exc}", file=sys.stderr)
+        return 1
+
+    finally:
+        mm.stop(save=False)
+
+
+def run_query(query: str, data_dir: str, llm_provider: LLMProvider | None = None) -> int:
     """
     Выполнить полный когнитивный пайплайн для одного запроса.
 
@@ -110,6 +375,7 @@ def run_query(query: str, data_dir: str) -> int:
             event_bus=bus,
             resource_monitor=rm,
             policy=policy,
+            llm_provider=llm_provider,
         )
 
         # --- 6. Run cognitive cycle ---
@@ -150,11 +416,21 @@ def main(argv: list[str] | None = None) -> int:
 
     setup_logging(args.verbose)
 
+    # --- LLM провайдер (Этап N) ---
+    llm = _build_llm_provider(
+        provider_name=args.llm_provider,
+        api_key=args.llm_api_key,
+        model=args.llm_model,
+    )
+
+    if args.autonomous:
+        return run_autonomous(args.data_dir, args.ticks, llm_provider=llm)
+
     if args.query is None:
         parser.print_help()
         return 0
 
-    return run_query(args.query, args.data_dir)
+    return run_query(args.query, args.data_dir, llm_provider=llm)
 
 
 def cli_entry() -> None:

@@ -1,7 +1,7 @@
 # 🧠 Слой 6: Learning Loop (Мозжечок + Гиппокамп)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ⬜ Фаза 9 — не реализовано**
+> **Статус: ⚡ Этап I — частично реализовано** (OnlineLearner ✅, ReplayEngine ✅, KnowledgeGapDetector ✅)
 
 ---
 
@@ -418,12 +418,12 @@ class LearningMetrics:
 
 | Компонент | Статус | Файл |
 |-----------|--------|------|
-| `OnlineLearner` | ⬜ Фаза 9.1 | `brain/learning/online_learner.py` |
-| `ReplayEngine` | ⬜ Фаза 9.2 | `brain/learning/replay_engine.py` |
-| `SelfSupervisedLearner` | ⬜ Фаза 9.3 | `brain/learning/self_supervised.py` |
-| `HypothesisEngine` | ⬜ Фаза 9.4 | `brain/learning/hypothesis_engine.py` |
-| `KnowledgeGapDetector` | ⬜ Фаза 9.5 | `brain/learning/gap_detector.py` |
-| `LearningMetrics` | ⬜ Фаза 9.6 | `brain/learning/metrics.py` |
+| `OnlineLearner` | ✅ Реализовано (Этап I) | `brain/learning/online_learner.py` |
+| `ReplayEngine` | ✅ Реализовано (Этап I) | `brain/learning/replay_engine.py` |
+| `KnowledgeGapDetector` | ✅ Реализовано (Этап I) | `brain/learning/knowledge_gap_detector.py` |
+| `SelfSupervisedLearner` | ⬜ Post-MVP | `brain/learning/self_supervised.py` |
+| `HypothesisEngine` | ✅ Реализовано (Этап F+) | `brain/cognition/hypothesis_engine.py` |
+| `LearningMetrics` | ⬜ Post-MVP | `brain/learning/metrics.py` |
 
 ---
 

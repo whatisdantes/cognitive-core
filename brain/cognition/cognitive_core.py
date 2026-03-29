@@ -15,10 +15,9 @@ Orchestrator когнитивного ядра.
 from __future__ import annotations
 
 import logging
-import time
-import uuid
 from typing import Any, Dict, Optional
 
+from brain.bridges.llm_bridge import LLMProvider
 from brain.core.contracts import (
     CognitiveResult,
     EncodedPercept,
@@ -26,23 +25,16 @@ from brain.core.contracts import (
     MemoryManagerProtocol,
     ResourceMonitorProtocol,
     TextEncoderProtocol,
-    TraceChain,
-    TraceRef,
-    TraceStep,
 )
 
-from .action_selector import ActionDecision, ActionSelector, ActionType
-from .context import (
-    FAILURE_OUTCOMES,
-    CognitiveContext,
-    CognitiveOutcome,
-    PolicyConstraints,
-)
+from .action_selector import ActionSelector
+from .context import PolicyConstraints
 from .contradiction_detector import ContradictionDetector
-from .goal_manager import Goal, GoalManager
+from .goal_manager import GoalManager
 from .hypothesis_engine import HypothesisEngine
+from .pipeline import CognitivePipeline
 from .planner import Planner
-from .reasoner import Reasoner, ReasoningTrace
+from .reasoner import Reasoner
 from .retrieval_adapter import (
     HybridRetrievalBackend,
     KeywordRetrievalBackend,
@@ -86,6 +78,7 @@ class CognitiveCore:
         event_bus: Optional[EventBusProtocol] = None,
         resource_monitor: Optional[ResourceMonitorProtocol] = None,
         policy: Optional[PolicyConstraints] = None,
+        llm_provider: Optional[LLMProvider] = None,
     ) -> None:
         self._memory: MemoryManagerProtocol = memory_manager
         self._encoder = text_encoder
@@ -135,8 +128,26 @@ class CognitiveCore:
         # Счётчик циклов
         self._cycle_count: int = 0
 
+        # LLM Bridge (Этап N, опциональный)
+        self._llm_provider: Optional[LLMProvider] = llm_provider
+
         # --- Построение векторного индекса из персистентного корпуса памяти ---
         self._build_vector_index()
+
+        # --- Явный пайплайн когнитивного цикла (P3-10, Этап H + N) ---
+        self._pipeline = CognitivePipeline(
+            memory=self._memory,
+            encoder=self._encoder,
+            event_bus=self._event_bus,
+            resource_monitor=self._resource_monitor,
+            policy=self._policy,
+            goal_manager=self._goal_manager,
+            reasoner=self._reasoner,
+            action_selector=self._action_selector,
+            vector_backend=self._vector_backend,
+            cycle_count_fn=lambda: self._cycle_count,
+            llm_provider=self._llm_provider,
+        )
 
     # ------------------------------------------------------------------
     # Основной метод
@@ -152,13 +163,13 @@ class CognitiveCore:
         """
         Выполнить полный когнитивный цикл.
 
-        Цепочка:
-          1. Создать контекст (session_id, cycle_id, trace_id)
-          2. Определить тип цели и создать Goal
-          3. Выполнить reasoning loop → ReasoningTrace
-          4. Выбрать действие → ActionDecision
-          5. Выполнить действие (LEARN → store в память)
-          6. Собрать CognitiveResult
+        Делегирует выполнение CognitivePipeline (P3-10, Этап H + N).
+        Цепочка из 15 явных шагов:
+          create_context → auto_encode → get_resources → build_retrieval_query
+          → create_goal → evaluate_salience → compute_budget
+          → index_percept_vector → reason → llm_enhance (Этап N)
+          → select_action (+PolicyLayer) → execute_action
+          → complete_goal → build_result → publish_event
 
         Args:
             query:           текстовый запрос
@@ -170,136 +181,23 @@ class CognitiveCore:
 
         Возвращает CognitiveResult.
         """
-        start_time = time.perf_counter()
         self._cycle_count += 1
-
-        # --- 1. Контекст ---
-        context = self._create_context(session_id=session_id)
-
-        # --- 2. Auto-encode (B.1) ---
-        if encoded_percept is None and self._encoder is not None:
-            try:
-                encoded_percept = self._encoder.encode(query)
-                logger.debug(
-                    "[CognitiveCore] auto-encoded query: mode=%s dim=%d",
-                    getattr(encoded_percept, "encoder_model", "?"),
-                    getattr(encoded_percept, "vector_dim", 0),
-                )
-            except Exception as e:
-                logger.warning("[CognitiveCore] auto-encode failed: %s", e)
-                encoded_percept = None
-
-        # --- 3. Ресурсы ---
-        if resources is None:
-            resources = self._get_resources()
-
-        # --- 4. Retrieval query ---
-        retrieval_query = self._build_retrieval_query(
-            query, encoded_percept,
-        )
-
-        # --- 5. Создать цель ---
-        goal = self._create_goal(query, encoded_percept)
-        self._goal_manager.push(goal)
-        context.active_goal = goal
-
-        # --- 6. Index vector from encoded_percept (if available) ---
-        query_vector = self._index_percept_vector(encoded_percept, query)
-
-        # --- 7. Reasoning loop ---
-        trace = self._reasoner.reason(
-            query=retrieval_query,
-            goal=goal,
-            policy=self._policy,
-            resources=resources,
-            query_vector=query_vector,
-        )
-
-        # --- 8. Выбор действия ---
-        decision = self._action_selector.select(
-            trace=trace,
-            goal_type=goal.goal_type,
-            policy=self._policy,
-            resources=resources,
-        )
-
-        # --- 9. Выполнить действие (LEARN → store) ---
-        self._execute_action(decision, query, trace)
-
-        # --- 10. Завершить цель ---
-        outcome = self._parse_outcome(trace.outcome)
-        if outcome and outcome in FAILURE_OUTCOMES:
-            self._goal_manager.fail(goal.goal_id, trace.stop_reason)
-        else:
-            self._goal_manager.complete(goal.goal_id)
-
-        # --- 11. Собрать CognitiveResult ---
-        elapsed_ms = (time.perf_counter() - start_time) * 1000
-        result = self._build_cognitive_result(
-            query=query,
-            goal=goal,
-            trace=trace,
-            decision=decision,
-            context=context,
-            elapsed_ms=elapsed_ms,
-        )
-
-        # --- 12. Публикация события ---
-        self._publish_event("cognitive_cycle_complete", {
-            "trace_id": context.trace_id,
-            "cycle_id": context.cycle_id,
-            "action": decision.action,
-            "confidence": decision.confidence,
-            "outcome": trace.outcome,
-            "duration_ms": round(elapsed_ms, 2),
-        })
-
         logger.info(
-            "[CognitiveCore] run complete: query='%s' action=%s "
-            "confidence=%.3f outcome=%s duration=%.1fms",
-            query[:50], decision.action, decision.confidence,
-            trace.outcome, elapsed_ms,
+            "[CognitiveCore] run: query='%s' cycle=%d",
+            query[:50], self._cycle_count,
         )
-
+        result = self._pipeline.run(
+            query=query,
+            encoded_percept=encoded_percept,
+            resources=resources,
+            session_id=session_id,
+        )
+        logger.info(
+            "[CognitiveCore] run complete: action=%s confidence=%.3f duration=%.1fms",
+            result.action, result.confidence,
+            result.metadata.get("total_duration_ms", 0),
+        )
         return result
-
-    # ------------------------------------------------------------------
-    # Приватные методы
-    # ------------------------------------------------------------------
-
-    def _create_context(
-        self,
-        session_id: Optional[str] = None,
-    ) -> CognitiveContext:
-        """Создать контекст для текущего цикла.
-
-        Args:
-            session_id: внешний session_id для связывания вызовов.
-                        Если None — генерируется автоматически.
-        """
-        return CognitiveContext(
-            session_id=session_id or f"session_{uuid.uuid4().hex[:8]}",
-            cycle_id=f"cycle_{self._cycle_count}",
-            trace_id=f"trace_{uuid.uuid4().hex[:8]}",
-        )
-
-    def _get_resources(self) -> Dict[str, Any]:
-        """Получить текущее состояние ресурсов."""
-        if self._resource_monitor and hasattr(self._resource_monitor, "snapshot"):
-            try:
-                snap = self._resource_monitor.snapshot()
-                if hasattr(snap, "to_dict"):
-                    snap_dict = snap.to_dict()
-                    if isinstance(snap_dict, dict):
-                        return snap_dict
-                    return {}
-                if isinstance(snap, dict):
-                    return snap
-            except Exception as e:
-                logger.warning(
-                    "[CognitiveCore] resource_monitor.snapshot() error: %s", e
-                )
-        return {}
 
     # ------------------------------------------------------------------
     # Наполнение векторного индекса (P0-P1)
@@ -511,286 +409,27 @@ class CognitiveCore:
 
         return deleted
 
-    def _index_percept_vector(
-        self,
-        encoded_percept: Optional[EncodedPercept] = None,
-        query: str = "",
-    ) -> Optional[list]:
+    # ------------------------------------------------------------------
+    # Backward compatibility — делегирование к CognitivePipeline
+    # ------------------------------------------------------------------
+
+    def _detect_goal_type(self, query: str) -> str:
         """
-        Индексация вектора из EncodedPercept в VectorRetrievalBackend
-        и возврат query-вектора для гибридного поиска.
+        Определить тип цели по тексту запроса.
 
-        Мост TextEncoder → Memory retrieval:
-          - EncodedPercept.vector сохраняется в векторном индексе
-          - Тот же вектор возвращается для использования как query_vector в гибридном поиске
+        Делегирует CognitivePipeline._detect_goal_type() для backward
+        compatibility с тестами, написанными до P3-10.
         """
-        if encoded_percept is None:
-            return None
-
-        vector = getattr(encoded_percept, "vector", None)
-        if not vector or (isinstance(vector, list) and all(v == 0.0 for v in vector)):
-            return None
-
-        # Сохраняем в векторный бэкенд для будущего поиска
-        if self._vector_backend is not None:
-            percept_id = getattr(encoded_percept, "percept_id", "") or f"enc_{id(encoded_percept)}"
-            text = getattr(encoded_percept, "text", query)
-            self._vector_backend.add(
-                evidence_id=f"ev_enc_{percept_id}",
-                content=text or query,
-                vector=list(vector),
-                memory_type="encoded_percept",
-                confidence=getattr(encoded_percept, "quality", 0.5),
-            )
-
-        return list(vector)
-
-    def _build_retrieval_query(
-        self,
-        query: str,
-        encoded_percept: Optional[EncodedPercept] = None,
-    ) -> str:
-        """
-        Bridge EncodedPercept → retrieval query.
-
-        MVP: приватный метод (не отдельный adapter).
-        Если есть encoded_percept с keywords — обогащаем запрос.
-        """
-        if encoded_percept is None:
-            return query
-
-        # Извлекаем keywords из metadata
-        keywords = encoded_percept.metadata.get("keywords", [])
-        if not keywords:
-            return query
-
-        # Обогащаем запрос ключевыми словами
-        kw_str = " ".join(keywords[:5])
-        enriched = f"{query} {kw_str}".strip()
-
-        logger.debug(
-            "[CognitiveCore] _build_retrieval_query: '%s' → '%s'",
-            query[:50], enriched[:80],
-        )
-        return enriched
-
-    def _create_goal(
-        self,
-        query: str,
-        encoded_percept: Optional[EncodedPercept] = None,
-    ) -> Goal:
-        """
-        Создать цель на основе запроса.
-
-        Эвристика определения goal_type:
-          - "запомни" / "сохрани" / "учти" → learn_fact
-          - "?" в конце → answer_question
-          - "правда ли" / "верно ли" → verify_claim
-          - иначе → answer_question (default)
-        """
-        goal_type = self._detect_goal_type(query, encoded_percept)
-
-        return Goal(
-            description=query[:200],
-            goal_type=goal_type,
-            priority=0.5,
-            context={
-                "original_query": query,
-                "has_percept": encoded_percept is not None,
-            },
-        )
-
-    def _detect_goal_type(
-        self,
-        query: str,
-        encoded_percept: Optional[EncodedPercept] = None,
-    ) -> str:
-        """Эвристика определения типа цели."""
-        q_lower = query.lower().strip()
-
-        # learn_fact
-        learn_markers = ["запомни", "сохрани", "учти", "запиши", "remember", "save"]
-        for marker in learn_markers:
-            if marker in q_lower:
-                return "learn_fact"
-
-        # message_type из encoded_percept
-        if encoded_percept and encoded_percept.message_type == "command":
-            # Команды типа "запомни" уже обработаны выше
-            pass
-
-        # verify_claim
-        verify_markers = [
-            "правда ли", "верно ли", "так ли", "действительно ли",
-            "is it true", "is it correct",
-        ]
-        for marker in verify_markers:
-            if marker in q_lower:
-                return "verify_claim"
-
-        # answer_question (по умолчанию для вопросов)
-        if "?" in query or q_lower.startswith(("что ", "кто ", "где ", "когда ",
-                                                "как ", "почему ", "зачем ",
-                                                "what ", "who ", "where ",
-                                                "when ", "how ", "why ")):
-            return "answer_question"
-
-        # explore_topic (длинные запросы без вопроса)
-        if len(query.split()) > 10 and "?" not in query:
-            return "explore_topic"
-
-        return "answer_question"
-
-    def _execute_action(
-        self,
-        decision: ActionDecision,
-        query: str,
-        trace: ReasoningTrace,
-    ) -> None:
-        """
-        Выполнить действие (side effects).
-
-        LEARN → memory_manager.store() + инкрементальная векторная индексация.
-        Остальные действия — без side effects (ответ формируется в result).
-        """
-        if decision.action_type == ActionType.LEARN:
-            try:
-                # Извлекаем факт из query (убираем маркеры)
-                fact = self._strip_learn_markers(query)
-                if fact and hasattr(self._memory, "store"):
-                    self._memory.store(fact, importance=0.7)
-                    logger.info(
-                        "[CognitiveCore] LEARN: stored fact '%s'",
-                        fact[:80],
-                    )
-                    decision.metadata["stored_fact"] = fact
-                    decision.metadata["store_success"] = True
-
-                    # Инкрементальная векторная индексация (P0-P1)
-                    self._index_single_text(
-                        evidence_id=f"ev_learn_{self._cycle_count}",
-                        text=fact,
-                        memory_type="learned_fact",
-                        confidence=0.7,
-                    )
-            except Exception as e:
-                logger.warning(
-                    "[CognitiveCore] LEARN store error: %s", e
-                )
-                decision.metadata["store_success"] = False
-                decision.metadata["store_error"] = str(e)
+        return self._pipeline._detect_goal_type(query)
 
     def _strip_learn_markers(self, query: str) -> str:
-        """Убрать маркеры команды ('запомни:', 'сохрани:' и т.д.) и вернуть чистый факт."""
-        q = query.strip()
-        # Убираем маркеры
-        markers = [
-            "запомни:", "запомни ", "сохрани:", "сохрани ",
-            "учти:", "учти ", "запиши:", "запиши ",
-            "remember:", "remember ", "save:", "save ",
-        ]
-        for marker in markers:
-            if q.lower().startswith(marker):
-                return q[len(marker):].strip()
-        return q
+        """
+        Убрать маркеры обучения из запроса.
 
-    def _build_cognitive_result(
-        self,
-        query: str,
-        goal: Goal,
-        trace: ReasoningTrace,
-        decision: ActionDecision,
-        context: CognitiveContext,
-        elapsed_ms: float,
-    ) -> CognitiveResult:
-        """Собрать CognitiveResult из всех компонентов."""
-
-        # Построить TraceChain из ReasoningTrace
-        trace_steps = []
-        for rs in trace.steps:
-            trace_steps.append(TraceStep(
-                step_id=rs.step_id,
-                module="cognition.reasoner",
-                action=rs.step_type,
-                confidence=trace.final_confidence,
-                details={
-                    "description": rs.description,
-                    "duration_ms": rs.duration_ms,
-                    **rs.metadata,
-                },
-            ))
-
-        # Добавить шаг action_selection
-        trace_steps.append(TraceStep(
-            step_id=f"action_{uuid.uuid4().hex[:6]}",
-            module="cognition.action_selector",
-            action=decision.action,
-            confidence=decision.confidence,
-            details={
-                "reasoning": decision.reasoning,
-                **decision.metadata,
-            },
-        ))
-
-        trace_chain = TraceChain(
-            trace_id=context.trace_id,
-            session_id=context.session_id,
-            cycle_id=context.cycle_id,
-            steps=trace_steps,
-            summary=(
-                f"query='{query[:80]}' → {decision.action} "
-                f"(confidence={decision.confidence:.3f})"
-            ),
-        )
-
-        # Memory refs из evidence
-        memory_refs = [
-            TraceRef(ref_type="evidence", ref_id=eid)
-            for eid in trace.evidence_refs
-        ]
-
-        return CognitiveResult(
-            action=decision.action,
-            response=decision.statement,
-            confidence=decision.confidence,
-            trace=trace_chain,
-            goal=goal.description,
-            trace_id=context.trace_id,
-            session_id=context.session_id,
-            cycle_id=context.cycle_id,
-            memory_refs=memory_refs,
-            metadata={
-                "goal_type": goal.goal_type,
-                "goal_id": goal.goal_id,
-                "outcome": trace.outcome,
-                "stop_reason": trace.stop_reason,
-                "total_iterations": trace.total_iterations,
-                "reasoning_duration_ms": trace.total_duration_ms,
-                "total_duration_ms": round(elapsed_ms, 2),
-                "hypothesis_count": trace.hypothesis_count,
-                "best_hypothesis_id": trace.best_hypothesis_id,
-            },
-        )
-
-    def _publish_event(self, event_type: str, data: Dict[str, Any]) -> None:
-        """Публикация события через EventBus (если доступен)."""
-        if self._event_bus and hasattr(self._event_bus, "publish"):
-            try:
-                self._event_bus.publish(event_type, data)
-            except Exception as e:
-                logger.warning(
-                    "[CognitiveCore] event_bus.publish error: %s", e
-                )
-
-    @staticmethod
-    def _parse_outcome(outcome_str: str) -> Optional[CognitiveOutcome]:
-        """Парсинг строки outcome."""
-        if not outcome_str:
-            return None
-        try:
-            return CognitiveOutcome(outcome_str)
-        except ValueError:
-            return None
+        Делегирует CognitivePipeline._strip_learn_markers() для backward
+        compatibility с тестами, написанными до P3-10.
+        """
+        return self._pipeline._strip_learn_markers(query)
 
     # ------------------------------------------------------------------
     # Публичные свойства
@@ -821,5 +460,11 @@ class CognitiveCore:
             "has_retrieval_adapter": self._retrieval_adapter is not None,
             "has_contradiction_detector": True,
             "has_uncertainty_monitor": True,
+            "has_llm_provider": self._llm_provider is not None,
+            "llm_provider_name": (
+                self._llm_provider.provider_name
+                if self._llm_provider is not None
+                else None
+            ),
             "policy": policy_dict,
         }

@@ -4,12 +4,17 @@ brain/core — Ядро автономного цикла мозга.
 Модули:
     events.py               — dataclasses всех типов событий (реализовано) ✅
     contracts.py            — общие сквозные типы (реализовано) ✅
-    event_bus.py            — publish/subscribe шина событий (реализовано) ✅
+    event_bus.py            — EventBus (sync) + ThreadPoolEventBus (async, P3-9) ✅
     scheduler.py            — тик-планировщик (clock-driven + event-driven) ✅
     resource_monitor.py     — мониторинг CPU/RAM, graceful degradation ✅
-    attention_controller.py — бюджет вычислений по модальностям
+    attention_controller.py — AttentionBudget, AttentionController (Этап H) ✅
 """
 
+from .attention_controller import (
+    PRESET_BUDGETS,
+    AttentionBudget,
+    AttentionController,
+)
 from .contracts import (
     BrainOutput,
     CognitiveResult,
@@ -26,7 +31,7 @@ from .contracts import (
     TraceRef,
     TraceStep,
 )
-from .event_bus import BusStats, EventBus
+from .event_bus import BusStats, EventBus, ThreadPoolEventBus
 from .events import (
     BaseEvent,
     CognitiveEvent,
@@ -71,6 +76,7 @@ __all__ = [
     "ResourceMonitorProtocol",
     # event_bus
     "EventBus",
+    "ThreadPoolEventBus",
     "BusStats",
     # scheduler
     "Scheduler",
@@ -82,4 +88,8 @@ __all__ = [
     "DegradationPolicy",
     "ResourceMonitorConfig",
     "ResourceMonitorStats",
+    # attention_controller (Этап H)
+    "AttentionBudget",
+    "AttentionController",
+    "PRESET_BUDGETS",
 ]

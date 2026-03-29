@@ -7,19 +7,21 @@
 > **Что реализовано (v0.7.0):**
 > - ✅ Perception Layer (текст: txt/md/pdf/docx/json) — Этап B
 > - ✅ Text Encoder (sentence-transformers 768d, fallback navec 300d) — Этап E
-> - ✅ Memory System (5 типов памяти + SQLite WAL persistence + embedding persistence) — Этапы D + P0/P1
-> - ✅ Cognitive Core (10-step pipeline, BM25 + Vector + Hybrid retrieval, planning, reasoning) — Этапы F/F+/P0/P1
+> - ✅ Memory System (5 типов памяти + SQLite WAL persistence + SQLCipher encryption + embedding persistence) — Этапы D + P0/P1 + P3-12
+> - ✅ Cognitive Core (15-step pipeline, BM25 + Vector + Hybrid retrieval, planning, reasoning) — Этапы F/F+/P0/P1/P3-10
 > - ✅ Output Layer (trace, validation, dialogue, pipeline) — Этап G
 > - ✅ Logging & Observability (JSONL, categories, rotation, atexit) — Этап C
-> - ✅ Core Infrastructure (EventBus, ResourceMonitor, Scheduler, Contracts) — Этап A
+> - ✅ Core Infrastructure (EventBus + ThreadPool, ResourceMonitor, Scheduler, Contracts) — Этап A + P3-9
+> - ✅ Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer) — Этап H
+> - ✅ LLM Bridge (OpenAI/Anthropic providers, safety wrapper, CLI integration) — Этап N
+> - ⚡ Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули готовы, интеграция в pipeline pending) — Этап I
 >
 > **Что НЕ реализовано:**
 > - ⬜ Vision/Audio/Video Ingestors (Этап J — post-MVP)
 > - ⬜ Cross-Modal Fusion (Этап K — post-MVP)
-> - ⬜ Learning Loop (Этап I — post-MVP)
 > - ⬜ Safety Boundaries (Этап L — post-MVP)
 > - ⬜ Motivation/Reward System (секция 15) — post-MVP
-> - ⬜ CuriosityEngine, MotivationEngine, SalienceEngine — post-MVP
+> - ⬜ CuriosityEngine, MotivationEngine — post-MVP
 > - ⬜ brain/motivation/ директория — не существует
 >
 > Актуальный roadmap: [`TODO.md`](../TODO.md)

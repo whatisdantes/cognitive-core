@@ -1,11 +1,12 @@
 # 🧠 Слой 8: Attention & Resource Control (Таламус + Гипоталамус)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ⬜ Этап H — не реализовано**  
-> ⚠️ `ResourceState` уже реализован в `brain/core/contracts.py` с полями:
-> `cpu_pct`, `ram_pct`, `ram_used_mb`, `ram_total_mb`, `available_threads`, `ring2_allowed`, `soft_blocked`.
-> Поля `ram_gb`, `ram_available_gb`, `models_gb`, `policy`, `timestamp` из этого документа
-> **не реализованы** в текущем контракте — будут добавлены при реализации Этапа H.
+> **Статус: ✅ Этап H — реализовано** (AttentionController ✅, SalienceEngine ✅, PolicyLayer ✅)  
+> ℹ️ `ResourceState` реализован в `brain/core/contracts.py` с полями:
+> `cpu_pct`, `ram_pct`, `ram_used_mb`, `ram_total_mb`, `available_threads`, `ring2_allowed`, `soft_blocked`.  
+> `SalienceEngine` реализован в `brain/cognition/salience_engine.py`.  
+> `PolicyLayer` реализован в `brain/cognition/policy_layer.py`.  
+> `ModalityRouter`, `CognitiveLoadBalancer`, `DegradationPolicy` — Post-MVP.
 
 ---
 
@@ -408,8 +409,10 @@ def handle_emergency(self):
 
 | Компонент | Статус | Файл |
 |-----------|--------|------|
-| `AttentionBudget` dataclass | ⬜ Фаза 8.1 | `brain/core/attention_controller.py` |
-| `AttentionController` | ⬜ Фаза 8.1 | `brain/core/attention_controller.py` |
-| `ModalityRouter` | ⬜ Фаза 8.2 | `brain/core/modality_router.py` |
-| `CognitiveLoadBalancer` | ⬜ Фаза 8.3 | `brain/core/load_balancer.py` |
-| `DegradationPolicy` | ⬜ Фаза 8.4 | `brain/core/degradation_policy.py` |
+| `AttentionBudget` dataclass | ✅ Реализовано (Этап H) | `brain/core/attention_controller.py` |
+| `AttentionController` | ✅ Реализовано (Этап H) | `brain/core/attention_controller.py` |
+| `SalienceEngine` | ✅ Реализовано (Этап H) | `brain/cognition/salience_engine.py` |
+| `PolicyLayer` | ✅ Реализовано (Этап H) | `brain/cognition/policy_layer.py` |
+| `ModalityRouter` | ⬜ Post-MVP | `brain/core/modality_router.py` |
+| `CognitiveLoadBalancer` | ⬜ Post-MVP | `brain/core/load_balancer.py` |
+| `DegradationPolicy` | ⬜ Post-MVP | `brain/core/degradation_policy.py` |

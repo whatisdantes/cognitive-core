@@ -1,0 +1,132 @@
+site_name: Cognitive Core
+site_description: Биоинспирированная когнитивная система на Python
+site_author: cognitive-core contributors
+site_url: https://whatisdantes.github.io/cognitive-core/
+repo_url: https://github.com/whatisdantes/cognitive-core
+repo_name: whatisdantes/cognitive-core
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: ru
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Тёмная тема
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Светлая тема
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      lang: ru
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            unwrap_annotated: true
+            merge_init_into_class: true
+            docstring_section_style: table
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+      title: Содержание
+  - attr_list
+  - md_in_html
+
+nav:
+  - Главная: index.md
+  - Архитектура:
+      - Обзор (BRAIN.md): BRAIN.md
+      - R&D концепт: ARCHITECTURE.md
+      - Анализ проекта: PROJECT_ANALYSIS.md
+      - Слои:
+          - "00 · Autonomous Loop": layers/00_autonomous_loop.md
+          - "01 · Perception": layers/01_perception_layer.md
+          - "02 · Modality Encoders": layers/02_modality_encoders.md
+          - "03 · Cross-Modal Fusion": layers/03_cross_modal_fusion.md
+          - "04 · Memory System": layers/04_memory_system.md
+          - "05 · Cognitive Core": layers/05_cognitive_core.md
+          - "06 · Learning Loop": layers/06_learning_loop.md
+          - "07 · Output Layer": layers/07_output_layer.md
+          - "08 · Attention/Resource": layers/08_attention_resource.md
+          - "09 · Logging": layers/09_logging_observability.md
+          - "10 · Safety": layers/10_safety_boundaries.md
+          - "11 · Midbrain/Reward": layers/11_midbrain_reward.md
+  - ADR:
+      - Обзор: adr/README.md
+      - "ADR-001 · SQLite backend": adr/ADR-001-sqlite-as-default-backend.md
+      - "ADR-002 · RLock threading": adr/ADR-002-threading-rlock-for-memory.md
+      - "ADR-003 · Protocol DI": adr/ADR-003-protocol-types-for-di.md
+      - "ADR-004 · BM25 retrieval": adr/ADR-004-bm25-hybrid-retrieval.md
+      - "ADR-005 · Template responses": adr/ADR-005-template-responses-no-llm.md
+      - "ADR-006 · EventBus sync": adr/ADR-006-event-bus-sync-snapshot.md
+      - "ADR-007 · CPU-only": adr/ADR-007-cpu-only-platform.md
+  - API Reference:
+      - Обзор: api/index.md
+      - cognition: api/cognition.md
+      - memory: api/memory.md
+      - perception: api/perception.md
+      - core: api/core.md
+      - output: api/output.md
+      - logging: api/logging.md
+      - encoders: api/encoders.md
+  - Разработка:
+      - Планы (PLANS.md): PLANS.md
+      - Action Plan: ACTION_PLAN.md
+      - CONTRIBUTING: ../CONTRIBUTING.md
+      - CHANGELOG: ../CHANGELOG.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/whatisdantes/cognitive-core
+  version:
+    provider: mike
+
+copyright: "Copyright &copy; 2026 cognitive-core contributors · Apache-2.0"

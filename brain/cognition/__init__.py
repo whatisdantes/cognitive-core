@@ -1,7 +1,7 @@
 """
 cognition — Когнитивное ядро (аналог префронтальной коры).
 
-Реализованные модули (Stage F + F+):
+Реализованные модули (Stage F + F+ + P3):
     context.py                — CognitiveContext, CognitiveOutcome, EvidencePack,
                                 ReasoningState, UncertaintyTrend, ReplanStrategy
     goal_manager.py           — Goal, GoalStatus, GoalManager
@@ -10,6 +10,7 @@ cognition — Когнитивное ядро (аналог префронтал
     reasoner.py               — ReasoningStep, ReasoningTrace, Reasoner
     action_selector.py        — ActionType, ActionDecision, ActionSelector
     cognitive_core.py         — CognitiveCore (orchestrator)
+    pipeline.py               — CognitivePipeline, CognitivePipelineContext (P3-10)
     retrieval_adapter.py      — RetrievalAdapter, RetrievalBackend, KeywordRetrievalBackend,
                                 BM25Scorer (BM25 reranking)
     contradiction_detector.py — Contradiction, ContradictionDetector
@@ -53,11 +54,13 @@ from .hypothesis_engine import (
     Hypothesis,
     HypothesisEngine,
 )
+from .pipeline import CognitivePipeline, CognitivePipelineContext
 from .planner import (
     ExecutionPlan,
     Planner,
     PlanStep,
 )
+from .policy_layer import PolicyLayer
 from .reasoner import (
     Reasoner,
     ReasoningStep,
@@ -70,6 +73,7 @@ from .retrieval_adapter import (
     RetrievalAdapter,
     VectorRetrievalBackend,
 )
+from .salience_engine import SalienceEngine, SalienceScore
 from .uncertainty_monitor import (
     UncertaintyMonitor,
     UncertaintySnapshot,
@@ -122,4 +126,12 @@ __all__ = [
     "UncertaintyMonitor",
     # cognitive_core
     "CognitiveCore",
+    # pipeline (P3-10)
+    "CognitivePipeline",
+    "CognitivePipelineContext",
+    # salience_engine (Этап H)
+    "SalienceScore",
+    "SalienceEngine",
+    # policy_layer (Этап H)
+    "PolicyLayer",
 ]
