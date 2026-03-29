@@ -478,6 +478,9 @@ class SemanticMemory:
                     score = 1.0
                 elif query_lower in concept:
                     score = 0.8
+                elif concept in query_lower:
+                    # запрос содержит концепт ("что такое нейрон?" → "нейрон")
+                    score = 0.75
                 elif query_lower in node.description.lower():
                     score = 0.5
                 elif any(query_lower in tag for tag in node.tags):

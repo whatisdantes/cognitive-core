@@ -102,7 +102,8 @@ def parse_fact_pattern(text: str) -> Optional[Tuple[str, str]]:
         if sep in text:
             parts = text.split(sep, 1)
             if len(parts) == 2:
-                concept = parts[0].strip()
+                # Убираем хвостовые тире/дефисы (напр. "нейрон —" → "нейрон")
+                concept = parts[0].strip().rstrip(" —–-").strip()
                 description = parts[1].strip()
                 if 2 <= len(concept) <= 50 and len(description) >= 5:
                     return concept, description
