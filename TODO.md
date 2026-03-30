@@ -300,15 +300,15 @@ Hardening (завершено):
   P1-P1..P3 (product quality) ✅
 
 Следующий этап:
-  P2 (algorithms, infra, product quality)
+  P2 (algorithms, infra, product quality) ✅
   
 Архитектурное расширение (после P2):
-  H Attention (depends: F+, MVP)
-  I Learning (depends: H, G)
+  H Attention (depends: F+, MVP) ✅
+  I Learning (depends: H, G) ✅
   J Multimodal (depends: E, G)
   K Fusion (depends: J, F+)
   L Safety (depends: G, K)
-  N LLM Bridge (depends: L, G)
+  N LLM Bridge (depends: L, G) ✅
   M Reward (depends: I, L)
 ```
 

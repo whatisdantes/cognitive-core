@@ -21,7 +21,10 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
+
+if TYPE_CHECKING:
+    from brain.core.contracts import CognitiveResult
 
 # ---------------------------------------------------------------------------
 # CycleInfo — входные данные для генерации дайджеста
@@ -75,6 +78,84 @@ class CycleInfo:
 
     # Дополнительно
     notes: str = ""
+
+    # ------------------------------------------------------------------
+    # Фабричный метод
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_result(
+        cls,
+        result: "CognitiveResult",
+        cycle_id: str = "",
+        timestamp: str = "",
+    ) -> "CycleInfo":
+        """
+        Создать CycleInfo из CognitiveResult (Phase 2b, LOG_PLAN.md v2.0).
+
+        Маппинг полей:
+          result.cycle_id       → cycle_id (если не передан явно)
+          result.session_id     → session_id
+          result.trace_id       → trace_id
+          result.goal           → goal
+          result.response       → response_preview (первые 120 символов)
+          result.confidence     → confidence
+          result.action         → action
+          result.contradictions → contradiction (через ", ".join)
+          result.memory_refs    → memory_used (форматированные ссылки)
+          result.source_refs    → sources_used (форматированные ссылки)
+          result.trace.steps    → reasoning_chain (шаги трассировки)
+          result.metadata       → duration_ms, cpu_pct, ram_gb, input_text,
+                                  reasoning_type, hypotheses_count
+
+        Args:
+            result:    результат когнитивного цикла
+            cycle_id:  явный ID цикла (если не задан — берётся из result)
+            timestamp: явный timestamp (если не задан — текущее время UTC)
+        """
+        meta: Dict[str, object] = result.metadata or {}
+
+        # Форматирование memory_refs → ["semantic:нейрон (conf=0.87)"]
+        memory_used: List[str] = [
+            f"{ref.ref_type}:{ref.ref_id}" + (f" ({ref.note})" if ref.note else "")
+            for ref in (result.memory_refs or [])
+        ]
+
+        # Форматирование source_refs → ["user_input (trust=0.80)"]
+        sources_used: List[str] = [
+            f"{ref.ref_id}" + (f" ({ref.note})" if ref.note else "")
+            for ref in (result.source_refs or [])
+        ]
+
+        # Reasoning chain из шагов трассировки
+        reasoning_chain: List[str] = []
+        if result.trace and result.trace.steps:
+            for step in result.trace.steps:
+                reasoning_chain.append(f"{step.module}:{step.action}")
+
+        return cls(
+            cycle_id=cycle_id or result.cycle_id,
+            session_id=result.session_id,
+            trace_id=result.trace_id,
+            timestamp=timestamp or _now_str(),
+            goal=result.goal,
+            input_text=str(meta.get("query", "")),
+            input_modality=str(meta.get("input_modality", "text")),
+            input_source=str(meta.get("input_source", "user_input")),
+            input_quality=float(meta.get("input_quality", 1.0)),  # type: ignore[arg-type]
+            memory_used=memory_used,
+            sources_used=sources_used,
+            reasoning_chain=reasoning_chain,
+            reasoning_type=str(meta.get("reasoning_type", "")),
+            contradiction=", ".join(result.contradictions) if result.contradictions else "",
+            hypotheses_count=int(meta.get("hypotheses_count", 0)),  # type: ignore[call-overload]
+            confidence=result.confidence,
+            action=result.action,
+            response_preview=result.response[:120] if result.response else "",
+            duration_ms=float(meta.get("total_duration_ms", 0.0)),  # type: ignore[arg-type]
+            cpu_pct=float(meta.get("cpu_pct", 0.0)),  # type: ignore[arg-type]
+            ram_gb=float(meta.get("ram_gb", 0.0)),  # type: ignore[arg-type]
+        )
 
 
 # ---------------------------------------------------------------------------

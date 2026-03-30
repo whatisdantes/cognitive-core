@@ -23,6 +23,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
+from brain.logging import _NULL_LOGGER, BrainLogger
+
 _logger = logging.getLogger(__name__)
 
 try:
@@ -111,12 +113,16 @@ class MemoryManager:
         auto_consolidate: bool = True,
         on_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
         storage_backend: str = "auto",
+        brain_logger: Optional[BrainLogger] = None,
     ):
         self._data_dir = data_dir
         self._auto_consolidate = auto_consolidate
         self._on_event = on_event
         self._started = False
         self._storage_backend = storage_backend
+
+        # --- Phase 4: BrainLogger (NullObject pattern) ---
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
 
         # ── SQLite backend (если запрошен) ────────────────────────────────────
         self._db: Optional[MemoryDatabase] = None
@@ -275,6 +281,18 @@ class MemoryManager:
             self.source.add_fact(source_ref)
 
         self._store_count += 1
+
+        # --- Phase 4: memory_store (INFO) ---
+        self._blog.info(
+            "memory", "memory_store",
+            state={
+                "content_preview": content_str[:80],
+                "modality": modality,
+                "importance": importance,
+                "stored_in": list(result.keys()),
+            },
+        )
+
         return result
 
     def store_fact(
@@ -304,6 +322,18 @@ class MemoryManager:
             self.source.register(source_ref)
             self.source.add_fact(source_ref)
         self._store_count += 1
+
+        # --- Phase 4: memory_store_fact (INFO) ---
+        self._blog.info(
+            "memory", "memory_store_fact",
+            state={
+                "concept": concept,
+                "description_preview": description[:80],
+                "confidence": confidence,
+                "importance": importance,
+            },
+        )
+
         return node
 
     def store_episode(
@@ -375,6 +405,20 @@ class MemoryManager:
 
         result.total = len(result.working) + len(result.semantic) + len(result.episodic)
         self._retrieve_count += 1
+
+        # --- Phase 4: memory_retrieve (DEBUG) ---
+        self._blog.debug(
+            "memory", "memory_retrieve",
+            state={
+                "query": query[:80],
+                "memory_types": memory_types,
+                "total_found": result.total,
+                "semantic_count": len(result.semantic),
+                "episodic_count": len(result.episodic),
+                "working_count": len(result.working),
+            },
+        )
+
         return result
 
     def get_fact(self, concept: str) -> Optional[SemanticNode]:

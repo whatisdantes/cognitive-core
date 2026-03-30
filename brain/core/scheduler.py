@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from brain.logging import _NULL_LOGGER, BrainLogger
+
 from .contracts import ResourceState, Task, TaskStatus
 from .event_bus import EventBus
 
@@ -113,6 +115,7 @@ class Scheduler:
         self,
         event_bus: EventBus,
         config: Optional[SchedulerConfig] = None,
+        brain_logger: Optional[BrainLogger] = None,
     ) -> None:
         self._bus    = event_bus
         self._config = config or SchedulerConfig()
@@ -126,6 +129,9 @@ class Scheduler:
 
         # Зарегистрированные обработчики задач: task_type → callable
         self._handlers: Dict[str, Callable[[Task], Any]] = {}
+
+        # --- Phase 7b: BrainLogger (NullObject pattern) ---
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
 
         if not self._config.session_id:
             self._config.session_id = f"session-{uuid.uuid4().hex[:8]}"
@@ -250,6 +256,16 @@ class Scheduler:
                 {"task_id": task.task_id, "task_type": task.task_type, "result": result},
                 trace_id=task.trace_id,
             )
+            # --- Phase 7b: scheduler_task_done (INFO) ---
+            self._blog.info(
+                "scheduler", "scheduler_task_done",
+                cycle_id=cycle_id,
+                state={
+                    "task_id": task.task_id,
+                    "task_type": task.task_type,
+                    "session_id": self._config.session_id,
+                },
+            )
             return {
                 "task_id": task.task_id,
                 "task_type": task.task_type,
@@ -271,6 +287,17 @@ class Scheduler:
                 "task_failed",
                 {"task_id": task.task_id, "task_type": task.task_type, "error": err},
                 trace_id=task.trace_id,
+            )
+            # --- Phase 7b: scheduler_task_failed (WARN) ---
+            self._blog.warn(
+                "scheduler", "scheduler_task_failed",
+                cycle_id=cycle_id,
+                state={
+                    "task_id": task.task_id,
+                    "task_type": task.task_type,
+                    "error": err.splitlines()[-1] if err else "",
+                    "session_id": self._config.session_id,
+                },
             )
             return {
                 "task_id": task.task_id,
@@ -350,6 +377,19 @@ class Scheduler:
             cycle_id,
             len(executed),
             duration_ms,
+        )
+
+        # --- Phase 7b: scheduler_tick (INFO) ---
+        self._blog.info(
+            "scheduler", "scheduler_tick",
+            cycle_id=cycle_id,
+            state={
+                "tick_number": self._cycle_counter,
+                "tasks_executed": len(executed),
+                "queue_size": self.queue_size(),
+                "session_id": self._config.session_id,
+            },
+            latency_ms=round(duration_ms, 2),
         )
 
         return {

@@ -25,6 +25,7 @@ from brain.core.contracts import Task
 from brain.core.event_bus import EventBus
 from brain.core.resource_monitor import ResourceMonitor, ResourceMonitorConfig
 from brain.core.scheduler import Scheduler, TaskPriority
+from brain.logging import BrainLogger, DigestGenerator, TraceBuilder
 from brain.memory.memory_manager import MemoryManager
 from brain.output.dialogue_responder import OutputPipeline
 
@@ -110,6 +111,25 @@ def build_parser() -> argparse.ArgumentParser:
             "Модель LLM провайдера "
             "(openai: gpt-4o-mini, anthropic: claude-3-haiku-20240307)"
         ),
+    )
+
+    # --- BrainLogger (Этап C) ---
+    parser.add_argument(
+        "--log-dir",
+        default=None,
+        metavar="DIR",
+        help=(
+            "Директория для JSONL-логов BrainLogger "
+            "(по умолчанию: не логировать; пример: brain/data/logs)"
+        ),
+    )
+
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
+        metavar="LEVEL",
+        help="Минимальный уровень BrainLogger: DEBUG|INFO|WARN|ERROR|CRITICAL (по умолчанию: INFO)",
     )
 
     return parser
@@ -206,7 +226,13 @@ def _build_llm_provider(
         return None
 
 
-def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None = None) -> int:
+def run_autonomous(
+    data_dir: str,
+    ticks: int,
+    llm_provider: LLMProvider | None = None,
+    log_dir: str | None = None,
+    log_level: str = "INFO",
+) -> int:
     """
     Запустить автономный режим когнитивного ядра через Scheduler.
 
@@ -214,44 +240,59 @@ def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None =
     Задачи: cognitive_cycle (NORMAL) + consolidate_memory (LOW).
 
     Args:
-        data_dir: директория данных памяти
-        ticks:    максимальное количество тиков (0 = бесконечно)
+        data_dir:     директория данных памяти
+        ticks:        максимальное количество тиков (0 = бесконечно)
+        llm_provider: опциональный LLM провайдер
+        log_dir:      директория для JSONL-логов (None = не логировать)
+        log_level:    минимальный уровень BrainLogger
 
     Returns:
         0 при успехе, 1 при ошибке.
     """
-    # --- 1. EventBus ---
+    # --- 1. BrainLogger + TraceBuilder ---
+    brain_log: BrainLogger | None = None
+    if log_dir:
+        brain_log = BrainLogger(log_dir=log_dir, min_level=log_level)
+        logger.info("[CLI] BrainLogger активирован: log_dir=%s level=%s", log_dir, log_level)
+
+    trace_builder = TraceBuilder()
+    digest_gen = DigestGenerator()
+
+    # --- 2. EventBus ---
     bus = EventBus()
 
-    # --- 2. ResourceMonitor ---
+    # --- 3. ResourceMonitor ---
     rm = ResourceMonitor(bus, ResourceMonitorConfig(sample_interval_s=10.0))
 
-    # --- 3. MemoryManager ---
+    # --- 4. MemoryManager ---
     data_path = Path(data_dir)
     data_path.mkdir(parents=True, exist_ok=True)
     mm = MemoryManager(data_dir=str(data_path))
     mm.start()
 
     try:
-        # --- 4. PolicyConstraints ---
+        # --- 5. PolicyConstraints ---
         policy = PolicyConstraints()
 
-        # --- 5. CognitiveCore ---
+        # --- 6. CognitiveCore ---
         core = CognitiveCore(
             memory_manager=mm,  # type: ignore[arg-type]
             event_bus=bus,
             resource_monitor=rm,
             policy=policy,
             llm_provider=llm_provider,
+            brain_logger=brain_log,
+            trace_builder=trace_builder,
+            digest_gen=digest_gen,
         )
 
-        # --- 6. OutputPipeline ---
+        # --- 7. OutputPipeline ---
         output_pipeline = OutputPipeline(hedge_threshold=policy.hedge_threshold)
 
-        # --- 7. Scheduler ---
+        # --- 8. Scheduler ---
         scheduler = Scheduler(bus)
 
-        # --- 8. Регистрация обработчиков ---
+        # --- 9. Регистрация обработчиков ---
 
         def handle_cognitive_cycle(task: Task) -> dict:
             """Обработчик когнитивного цикла."""
@@ -278,7 +319,7 @@ def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None =
         scheduler.register_handler("cognitive_cycle", handle_cognitive_cycle)
         scheduler.register_handler("consolidate_memory", handle_consolidate_memory)
 
-        # --- 9. Начальные задачи ---
+        # --- 10. Начальные задачи ---
         for i, q in enumerate(_AUTONOMOUS_QUERIES):
             scheduler.enqueue(
                 Task(
@@ -298,7 +339,7 @@ def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None =
             TaskPriority.LOW,
         )
 
-        # --- 10. Запуск ---
+        # --- 11. Запуск ---
         max_ticks: int | None = ticks if ticks > 0 else None
         print(
             f"[autonomous] Запуск автономного режима. "
@@ -321,10 +362,10 @@ def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None =
             resource_provider=_resource_provider,
         )
 
-        # --- 11. Сохранение памяти ---
+        # --- 12. Сохранение памяти ---
         mm.save_all()
 
-        # --- 12. Статистика ---
+        # --- 13. Статистика ---
         stats = scheduler.stats
         print(
             f"[autonomous] Завершено. "
@@ -342,50 +383,78 @@ def run_autonomous(data_dir: str, ticks: int, llm_provider: LLMProvider | None =
 
     finally:
         mm.stop(save=False)
+        if brain_log:
+            brain_log.flush()
+            brain_log.close()
 
 
-def run_query(query: str, data_dir: str, llm_provider: LLMProvider | None = None) -> int:
+def run_query(
+    query: str,
+    data_dir: str,
+    llm_provider: LLMProvider | None = None,
+    log_dir: str | None = None,
+    log_level: str = "INFO",
+) -> int:
     """
     Выполнить полный когнитивный пайплайн для одного запроса.
 
     Пайплайн: query -> MemoryManager -> CognitiveCore.run() -> OutputPipeline -> BrainOutput
 
+    Args:
+        query:        текстовый запрос
+        data_dir:     директория данных памяти
+        llm_provider: опциональный LLM провайдер
+        log_dir:      директория для JSONL-логов (None = не логировать)
+        log_level:    минимальный уровень BrainLogger
+
     Returns:
         0 при успехе, 1 при ошибке.
     """
-    # --- 1. EventBus ---
+    # --- 1. BrainLogger + TraceBuilder ---
+    brain_log: BrainLogger | None = None
+    if log_dir:
+        brain_log = BrainLogger(log_dir=log_dir, min_level=log_level)
+        logger.info("[CLI] BrainLogger активирован: log_dir=%s level=%s", log_dir, log_level)
+
+    trace_builder = TraceBuilder()
+    digest_gen = DigestGenerator()
+
+    # --- 2. EventBus ---
     bus = EventBus()
 
-    # --- 2. ResourceMonitor ---
+    # --- 3. ResourceMonitor ---
     rm = ResourceMonitor(bus, ResourceMonitorConfig(sample_interval_s=10.0))
 
-    # --- 3. MemoryManager ---
+    # --- 4. MemoryManager ---
     data_path = Path(data_dir)
     data_path.mkdir(parents=True, exist_ok=True)
     mm = MemoryManager(data_dir=str(data_path))
     mm.start()
 
     try:
-        # --- 4. PolicyConstraints (единый источник порогов) ---
+        # --- 5. PolicyConstraints (единый источник порогов) ---
         policy = PolicyConstraints()
 
-        # --- 5. CognitiveCore ---
+        # --- 6. CognitiveCore ---
         core = CognitiveCore(
             memory_manager=mm,  # type: ignore[arg-type]
             event_bus=bus,
             resource_monitor=rm,
             policy=policy,
             llm_provider=llm_provider,
+            brain_logger=brain_log,
+            trace_builder=trace_builder,
+            digest_gen=digest_gen,
         )
 
-        # --- 6. Run cognitive cycle ---
+        # --- 7. Run cognitive cycle ---
         result = core.run(query)
 
-        # --- 7. OutputPipeline (hedge_threshold из policy) ---
+        # --- 8. OutputPipeline (hedge_threshold из policy) ---
         pipeline = OutputPipeline(hedge_threshold=policy.hedge_threshold)
         output = pipeline.process(result)
 
-        # --- 8. Print result ---
+        # --- 9. Print result ---
         print(output.text)
 
         logger.info(
@@ -395,7 +464,7 @@ def run_query(query: str, data_dir: str, llm_provider: LLMProvider | None = None
             output.trace_id,
         )
 
-        # --- 9. Save memory ---
+        # --- 10. Save memory ---
         mm.save_all()
 
         return 0
@@ -407,6 +476,9 @@ def run_query(query: str, data_dir: str, llm_provider: LLMProvider | None = None
 
     finally:
         mm.stop(save=False)
+        if brain_log:
+            brain_log.flush()
+            brain_log.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -424,13 +496,25 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.autonomous:
-        return run_autonomous(args.data_dir, args.ticks, llm_provider=llm)
+        return run_autonomous(
+            args.data_dir,
+            args.ticks,
+            llm_provider=llm,
+            log_dir=args.log_dir,
+            log_level=args.log_level,
+        )
 
     if args.query is None:
         parser.print_help()
         return 0
 
-    return run_query(args.query, args.data_dir, llm_provider=llm)
+    return run_query(
+        args.query,
+        args.data_dir,
+        llm_provider=llm,
+        log_dir=args.log_dir,
+        log_level=args.log_level,
+    )
 
 
 def cli_entry() -> None:

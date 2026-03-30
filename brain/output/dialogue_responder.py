@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from brain.core.contracts import BrainOutput, CognitiveResult
 from brain.core.text_utils import detect_language as _canonical_detect_language
+from brain.logging import _NULL_LOGGER, BrainLogger
 
 from .response_validator import (
     ResponseValidator,
@@ -373,6 +374,7 @@ class OutputPipeline:
         validator: Optional[ResponseValidator] = None,
         responder: Optional[DialogueResponder] = None,
         hedge_threshold: Optional[float] = None,
+        brain_logger: Optional[BrainLogger] = None,
     ) -> None:
         self._trace_builder = trace_builder or OutputTraceBuilder()
         # Если передан hedge_threshold и нет кастомного validator — создаём
@@ -389,6 +391,9 @@ class OutputPipeline:
             trace_builder=self._trace_builder,
         )
 
+        # --- Phase 6: BrainLogger (NullObject pattern) ---
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
+
     def process(self, result: CognitiveResult) -> BrainOutput:
         """
         Обработать CognitiveResult → BrainOutput.
@@ -399,6 +404,16 @@ class OutputPipeline:
           3. Generate BrainOutput
         """
         start = time.perf_counter()
+
+        # --- Phase 6: output_start (DEBUG) ---
+        self._blog.debug(
+            "output", "output_start",
+            state={
+                "action": result.action,
+                "confidence": result.confidence,
+                "trace_id": result.trace_id,
+            },
+        )
 
         # --- 1. Trace ---
         trace = self._trace_builder.build(result)
@@ -415,6 +430,19 @@ class OutputPipeline:
             "issues=%d duration=%.1fms",
             result.action, result.confidence,
             validation.issue_count, elapsed,
+        )
+
+        # --- Phase 6: output_complete (INFO) ---
+        self._blog.info(
+            "output", "output_complete",
+            state={
+                "action": result.action,
+                "confidence": result.confidence,
+                "issues_count": validation.issue_count,
+                "corrections_applied": validation.applied_corrections,
+                "trace_id": output.trace_id,
+            },
+            latency_ms=elapsed,
         )
 
         return output

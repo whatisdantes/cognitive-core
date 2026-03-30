@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Set
 from brain.core.events import PerceptEvent
 from brain.core.hash_utils import sha256_file as _sha256_file
 from brain.core.hash_utils import sha256_text
+from brain.logging import _NULL_LOGGER, BrainLogger
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import check_file_size, validate_file_path
@@ -147,12 +148,16 @@ class InputRouter:
         text_ingestor: Optional[TextIngestor] = None,
         event_bus=None,
         dedup: bool = True,
+        brain_logger: Optional[BrainLogger] = None,
     ):
         self._ingestor = text_ingestor or TextIngestor()
         self._bus = event_bus
         self._dedup = dedup
         self._seen_hashes: Set[str] = set()
         self._stats = RouterStats()
+
+        # --- Phase 5: BrainLogger (NullObject pattern) ---
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
 
     # ─── Публичный API ───────────────────────────────────────────────────────
 
@@ -235,6 +240,11 @@ class InputRouter:
         if reject:
             _logger.warning("InputRouter: hard reject text source='%s' — %s", source, reason)
             self._stats.hard_rejected += 1
+            # --- Phase 5: input_rejected (WARN) ---
+            self._blog.warn(
+                "perception", "input_rejected",
+                state={"source": source, "reason": reason, "modality": "text"},
+            )
             return []
 
         # Дедупликация
@@ -243,6 +253,11 @@ class InputRouter:
             if h in self._seen_hashes:
                 _logger.debug("InputRouter: дубликат text source='%s' hash=%s", source, h)
                 self._stats.duplicates_skipped += 1
+                # --- Phase 5: input_duplicate (DEBUG) ---
+                self._blog.debug(
+                    "perception", "input_duplicate",
+                    state={"source": source, "hash": h, "modality": "text"},
+                )
                 return []
             self._seen_hashes.add(h)
 
@@ -266,6 +281,18 @@ class InputRouter:
             "InputRouter: text source='%s' → %d событий",
             source, len(events),
         )
+
+        # --- Phase 5: input_routed (INFO) ---
+        self._blog.info(
+            "perception", "input_routed",
+            state={
+                "source": source,
+                "modality": "text",
+                "events_count": len(events),
+                "session_id": session_id,
+            },
+        )
+
         return events
 
     def route_batch(
@@ -378,6 +405,11 @@ class InputRouter:
                     file_path, file_hash,
                 )
                 self._stats.duplicates_skipped += 1
+                # --- Phase 5: input_duplicate (DEBUG) ---
+                self._blog.debug(
+                    "perception", "input_duplicate",
+                    state={"source": file_path, "hash": file_hash, "modality": modality},
+                )
                 return []
             self._seen_hashes.add(file_hash)
 
@@ -406,6 +438,18 @@ class InputRouter:
             "InputRouter: файл %s → %d событий (modality=%s)",
             file_path, len(events), modality,
         )
+
+        # --- Phase 5: input_routed (INFO) ---
+        self._blog.info(
+            "perception", "input_routed",
+            state={
+                "source": file_path,
+                "modality": modality,
+                "events_count": len(events),
+                "session_id": session_id,
+            },
+        )
+
         return events
 
     def _apply_quality_policy(self, events: List[PerceptEvent]) -> List[PerceptEvent]:

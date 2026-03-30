@@ -26,6 +26,13 @@ from brain.core.contracts import (
     ResourceMonitorProtocol,
     TextEncoderProtocol,
 )
+from brain.logging import (
+    _NULL_LOGGER,
+    _NULL_TRACE_BUILDER,
+    BrainLogger,
+    DigestGenerator,
+    TraceBuilder,
+)
 
 from .action_selector import ActionSelector
 from .context import PolicyConstraints
@@ -79,12 +86,21 @@ class CognitiveCore:
         resource_monitor: Optional[ResourceMonitorProtocol] = None,
         policy: Optional[PolicyConstraints] = None,
         llm_provider: Optional[LLMProvider] = None,
+        brain_logger: Optional[BrainLogger] = None,
+        trace_builder: Optional[TraceBuilder] = None,
+        digest_gen: Optional[DigestGenerator] = None,
     ) -> None:
         self._memory: MemoryManagerProtocol = memory_manager
         self._encoder = text_encoder
         self._event_bus: Optional[EventBusProtocol] = event_bus
         self._resource_monitor: Optional[ResourceMonitorProtocol] = resource_monitor
         self._policy = policy or PolicyConstraints()
+
+        # --- BrainLogger (Phase 2, LOG_PLAN.md v2.0) ---
+        # NullObject-паттерн: если логгер не передан — используем _NULL_LOGGER (no-op)
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
+        self._trace_builder: TraceBuilder = trace_builder or _NULL_TRACE_BUILDER  # type: ignore[assignment]
+        self._digest_gen: Optional[DigestGenerator] = digest_gen
 
         # Внутренние компоненты
         self._goal_manager = GoalManager()
@@ -134,7 +150,7 @@ class CognitiveCore:
         # --- Построение векторного индекса из персистентного корпуса памяти ---
         self._build_vector_index()
 
-        # --- Явный пайплайн когнитивного цикла (P3-10, Этап H + N) ---
+        # --- Явный пайплайн когнитивного цикла (P3-10, Этап H + N + Phase 3) ---
         self._pipeline = CognitivePipeline(
             memory=self._memory,
             encoder=self._encoder,
@@ -147,6 +163,8 @@ class CognitiveCore:
             vector_backend=self._vector_backend,
             cycle_count_fn=lambda: self._cycle_count,
             llm_provider=self._llm_provider,
+            brain_logger=brain_logger,
+            trace_builder=trace_builder,
         )
 
     # ------------------------------------------------------------------
@@ -466,5 +484,8 @@ class CognitiveCore:
                 if self._llm_provider is not None
                 else None
             ),
+            "has_brain_logger": not self._blog.__class__.__name__.startswith("Null"),
+            "has_trace_builder": not self._trace_builder.__class__.__name__.startswith("Null"),
+            "has_digest_gen": self._digest_gen is not None,
             "policy": policy_dict,
         }

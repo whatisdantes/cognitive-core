@@ -369,3 +369,62 @@ def _now_iso() -> str:
     """Текущее время в ISO 8601 с миллисекундами и Z-суффиксом."""
     now = datetime.now(timezone.utc)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+# ---------------------------------------------------------------------------
+# NullBrainLogger — no-op заглушка (NullObject pattern)
+# ---------------------------------------------------------------------------
+
+class NullBrainLogger:
+    """
+    No-op реализация BrainLogger для случаев, когда логирование не нужно.
+
+    Устраняет необходимость проверок ``if self._blog:`` во всех модулях.
+    Используется как значение по умолчанию через ``_NULL_LOGGER``.
+
+    Пример:
+        self._blog = brain_logger or _NULL_LOGGER
+    """
+
+    def log(self, *a: Any, **kw: Any) -> None:  # noqa: D401
+        """Ничего не делает."""
+
+    def debug(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def info(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def warn(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def error(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def critical(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def flush(self) -> None:
+        """Ничего не делает."""
+
+    def close(self) -> None:
+        """Ничего не делает."""
+
+    def get_events(self, trace_id: str) -> List[dict]:  # noqa: D401
+        """Возвращает пустой список."""
+        return []
+
+    def get_session(self, session_id: str) -> List[dict]:  # noqa: D401
+        """Возвращает пустой список."""
+        return []
+
+    def get_recent(self, n: int = 10, min_level: str = "DEBUG") -> List[dict]:  # noqa: D401
+        """Возвращает пустой список."""
+        return []
+
+    def __repr__(self) -> str:
+        return "NullBrainLogger()"
+
+
+#: Глобальный синглтон-заглушка — используется как default в конструкторах.
+_NULL_LOGGER: NullBrainLogger = NullBrainLogger()

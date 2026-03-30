@@ -24,6 +24,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from brain.logging import _NULL_LOGGER, BrainLogger
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,11 +70,14 @@ class EventBus:
         bus.subscribe("*", debug_handler)  # получает ВСЕ события
     """
 
-    def __init__(self) -> None:
+    def __init__(self, brain_logger: Optional[BrainLogger] = None) -> None:
         self._lock = threading.RLock()
         # event_type → список handlers
         self._handlers: Dict[str, List[Handler]] = defaultdict(list)
         self._stats = BusStats()
+
+        # --- Phase 7a: BrainLogger (NullObject pattern) ---
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
 
     # ------------------------------------------------------------------
     # Подписка / отписка
@@ -161,13 +166,35 @@ class EventBus:
             except Exception:
                 with self._lock:
                     self._stats.error_count += 1
+                tb = traceback.format_exc()
                 logger.error(
                     "EventBus: handler '%s' raised on event '%s' (trace=%s):\n%s",
                     _handler_name(handler),
                     event_type,
                     trace_id,
-                    traceback.format_exc(),
+                    tb,
                 )
+                # --- Phase 7a: audit_event_bus_error (ERROR → safety_audit.jsonl) ---
+                self._blog.error(
+                    "event_bus", "audit_event_bus_error",
+                    trace_id=trace_id,
+                    state={
+                        "event_type": event_type,
+                        "handler": _handler_name(handler),
+                        "traceback": tb.splitlines()[-1] if tb else "",
+                    },
+                )
+
+        # --- Phase 7a: event_published (DEBUG → brain.jsonl) ---
+        self._blog.debug(
+            "event_bus", "event_published",
+            trace_id=trace_id,
+            state={
+                "event_type": event_type,
+                "handlers_called": success,
+                "handlers_total": len(all_handlers),
+            },
+        )
 
         return success
 
@@ -234,8 +261,12 @@ class ThreadPoolEventBus(EventBus):
         bus.shutdown(wait=True)
     """
 
-    def __init__(self, max_workers: int = 4) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        max_workers: int = 4,
+        brain_logger: Optional[BrainLogger] = None,
+    ) -> None:
+        super().__init__(brain_logger=brain_logger)
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix="event-bus",
@@ -311,12 +342,24 @@ class ThreadPoolEventBus(EventBus):
         except Exception:
             with self._lock:
                 self._stats.error_count += 1
+            tb = traceback.format_exc()
             logger.error(
                 "[ThreadPoolEventBus] handler '%s' raised on event '%s' (trace=%s):\n%s",
                 _handler_name(handler),
                 event_type,
                 trace_id,
-                traceback.format_exc(),
+                tb,
+            )
+            # --- Phase 7a: audit_event_bus_error (ERROR → safety_audit.jsonl) ---
+            self._blog.error(
+                "event_bus", "audit_event_bus_error",
+                trace_id=trace_id,
+                state={
+                    "event_type": event_type,
+                    "handler": _handler_name(handler),
+                    "traceback": tb.splitlines()[-1] if tb else "",
+                    "bus_type": "thread_pool",
+                },
             )
 
     # ------------------------------------------------------------------

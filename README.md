@@ -422,9 +422,6 @@ cognitive-core/
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
-│   ├── ACTION_PLAN.md                  # Детальный план с code snippets и effort-оценками
-│   ├── ARCHITECTURE.md                 # R&D концепт когнитивного нейрона
-│   ├── PLANS.md                        # Стратегический контекст (исторический)
 │   ├── adr/                            # ✅ Architecture Decision Records (P3-4)
 │   │   ├── README.md                   # Индекс ADR
 │   │   ├── ADR-001-sqlite-as-default-backend.md

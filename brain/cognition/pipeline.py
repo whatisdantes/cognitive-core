@@ -53,6 +53,12 @@ from brain.core.contracts import (
     TraceRef,
     TraceStep,
 )
+from brain.logging import (
+    _NULL_LOGGER,
+    _NULL_TRACE_BUILDER,
+    BrainLogger,
+    TraceBuilder,
+)
 
 from .action_selector import ActionDecision, ActionSelector, ActionType
 from .context import (
@@ -171,6 +177,8 @@ class CognitivePipeline:
         vector_backend: Optional[VectorRetrievalBackend],
         cycle_count_fn: Callable[[], int],
         llm_provider: Optional[LLMProvider] = None,
+        brain_logger: Optional[BrainLogger] = None,
+        trace_builder: Optional[TraceBuilder] = None,
     ) -> None:
         self._memory = memory
         self._encoder = encoder
@@ -190,6 +198,10 @@ class CognitivePipeline:
 
         # --- Этап N: LLM Bridge (опциональный) ---
         self._llm_provider: Optional[LLMProvider] = llm_provider
+
+        # --- Phase 3: BrainLogger + TraceBuilder (NullObject pattern) ---
+        self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
+        self._trace_builder: TraceBuilder = trace_builder or _NULL_TRACE_BUILDER  # type: ignore[assignment]
 
     # ------------------------------------------------------------------
     # Основной метод
@@ -221,6 +233,13 @@ class CognitivePipeline:
             resources=resources or {},
         )
 
+        # --- 1. cycle_start (Phase 3, LOG_PLAN.md v2.0) ---
+        self._blog.info(
+            "pipeline", "cycle_start",
+            session_id=session_id or "",
+            state={"query_preview": query[:80]},
+        )
+
         # Явная последовательность шагов (15 шагов, Этап H + N)
         steps: List[PipelineStep] = [
             self.step_create_context,       # 1
@@ -248,7 +267,25 @@ class CognitivePipeline:
                 )
                 break
             try:
+                t0 = time.perf_counter()
                 step(ctx)
+                step_ms = (time.perf_counter() - t0) * 1000
+                # --- auto-timing debug log (Phase 3) ---
+                self._blog.debug(
+                    "pipeline",
+                    f"step_{step.__name__}_done",
+                    trace_id=ctx.cognitive_context.trace_id if ctx.cognitive_context else "",
+                    session_id=ctx.cognitive_context.session_id if ctx.cognitive_context else "",
+                    cycle_id=ctx.cognitive_context.cycle_id if ctx.cognitive_context else "",
+                    latency_ms=step_ms,
+                )
+                # Запустить TraceBuilder сразу после step_create_context
+                if step is self.step_create_context and ctx.cognitive_context:
+                    self._trace_builder.start_trace(
+                        ctx.cognitive_context.trace_id,
+                        session_id=ctx.cognitive_context.session_id,
+                        cycle_id=ctx.cognitive_context.cycle_id,
+                    )
             except Exception as e:
                 logger.error(
                     "[CognitivePipeline] ошибка в шаге '%s': %s",
@@ -257,6 +294,26 @@ class CognitivePipeline:
                 ctx.aborted = True
                 ctx.abort_reason = f"{step.__name__}: {e}"
                 break
+
+        # --- 9. cycle_complete (Phase 3) ---
+        if ctx.result is not None and ctx.cognitive_context is not None:
+            self._blog.info(
+                "pipeline", "cycle_complete",
+                trace_id=ctx.cognitive_context.trace_id,
+                session_id=ctx.cognitive_context.session_id,
+                cycle_id=ctx.cognitive_context.cycle_id,
+                latency_ms=ctx.elapsed_ms,
+                decision={
+                    "action": ctx.result.action,
+                    "confidence": ctx.result.confidence,
+                },
+            )
+            self._trace_builder.set_summary(
+                ctx.cognitive_context.trace_id,
+                f"query='{query[:80]}' → {ctx.result.action} "
+                f"(conf={ctx.result.confidence:.3f})",
+            )
+            self._trace_builder.finish_trace(ctx.cognitive_context.trace_id)
 
         # Если пайплайн прерван — возвращаем fallback result
         if ctx.aborted or ctx.result is None:
@@ -286,6 +343,16 @@ class CognitivePipeline:
                 "[CognitivePipeline] auto-encoded: mode=%s dim=%d",
                 getattr(ctx.encoded_percept, "encoder_model", "?"),
                 getattr(ctx.encoded_percept, "vector_dim", 0),
+            )
+            # --- 2. encode_done (Phase 3) ---
+            self._blog.info(
+                "pipeline", "encode_done",
+                trace_id=ctx.cognitive_context.trace_id if ctx.cognitive_context else "",
+                session_id=ctx.cognitive_context.session_id if ctx.cognitive_context else "",
+                state={
+                    "modality": str(getattr(ctx.encoded_percept, "modality", "text")),
+                    "vector_dim": getattr(ctx.encoded_percept, "vector_dim", 0),
+                },
             )
         except Exception as e:
             logger.warning("[CognitivePipeline] auto-encode failed: %s", e)
@@ -337,6 +404,21 @@ class CognitivePipeline:
         self._goal_manager.push(ctx.goal)
         if ctx.cognitive_context is not None:
             ctx.cognitive_context.active_goal = ctx.goal
+        # --- 3. goal_created (Phase 3) ---
+        if ctx.cognitive_context is not None and ctx.goal is not None:
+            self._blog.info(
+                "pipeline", "goal_created",
+                trace_id=ctx.cognitive_context.trace_id,
+                session_id=ctx.cognitive_context.session_id,
+                state={"goal_type": goal_type, "goal_id": ctx.goal.goal_id},
+            )
+            self._trace_builder.add_step(
+                ctx.cognitive_context.trace_id,
+                module="pipeline",
+                action="goal_created",
+                confidence=1.0,
+                details={"goal_type": goal_type, "goal_id": ctx.goal.goal_id},
+            )
 
     def step_evaluate_salience(self, ctx: CognitivePipelineContext) -> None:
         """
@@ -354,6 +436,18 @@ class CognitivePipeline:
             ctx.salience.overall,
             ctx.salience.action,
         )
+        # --- 4. salience_evaluated (Phase 3) ---
+        if ctx.cognitive_context is not None:
+            self._blog.debug(
+                "pipeline", "salience_evaluated",
+                trace_id=ctx.cognitive_context.trace_id,
+                session_id=ctx.cognitive_context.session_id,
+                state={
+                    "overall": round(ctx.salience.overall, 4),
+                    "action": ctx.salience.action,
+                    "reason": ctx.salience.reason,
+                },
+            )
 
     def step_compute_budget(self, ctx: CognitivePipelineContext) -> None:
         """
@@ -386,6 +480,19 @@ class CognitivePipeline:
             ctx.budget.cognition,
             ctx.budget.memory,
         )
+        # --- 5. budget_computed (Phase 3) ---
+        if ctx.cognitive_context is not None:
+            self._blog.debug(
+                "pipeline", "budget_computed",
+                trace_id=ctx.cognitive_context.trace_id,
+                session_id=ctx.cognitive_context.session_id,
+                state={
+                    "policy": ctx.budget.policy,
+                    "cognition": round(ctx.budget.cognition, 4),
+                    "memory": round(ctx.budget.memory, 4),
+                    "reason": ctx.budget.reason,
+                },
+            )
 
     def step_index_percept_vector(self, ctx: CognitivePipelineContext) -> None:
         """Шаг 8: Индексировать вектор перцепта в VectorRetrievalBackend."""
@@ -419,6 +526,20 @@ class CognitivePipeline:
             resources=ctx.resources,
             query_vector=ctx.query_vector,
         )
+        # --- 6. reason_done (Phase 3) ---
+        if ctx.cognitive_context is not None and ctx.trace is not None:
+            self._blog.info(
+                "pipeline", "reason_done",
+                trace_id=ctx.cognitive_context.trace_id,
+                session_id=ctx.cognitive_context.session_id,
+                latency_ms=ctx.trace.total_duration_ms,
+                state={
+                    "confidence": round(ctx.trace.final_confidence, 4),
+                    "iterations": ctx.trace.total_iterations,
+                    "outcome": ctx.trace.outcome,
+                    "hypothesis_count": ctx.trace.hypothesis_count,
+                },
+            )
 
     def step_llm_enhance(self, ctx: CognitivePipelineContext) -> None:
         """
@@ -479,6 +600,17 @@ class CognitivePipeline:
                     "[CognitivePipeline] LLM enhance OK: provider=%s tokens=%d",
                     response.provider, response.tokens_used,
                 )
+                # --- 7. llm_enhance_done (Phase 3) ---
+                if ctx.cognitive_context is not None:
+                    self._blog.info(
+                        "pipeline", "llm_enhance_done",
+                        trace_id=ctx.cognitive_context.trace_id,
+                        session_id=ctx.cognitive_context.session_id,
+                        state={
+                            "provider": response.provider,
+                            "tokens_used": response.tokens_used,
+                        },
+                    )
 
         except LLMUnavailableError as e:
             logger.warning("[CognitivePipeline] LLM enhance unavailable: %s", e)
@@ -546,6 +678,30 @@ class CognitivePipeline:
                     **ctx.decision.metadata,
                     "policy_layer_applied": True,
                     "original_action": current_action_type.value,
+                },
+            )
+
+        # --- 8. action_selected (Phase 3) ---
+        if ctx.cognitive_context is not None and ctx.decision is not None:
+            self._blog.info(
+                "pipeline", "action_selected",
+                trace_id=ctx.cognitive_context.trace_id,
+                session_id=ctx.cognitive_context.session_id,
+                decision={
+                    "action": ctx.decision.action,
+                    "confidence": ctx.decision.confidence,
+                },
+            )
+            self._trace_builder.add_step(
+                ctx.cognitive_context.trace_id,
+                module="pipeline",
+                action="action_selected",
+                confidence=ctx.decision.confidence,
+                details={
+                    "action": ctx.decision.action,
+                    "policy_layer_applied": ctx.decision.metadata.get(
+                        "policy_layer_applied", False
+                    ),
                 },
             )
 

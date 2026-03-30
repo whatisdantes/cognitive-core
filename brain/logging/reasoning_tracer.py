@@ -339,6 +339,58 @@ class TraceBuilder:
 
 
 # ---------------------------------------------------------------------------
+# NullTraceBuilder — no-op заглушка (NullObject pattern)
+# ---------------------------------------------------------------------------
+
+class NullTraceBuilder:
+    """
+    No-op реализация TraceBuilder для случаев, когда трассировка не нужна.
+
+    Устраняет необходимость проверок ``if self._trace_builder:`` во всех модулях.
+    Используется как значение по умолчанию через ``_NULL_TRACE_BUILDER``.
+
+    Пример:
+        self._trace_builder = trace_builder or _NULL_TRACE_BUILDER
+    """
+
+    def start_trace(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def add_step(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def add_input_ref(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def add_memory_ref(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def add_output_ref(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def set_summary(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def finish_trace(self, *a: Any, **kw: Any) -> None:
+        """Ничего не делает."""
+
+    def reconstruct(self, *a: Any, **kw: Any) -> None:
+        """Возвращает None."""
+        return
+
+    def active_traces(self) -> list:
+        """Возвращает пустой список."""
+        return []
+
+    def __repr__(self) -> str:
+        return "NullTraceBuilder()"
+
+
+#: Глобальный синглтон-заглушка — используется как default в конструкторах.
+_NULL_TRACE_BUILDER: NullTraceBuilder = NullTraceBuilder()
+
+
+# ---------------------------------------------------------------------------
 # _TraceAccumulator — внутренний накопитель данных trace
 # ---------------------------------------------------------------------------
 
