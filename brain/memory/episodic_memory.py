@@ -18,16 +18,134 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 _logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .storage import MemoryDatabase
+
+# ─── Вспомогательные функции для поиска ─────────────────────────────────────
+
+# Стоп-слова русского языка (предлоги, союзы, частицы, местоимения)
+_STOP_WORDS_RU: frozenset[str] = frozenset({
+    "в", "на", "и", "с", "по", "к", "у", "о", "из", "за", "от", "до",
+    "это", "что", "как", "не", "а", "но", "или", "то", "же", "ли",
+    "бы", "ни", "да", "нет", "так", "вот", "уже", "ещё", "ещe",
+    "при", "для", "без", "под", "над", "об", "со", "во", "ко",
+    "ведь", "ну", "ой", "эй",
+    "the", "a", "an", "of", "in", "on", "at", "to", "is", "are",
+})
+
+# Типичные падежные/числовые окончания русского языка (от длинных к коротким)
+# Используется только как fallback, когда pymorphy3 недоступен
+_RU_SUFFIXES: tuple[str, ...] = (
+    "ами", "ями",                  # творительный мн.ч.
+    "ов", "ев", "ей",              # родительный мн.ч.
+    "ах", "ях",                    # предложный мн.ч.
+    "ом", "ем", "ём",              # творительный ед.ч.
+    "ого", "его", "ёго",           # родительный ед.ч.
+    "ому", "ему",                  # дательный ед.ч.
+    "ую", "юю",                    # винительный ед.ч. (жен.)
+    "ие", "ые",                    # именительный мн.ч. (прил.)
+    "ий", "ый",                    # именительный ед.ч. (прил.)
+    "ая", "яя",                    # именительный ед.ч. (жен. прил.)
+    "ть", "ться",                  # инфинитив
+    "ет", "ёт", "ит",              # настоящее время
+    "ют", "ут",                    # настоящее время мн.ч.
+    "ал", "ял", "ил",              # прошедшее время
+    "е", "у", "а", "и", "ы",      # короткие окончания (последними)
+)
+
+# ─── pymorphy3 (опциональная зависимость) ────────────────────────────────────
+try:
+    import pymorphy3 as _pymorphy3_mod
+    _morph = _pymorphy3_mod.MorphAnalyzer()
+    _HAS_MORPH = True
+    _logger_init = logging.getLogger(__name__)
+    _logger_init.debug("pymorphy3 доступен — используется морфологическая лемматизация")
+except Exception:
+    _morph = None
+    _HAS_MORPH = False
+
+# Паттерн для определения кириллических слов (pymorphy3 работает только с русским)
+_RE_CYRILLIC = re.compile(r"[а-яё]")
+
+
+def _stem_ru(word: str) -> str:
+    """
+    Наивный суффикс-стриппер для русского языка (fallback без pymorphy3).
+
+    Обрезает типичные падежные/глагольные окончания.
+    Точность ~70% (достаточно для overlap-скоринга).
+
+    Примеры:
+        "нейронов" → "нейрон"
+        "мозге"    → "мозг"
+        "человека" → "человек"
+        "миллиардов" → "миллиард"
+    """
+    if len(word) <= 3:
+        return word
+    for suffix in _RU_SUFFIXES:
+        # Минимальная длина основы — 3 символа
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
+@lru_cache(maxsize=4096)
+def _lemmatize(word: str) -> str:
+    """
+    Лемматизировать одно слово.
+
+    Если pymorphy3 доступен — использует морфологический анализ (точность ~96%).
+    Иначе — наивный суффикс-стриппер _stem_ru() (точность ~70%).
+
+    Кэшируется через lru_cache(4096) — покрывает типичный сеанс без повторных вычислений.
+
+    Примеры (с pymorphy3):
+        "содержит"     → "содержать"
+        "электрические" → "электрический"
+        "мыши"         → "мышь"
+        "нейронов"     → "нейрон"
+    """
+    if _HAS_MORPH and _morph is not None and _RE_CYRILLIC.search(word):
+        try:
+            parsed = _morph.parse(word)
+            if parsed:
+                return str(parsed[0].normal_form)
+        except Exception:
+            pass
+    return _stem_ru(word)
+
+
+def _tokenize(text: str) -> frozenset[str]:
+    """
+    Токенизировать текст: извлечь слова, убрать стоп-слова, лемматизировать.
+
+    Использует pymorphy3 если доступен, иначе — наивный стеммер.
+    Возвращает frozenset лемматизированных токенов.
+
+    Примеры (с pymorphy3):
+        "сколько нейронов в мозге человека?" →
+            frozenset({"сколько", "нейрон", "мозг", "человек"})
+        "мозг человека содержит около 86 миллиардов нейронов" →
+            frozenset({"мозг", "человек", "содержать", "около", "86", "миллиард", "нейрон"})
+
+    Overlap для q04: {"нейрон", "мозг", "человек"} = 3/4 → score=0.45 (вместо 0.216)
+    """
+    words = re.findall(r"[а-яёa-z0-9]+", text.lower())
+    return frozenset(
+        _lemmatize(w) for w in words
+        if w not in _STOP_WORDS_RU and len(w) > 1
+    )
 
 try:
     import psutil
@@ -386,6 +504,13 @@ class EpisodicMemory:
         """
         Полнотекстовый поиск по эпизодам.
 
+        Скоринг (двухуровневый):
+          1. Полное совпадение строки запроса → score += 0.6 (точный match)
+          2. Пословный overlap (fallback) → score += 0.6 * overlap_ratio
+             Позволяет находить эпизоды по длинным запросам, например:
+             "сколько нейронов в мозге человека?" → Fact3 ("мозг человека
+             содержит около 86 миллиардов нейронов") получает overlap=2/5=0.4.
+
         Args:
             query:          строка поиска
             top_n:          максимальное количество результатов
@@ -398,6 +523,8 @@ class EpisodicMemory:
             Список эпизодов, отсортированных по релевантности
         """
         query_lower = query.lower()
+        # Стеммированные токены запроса (без стоп-слов) для overlap-скоринга
+        query_tokens: frozenset[str] = _tokenize(query_lower)
         cutoff_ts = time.time() - last_n_hours * 3600 if last_n_hours else 0.0
 
         results: List[Tuple[float, Episode]] = []
@@ -413,17 +540,41 @@ class EpisodicMemory:
                 # Фильтр по модальности
                 if modality and ep.modality != modality:
                     continue
-                # Фильтр по тегам
+                # Фильтр по тегам (аргумент tags — фильтр, не скоринг)
                 if tags and not any(t in ep.tags for t in tags):
                     continue
 
-                # Скоринг
+                # ── Скоринг контента ─────────────────────────────────────
                 score = 0.0
-                if query_lower in ep.content.lower():
+                content_lower = ep.content.lower()
+
+                if query_lower in content_lower:
+                    # Уровень 1: полное совпадение строки запроса (точный match)
                     score += 0.6
-                if any(query_lower in c for c in ep.concepts):
+                elif query_tokens:
+                    # Уровень 2: стеммированный overlap (для длинных запросов)
+                    # "мозге" → "мозг", "нейронов" → "нейрон" и т.д.
+                    content_tokens: frozenset[str] = _tokenize(content_lower)
+                    overlap = query_tokens & content_tokens
+                    if overlap:
+                        score += 0.6 * (len(overlap) / len(query_tokens))
+
+                # ── Скоринг концептов ────────────────────────────────────
+                if any(query_lower in c for c in ep.concepts) or (
+                    query_tokens and any(
+                        query_tokens & _tokenize(c.lower())
+                        for c in ep.concepts
+                    )
+                ):
                     score += 0.3
-                if any(query_lower in t for t in ep.tags):
+
+                # ── Скоринг тегов ────────────────────────────────────────
+                if any(query_lower in t for t in ep.tags) or (
+                    query_tokens and any(
+                        query_tokens & _tokenize(t.lower())
+                        for t in ep.tags
+                    )
+                ):
                     score += 0.1
 
                 if score > 0:

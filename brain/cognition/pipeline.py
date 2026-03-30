@@ -3,22 +3,24 @@ brain/cognition/pipeline.py
 
 Явный пайплайн когнитивного цикла (P3-10).
 
-Заменяет «god-method» CognitiveCore.run() на цепочку явных шагов (15 шагов, Этап H + N):
-  1.  create_context        — создание контекста (session_id, cycle_id, trace_id)
-  2.  auto_encode           — кодирование запроса через TextEncoder
-  3.  get_resources         — получение состояния ресурсов
-  4.  build_retrieval_query — обогащение запроса ключевыми словами
-  5.  create_goal           — определение типа цели и создание Goal
-  6.  evaluate_salience     — оценка значимости стимула (SalienceEngine) [Этап H]
-  7.  compute_budget        — вычисление AttentionBudget (AttentionController) [Этап H]
-  8.  index_percept_vector  — индексация вектора перцепта
-  9.  reason                — reasoning loop → ReasoningTrace
-  10. llm_enhance           — LLM-обогащение best_statement (no-op если LLM нет) [Этап N]
-  11. select_action         — выбор действия + PolicyLayer фильтрация [Этап H]
-  12. execute_action        — выполнение действия (LEARN → store)
-  13. complete_goal         — завершение/провал цели в GoalManager
-  14. build_result          — сборка CognitiveResult + salience/budget/llm metadata
-  15. publish_event         — публикация события через EventBus
+Заменяет «god-method» CognitiveCore.run() на цепочку явных шагов (17 шагов, Этап H + N + J):
+  1.  create_context           — создание контекста (session_id, cycle_id, trace_id)
+  2.  auto_encode              — кодирование запроса через TextEncoder
+  3.  get_resources            — получение состояния ресурсов
+  4.  build_retrieval_query    — обогащение запроса ключевыми словами
+  5.  create_goal              — определение типа цели и создание Goal
+  6.  evaluate_salience        — оценка значимости стимула (SalienceEngine) [Этап H]
+  7.  compute_budget           — вычисление AttentionBudget (AttentionController) [Этап H]
+  8.  index_percept_vector     — индексация вектора перцепта
+  9.  reason                   — reasoning loop → ReasoningTrace
+  10. detect_knowledge_gaps    — обнаружение пробелов в знаниях (KnowledgeGapDetector) [Этап J]
+  11. llm_enhance              — LLM-обогащение best_statement (no-op если LLM нет) [Этап N]
+  12. select_action            — выбор действия + PolicyLayer фильтрация [Этап H]
+  13. execute_action           — выполнение действия (LEARN → store)
+  14. complete_goal            — завершение/провал цели в GoalManager
+  15. build_result             — сборка CognitiveResult + salience/budget/llm metadata
+  16. publish_event            — публикация события через EventBus
+  17. post_cycle               — пост-цикловое обучение (OnlineLearner) [Этап J]
 
 Преимущества:
   - Каждый шаг тестируется изолированно
@@ -53,6 +55,8 @@ from brain.core.contracts import (
     TraceRef,
     TraceStep,
 )
+from brain.learning.knowledge_gap_detector import KnowledgeGapDetector
+from brain.learning.online_learner import OnlineLearner
 from brain.logging import (
     _NULL_LOGGER,
     _NULL_TRACE_BUILDER,
@@ -113,6 +117,10 @@ class CognitivePipelineContext:
     llm_enhanced: bool = False
     llm_response_text: str = ""
     llm_provider_name: str = ""
+
+    # --- Этап J: Learning ---
+    memory_search_result: Optional[Any] = None  # MemorySearchResult из Reasoner._retrieve_evidence()
+    knowledge_gap: Optional[Any] = None          # KnowledgeGap из KnowledgeGapDetector
 
     # --- Метрики ---
     start_time: float = field(default_factory=time.perf_counter)
@@ -179,6 +187,8 @@ class CognitivePipeline:
         llm_provider: Optional[LLMProvider] = None,
         brain_logger: Optional[BrainLogger] = None,
         trace_builder: Optional[TraceBuilder] = None,
+        gap_detector: Optional[KnowledgeGapDetector] = None,
+        online_learner: Optional[OnlineLearner] = None,
     ) -> None:
         self._memory = memory
         self._encoder = encoder
@@ -202,6 +212,10 @@ class CognitivePipeline:
         # --- Phase 3: BrainLogger + TraceBuilder (NullObject pattern) ---
         self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
         self._trace_builder: TraceBuilder = trace_builder or _NULL_TRACE_BUILDER  # type: ignore[assignment]
+
+        # --- Этап J: Learning (NullObject pattern — None = no-op) ---
+        self._gap_detector: Optional[KnowledgeGapDetector] = gap_detector
+        self._online_learner: Optional[OnlineLearner] = online_learner
 
     # ------------------------------------------------------------------
     # Основной метод
@@ -240,23 +254,25 @@ class CognitivePipeline:
             state={"query_preview": query[:80]},
         )
 
-        # Явная последовательность шагов (15 шагов, Этап H + N)
+        # Явная последовательность шагов (17 шагов, Этап H + N + J)
         steps: List[PipelineStep] = [
-            self.step_create_context,       # 1
-            self.step_auto_encode,          # 2
-            self.step_get_resources,        # 3
-            self.step_build_retrieval_query,# 4
-            self.step_create_goal,          # 5
-            self.step_evaluate_salience,    # 6  ← Этап H (после goal)
-            self.step_compute_budget,       # 7  ← Этап H (после salience)
-            self.step_index_percept_vector, # 8
-            self.step_reason,               # 9
-            self.step_llm_enhance,          # 10 ← Этап N (no-op если LLM нет)
-            self.step_select_action,        # 11 ← + PolicyLayer
-            self.step_execute_action,       # 12
-            self.step_complete_goal,        # 13
-            self.step_build_result,         # 14 ← + salience/budget/llm metadata
-            self.step_publish_event,        # 15
+            self.step_create_context,           # 1
+            self.step_auto_encode,              # 2
+            self.step_get_resources,            # 3
+            self.step_build_retrieval_query,    # 4
+            self.step_create_goal,              # 5
+            self.step_evaluate_salience,        # 6  ← Этап H (после goal)
+            self.step_compute_budget,           # 7  ← Этап H (после salience)
+            self.step_index_percept_vector,     # 8
+            self.step_reason,                   # 9
+            self.step_detect_knowledge_gaps,    # 10 ← Этап J (no-op если gap_detector нет)
+            self.step_llm_enhance,              # 11 ← Этап N (no-op если LLM нет)
+            self.step_select_action,            # 12 ← + PolicyLayer
+            self.step_execute_action,           # 13
+            self.step_complete_goal,            # 14
+            self.step_build_result,             # 15 ← + salience/budget/llm metadata
+            self.step_publish_event,            # 16
+            self.step_post_cycle,               # 17 ← Этап J (no-op если online_learner нет)
         ]
 
         for step in steps:
@@ -526,6 +542,9 @@ class CognitivePipeline:
             resources=ctx.resources,
             query_vector=ctx.query_vector,
         )
+        # Извлечь MemorySearchResult из trace.metadata (Этап J)
+        if ctx.trace is not None:
+            ctx.memory_search_result = ctx.trace.metadata.get("memory_search_result")
         # --- 6. reason_done (Phase 3) ---
         if ctx.cognitive_context is not None and ctx.trace is not None:
             self._blog.info(
@@ -541,9 +560,45 @@ class CognitivePipeline:
                 },
             )
 
+    def step_detect_knowledge_gaps(self, ctx: CognitivePipelineContext) -> None:
+        """
+        Шаг 10: Обнаружение пробелов в знаниях (KnowledgeGapDetector, Этап J).
+
+        Использует MemorySearchResult из ctx.memory_search_result, который
+        был сохранён в Reasoner._retrieve_evidence() через trace.metadata.
+        No-op если gap_detector не задан или memory_search_result отсутствует.
+        """
+        if self._gap_detector is None or ctx.memory_search_result is None:
+            return
+        try:
+            gap = self._gap_detector.analyze(
+                query=ctx.retrieval_query or ctx.query,
+                search_result=ctx.memory_search_result,
+            )
+            if gap is not None:
+                ctx.knowledge_gap = gap
+                if ctx.cognitive_context is not None:
+                    self._blog.debug(
+                        "learning", "knowledge_gap_detected",
+                        trace_id=ctx.cognitive_context.trace_id,
+                        session_id=ctx.cognitive_context.session_id,
+                        state={
+                            "concept": gap.concept,
+                            "gap_type": gap.gap_type.value,
+                            "severity": gap.severity.value,
+                            "gap_id": gap.gap_id,
+                        },
+                    )
+                    logger.debug(
+                        "[CognitivePipeline] knowledge gap: concept='%s' type=%s severity=%s",
+                        gap.concept, gap.gap_type.value, gap.severity.value,
+                    )
+        except Exception as exc:
+            logger.debug("[CognitivePipeline] step_detect_knowledge_gaps error: %s", exc)
+
     def step_llm_enhance(self, ctx: CognitivePipelineContext) -> None:
         """
-        Шаг 10: LLM-обогащение best_statement из ReasoningTrace (Этап N).
+        Шаг 11: LLM-обогащение best_statement из ReasoningTrace (Этап N).
 
         Если LLM провайдер не настроен или недоступен — no-op (backward compatible).
         Если LLM доступен — берёт best_statement из trace, строит промпт
@@ -620,7 +675,7 @@ class CognitivePipeline:
 
     def step_select_action(self, ctx: CognitivePipelineContext) -> None:
         """
-        Шаг 11: Выбор действия → ActionDecision (с PolicyLayer).
+        Шаг 12: Выбор действия → ActionDecision (с PolicyLayer).
 
         Порядок:
           1. ActionSelector.select() → первичное решение
@@ -706,7 +761,7 @@ class CognitivePipeline:
             )
 
     def step_execute_action(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 12: Выполнить действие (LEARN → store + инкрементальная индексация)."""
+        """Шаг 13: Выполнить действие (LEARN → store + инкрементальная индексация)."""
         if ctx.decision is None:
             return
         if ctx.decision.action == ActionType.LEARN.value:
@@ -730,7 +785,7 @@ class CognitivePipeline:
                 ctx.decision.metadata["store_error"] = str(e)
 
     def step_complete_goal(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 13: Завершить или провалить цель в GoalManager."""
+        """Шаг 14: Завершить или провалить цель в GoalManager."""
         if ctx.goal is None or ctx.trace is None:
             return
         outcome = self._parse_outcome(ctx.trace.outcome)
@@ -740,7 +795,7 @@ class CognitivePipeline:
             self._goal_manager.complete(ctx.goal.goal_id)
 
     def step_build_result(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 14: Собрать CognitiveResult из всех компонентов."""
+        """Шаг 15: Собрать CognitiveResult из всех компонентов."""
         if ctx.goal is None or ctx.trace is None or ctx.decision is None or ctx.cognitive_context is None:
             ctx.aborted = True
             ctx.abort_reason = "step_build_result: missing required context"
@@ -842,7 +897,7 @@ class CognitivePipeline:
         )
 
     def step_publish_event(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 15: Публикация события через EventBus."""
+        """Шаг 16: Публикация события через EventBus."""
         if ctx.result is None or ctx.cognitive_context is None or ctx.decision is None or ctx.trace is None:
             return
         if self._event_bus and hasattr(self._event_bus, "publish"):
@@ -857,6 +912,40 @@ class CognitivePipeline:
                 })
             except Exception as e:
                 logger.warning("[CognitivePipeline] event_bus.publish error: %s", e)
+
+    def step_post_cycle(self, ctx: CognitivePipelineContext) -> None:
+        """
+        Шаг 17: Пост-цикловое обучение (OnlineLearner, Этап J).
+
+        Вызывается ПОСЛЕ publish_event, чтобы не блокировать основной цикл.
+        No-op если online_learner не задан или result отсутствует.
+        Пропускает обновление при confidence < 0.3 (делегируется OnlineLearner).
+        """
+        if self._online_learner is None or ctx.result is None:
+            return
+        try:
+            update = self._online_learner.update(ctx.result)
+            if ctx.cognitive_context is not None:
+                self._blog.info(
+                    "learning", "learning_update",
+                    trace_id=ctx.cognitive_context.trace_id,
+                    session_id=ctx.cognitive_context.session_id,
+                    cycle_id=ctx.cognitive_context.cycle_id,
+                    state={
+                        "confirmed": len(update.facts_confirmed),
+                        "denied": len(update.facts_denied),
+                        "associations": len(update.associations_updated),
+                        "duration_ms": update.duration_ms,
+                    },
+                )
+                logger.debug(
+                    "[CognitivePipeline] learning update: confirmed=%d denied=%d assoc=%d",
+                    len(update.facts_confirmed),
+                    len(update.facts_denied),
+                    len(update.associations_updated),
+                )
+        except Exception as exc:
+            logger.warning("[CognitivePipeline] step_post_cycle error: %s", exc)
 
     # ------------------------------------------------------------------
     # Вспомогательные методы (Этап H + базовые)

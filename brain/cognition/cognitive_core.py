@@ -26,6 +26,7 @@ from brain.core.contracts import (
     ResourceMonitorProtocol,
     TextEncoderProtocol,
 )
+from brain.learning import KnowledgeGapDetector, OnlineLearner
 from brain.logging import (
     _NULL_LOGGER,
     _NULL_TRACE_BUILDER,
@@ -33,6 +34,7 @@ from brain.logging import (
     DigestGenerator,
     TraceBuilder,
 )
+from brain.memory.memory_manager import MemoryManager
 
 from .action_selector import ActionSelector
 from .context import PolicyConstraints
@@ -147,10 +149,24 @@ class CognitiveCore:
         # LLM Bridge (Этап N, опциональный)
         self._llm_provider: Optional[LLMProvider] = llm_provider
 
+        # --- Этап J: Learning (активируется только при конкретном MemoryManager) ---
+        # NullObject-паттерн: None = no-op в CognitivePipeline
+        self._gap_detector: Optional[KnowledgeGapDetector] = None
+        self._online_learner: Optional[OnlineLearner] = None
+        if isinstance(self._memory, MemoryManager):
+            try:
+                self._gap_detector = KnowledgeGapDetector(memory=self._memory)
+                self._online_learner = OnlineLearner(memory=self._memory)
+                logger.info("[CognitiveCore] Learning subsystem activated (Этап J)")
+            except Exception as exc:
+                logger.warning(
+                    "[CognitiveCore] Learning subsystem init failed: %s", exc
+                )
+
         # --- Построение векторного индекса из персистентного корпуса памяти ---
         self._build_vector_index()
 
-        # --- Явный пайплайн когнитивного цикла (P3-10, Этап H + N + Phase 3) ---
+        # --- Явный пайплайн когнитивного цикла (P3-10, Этап H + N + J + Phase 3) ---
         self._pipeline = CognitivePipeline(
             memory=self._memory,
             encoder=self._encoder,
@@ -165,6 +181,8 @@ class CognitiveCore:
             llm_provider=self._llm_provider,
             brain_logger=brain_logger,
             trace_builder=trace_builder,
+            gap_detector=self._gap_detector,
+            online_learner=self._online_learner,
         )
 
     # ------------------------------------------------------------------
@@ -181,13 +199,13 @@ class CognitiveCore:
         """
         Выполнить полный когнитивный цикл.
 
-        Делегирует выполнение CognitivePipeline (P3-10, Этап H + N).
-        Цепочка из 15 явных шагов:
+        Делегирует выполнение CognitivePipeline (P3-10, Этап H + N + J).
+        Цепочка из 17 явных шагов:
           create_context → auto_encode → get_resources → build_retrieval_query
           → create_goal → evaluate_salience → compute_budget
-          → index_percept_vector → reason → llm_enhance (Этап N)
-          → select_action (+PolicyLayer) → execute_action
-          → complete_goal → build_result → publish_event
+          → index_percept_vector → reason → detect_knowledge_gaps (Этап J)
+          → llm_enhance (Этап N) → select_action (+PolicyLayer) → execute_action
+          → complete_goal → build_result → publish_event → post_cycle (Этап J)
 
         Args:
             query:           текстовый запрос
@@ -487,5 +505,7 @@ class CognitiveCore:
             "has_brain_logger": not self._blog.__class__.__name__.startswith("Null"),
             "has_trace_builder": not self._trace_builder.__class__.__name__.startswith("Null"),
             "has_digest_gen": self._digest_gen is not None,
+            "has_gap_detector": self._gap_detector is not None,
+            "has_online_learner": self._online_learner is not None,
             "policy": policy_dict,
         }

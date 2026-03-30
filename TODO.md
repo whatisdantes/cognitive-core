@@ -2,7 +2,7 @@
 ## cognitive-core v0.7.0
 
 > **Принцип:** сначала hardening, затем retrieval, затем расширение  
-> **Тесты:** 1774/1774 ✅ (5 skipped) · **Coverage:** 84%+ (gate 70%) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **CI:** test + lint + typecheck + sast  
+> **Тесты:** 1800/1800 ✅ (5 skipped) · **Coverage:** 84%+ (gate 70%) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **CI:** test + lint + typecheck + sast  
 > **Связанные документы:**
 > - [`docs/ACTION_PLAN.md`](docs/ACTION_PLAN.md) — детальный план с code snippets и effort-оценками (54 задачи)
 > - [`docs/PLANS.md`](docs/PLANS.md) — стратегический контекст (Axicor, ARCHITECTURE.md роль, hot/cold path)
@@ -15,7 +15,7 @@
 
 1. [P0 — Критические](#-p0--критические) — crash, data loss, нерабочий value path — **✅ 7/7 ЗАВЕРШЕНО**
 2. [P1 — Высокий приоритет](#-p1--высокий-приоритет) — качество, масштаб, CI — **✅ 14/14 ЗАВЕРШЕНО**
-3. [P2 — Средний приоритет](#-p2--средний-приоритет) — алгоритмы, инфра, продуктовое качество
+3. [P2 — Средний приоритет](#-p2--средний-приоритет) — алгоритмы, инфра, продуктовое качество — **✅ 20/20 ЗАВЕРШЕНО**
 4. [P3 — Nice-to-have](#-p3--nice-to-have) — DX, research, архитектура
 5. [Архитектурное расширение](#-архитектурное-расширение-слои) — новые слои (H–M) — **Этап H ✅**
 6. [Completed](#-completed-история-реализации) — MVP A/B/C + ранние этапы
@@ -109,7 +109,7 @@
 
 ---
 
-## 🟡 P2 — Средний приоритет (Неделя 3–4)
+## 🟡 P2 — Средний приоритет — ✅ 20/20 ЗАВЕРШЕНО
 
 > Алгоритмические оптимизации, локальные дефекты, инфраструктура.
 
@@ -409,11 +409,30 @@ Hardening (завершено):
 
 </details>
 
+<details>
+<summary><strong>LOG_PLAN.md v2.0 — BrainLogger Integration ✅ 13/13</strong></summary>
+
+- [x] **Phase 0a** `brain/logging/brain_logger.py` — NullBrainLogger + _NULL_LOGGER
+- [x] **Phase 0b** `brain/logging/reasoning_tracer.py` — NullTraceBuilder + _NULL_TRACE_BUILDER
+- [x] **Phase 0c** `brain/logging/__init__.py` — экспорт Null-объектов
+- [x] **Phase 1** `brain/cli.py` — `--log-dir`, `--log-level`, BrainLogger в run_query/run_autonomous
+- [x] **Phase 2** `brain/cognition/cognitive_core.py` — brain_logger + digest_gen + trace_builder
+- [x] **Phase 2b** `brain/logging/digest_generator.py` — CycleInfo.from_result()
+- [x] **Phase 3** `brain/cognition/pipeline.py` — auto-timing + 9 событий + TraceBuilder
+- [x] **Phase 4** `brain/memory/memory_manager.py` — store/retrieve logging
+- [x] **Phase 5** `brain/perception/input_router.py` — route logging
+- [x] **Phase 6** `brain/output/dialogue_responder.py` — OutputPipeline logging
+- [x] **Phase 7a** `brain/core/event_bus.py` — publish + error logging
+- [x] **Phase 7b** `brain/core/scheduler.py` — tick + task logging
+- [x] **Phase 9** `tests/test_brain_logger_integration.py` — 19 тестов
+
+</details>
+
 ---
 
 ## 🧪 Test Coverage
 
-**Всего: 1774/1774 ✅ (5 skipped)** · Coverage: 84%+ (gate 70%) · 29 test files
+**Всего: 1800/1800 ✅ (5 skipped)** · Coverage: 84%+ (gate 70%) · 32 test files
 
 | Файл | Модуль | Тестов | Статус |
 |------|--------|--------|--------|
@@ -439,14 +458,15 @@ Hardening (завершено):
 | `test_contracts_hypothesis.py` | Property-based roundtrip (P3-6) | 4 | ✅ |
 | `test_concurrency_stress.py` | Concurrent stress (P3-8) | 3 | ✅ |
 | `test_storage_encrypted.py` | SQLCipher encryption at rest (P3-12) | 6+5* | ✅ |
-| `test_attention_controller.py` | AttentionController + budgets (Этап H) | — | ✅ |
-| `test_salience_engine.py` | SalienceEngine + scoring (Этап H) | — | ✅ |
-| `test_policy_layer.py` | PolicyLayer filters + modifiers (Этап H) | — | ✅ |
-| `test_llm_bridge.py` | LLMBridge + providers + safety (Этап N) | ~70 | ✅ |
-| `test_online_learner.py` | OnlineLearner (Этап I) | — | ✅ |
-| `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | — | ✅ |
-| `test_replay_engine.py` | ReplayEngine + strategies (Этап I) | — | ✅ |
-| **Итого** | | **1774** | **✅** |
+| `test_attention_controller.py` | AttentionController + budgets (Этап H) | 10 | ✅ |
+| `test_salience_engine.py` | SalienceEngine + scoring (Этап H) | 12 | ✅ |
+| `test_policy_layer.py` | PolicyLayer filters + modifiers (Этап H) | 9 | ✅ |
+| `test_brain_logger_integration.py` | BrainLogger integration (LOG_PLAN.md Phase 9) | 19 | ✅ |
+| `test_llm_bridge.py` | LLMBridge + providers + safety (Этап N) | 70 | ✅ |
+| `test_online_learner.py` | OnlineLearner (Этап I) | 12 | ✅ |
+| `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | 8 | ✅ |
+| `test_replay_engine.py` | ReplayEngine + strategies (Этап I) | 15 | ✅ |
+| **Итого** | | **1800** | **✅** |
 
 > \* 6 тестов запускаются всегда, 5 — только при установленном `sqlcipher3`  
 > Тесты H/I/N: точные числа уточняются при следующем прогоне `pytest --co -q`
@@ -466,7 +486,7 @@ Hardening (завершено):
 | **MVP C** | **Cleanup + Critical DRY** | **✅** | 63 |
 | **P0 (new)** | **Critical hardening** | **✅ 7/7** | 1333 |
 | **P1 (new)** | **High priority** | **✅ 14/14** | 1333 |
-| **P2** | **Medium priority** | **✅ 20/20** | 1339 |
+| **P2** | **Medium priority** | **✅ 20/20** | 1800 |
 | **P3** | **Nice-to-have** | **✅ 12/12** | 1352 |
 | **H** | **Attention & Resource Control** | **✅ 4/5** | — |
 | **I** | **Learning Loop** | **✅ 3/3** | — |
@@ -483,6 +503,7 @@ Hardening (завершено):
 3. ✅ Type safety + CI hardening        → закрыто (P1)
 4. ✅ README ↔ Reality alignment        → закрыто (P1-P3)
 5. ✅ LLM Bridge                        → закрыто (Этап N)
+6. ✅ BrainLogger integration           → закрыто (LOG_PLAN.md v2.0)
 ```
 
 ---

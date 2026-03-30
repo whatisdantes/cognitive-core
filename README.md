@@ -6,10 +6,10 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
 > **Версия:** 0.7.0  
-> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅  
+> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅, P0/P1/P2 ✅, H/I/N ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 1774/1774 ✅ (5 skipped) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **Coverage:** 84%+
+> **Тесты:** 1800/1800 ✅ (5 skipped) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **Coverage:** 84%+
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -52,13 +52,16 @@ pip install -e ".[dev]"
 # 2. Задать вопрос через CLI
 cognitive-core "Что такое нейропластичность?"
 
-# 3. Запустить все тесты (1774 ✅)
+# 3. Запустить все тесты (1800 ✅)
 python -m pytest tests/ -v
 
 # 4. Автономный режим (Scheduler-driven)
 cognitive-core --autonomous --ticks 5
 
-# 5. Docker (опционально)
+# 5. С BrainLogger (JSONL-логи в директорию)
+cognitive-core --log-dir brain/data/logs --log-level DEBUG "Что такое нейрон?"
+
+# 6. Docker (опционально)
 docker build -t cognitive-core .
 docker run cognitive-core "Что такое нейрон?"
 ```
@@ -108,6 +111,7 @@ mm.stop()
 | CI/CD (GitHub Actions) | ✅ Реализовано | pytest + coverage + ruff + mypy |
 | Attention & Resource Control | ✅ Реализовано | SalienceEngine, AttentionController, PolicyLayer (Этап H) |
 | LLM Bridge | ✅ Реализовано | OpenAI/Anthropic providers, safety wrapper (Этап N) |
+| BrainLogger Integration | ✅ Реализовано | JSONL-логи через `--log-dir`/`--log-level` (LOG_PLAN.md v2.0) |
 | Learning Loop | ⚡ Partial | OnlineLearner, KnowledgeGapDetector, ReplayEngine (Этап I) |
 | Vision/Audio Encoders | 🔮 Planned | Post-MVP (Этап J) |
 | Cross-Modal Fusion | 🔮 Planned | Post-MVP (Этап K) |
@@ -388,7 +392,7 @@ cognitive-core/
 │
 ├── CHANGELOG.md                        # ✅ История изменений (Keep a Changelog) — P3-1
 ├── CONTRIBUTING.md                     # ✅ Гайд для контрибьюторов — P3-2
-├── tests/                              # Тесты (pytest-совместимые, 1774 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 1800 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -774,7 +778,7 @@ pip install -e .
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (1774 ✅)
+# Запустить все тесты (1800 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
@@ -784,7 +788,7 @@ python -m pytest tests/test_memory.py -v
 python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (1774 тестов)
+### Состав тестового набора (1800 тестов)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -809,19 +813,40 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_persistence_integration.py` | Persistence Integration (SQLite round-trip) | 6 |
 | `test_contracts_hypothesis.py` | Property-based roundtrip (Hypothesis) | 4 |
 | `test_concurrency_stress.py` | Concurrent stress (EventBus + Scheduler) | 3 |
-| `test_attention_controller.py` | AttentionController (Этап H) | — |
-| `test_salience_engine.py` | SalienceEngine (Этап H) | — |
-| `test_policy_layer.py` | PolicyLayer (Этап H) | — |
-| `test_llm_bridge.py` | LLM Bridge (Этап N) | — |
-| `test_online_learner.py` | OnlineLearner (Этап I) | — |
-| `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | — |
-| `test_replay_engine.py` | ReplayEngine (Этап I) | — |
-| `test_storage_encrypted.py` | SQLCipher encryption (P3-12) | — |
-| | **Итого** | **1774** |
+| `test_storage_encrypted.py` | SQLCipher encryption at rest (P3-12) | 6+5* |
+| `test_attention_controller.py` | AttentionController + budgets (Этап H) | 10 |
+| `test_salience_engine.py` | SalienceEngine + scoring (Этап H) | 12 |
+| `test_policy_layer.py` | PolicyLayer filters + modifiers (Этап H) | 9 |
+| `test_brain_logger_integration.py` | BrainLogger integration (LOG_PLAN.md v2.0) | 19 |
+| `test_llm_bridge.py` | LLMBridge + providers + safety (Этап N) | 70 |
+| `test_online_learner.py` | OnlineLearner (Этап I) | 12 |
+| `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | 8 |
+| `test_replay_engine.py` | ReplayEngine + strategies (Этап I) | 15 |
+| | **Итого** | **1800** |
+
+> \* 6 тестов запускаются всегда, 5 — только при установленном `sqlcipher3`
 
 ---
 
 ## 📊 Логирование
+
+### BrainLogger CLI
+
+```bash
+# Включить JSONL-логирование через CLI
+cognitive-core --log-dir brain/data/logs "Что такое нейрон?"
+cognitive-core --log-dir brain/data/logs --log-level DEBUG "вопрос"
+cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level INFO
+```
+
+Создаёт файлы в `brain/data/logs/`:
+- `brain.jsonl` — все события
+- `memory.jsonl` — операции с памятью
+- `cognition.jsonl` — когнитивные шаги
+- `safety_audit.jsonl` — события безопасности
+- `digests/YYYY-MM-DD.txt` — human-readable сводки
+
+### Формат события
 
 Каждое событие — одна JSON-строка в JSONL-файле:
 
@@ -933,11 +958,12 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | **MVP C** | **Critical DRY (text_utils, hash_utils)** | **✅ Завершено** | **63** |
 | **P0 (new)** | **Critical Hardening (thread safety, vector retrieval)** | **✅ Завершено 7/7** | **1333** |
 | **P1 (new)** | **High Priority (CI, types, Docker, lint)** | **✅ Завершено 14/14** | **1333** |
-| **P2** | **Medium Priority (algorithms, infra, product quality)** | **✅ Завершено 20/20** | **1339** |
-| **P3** | **Nice-to-have (DX, architecture, testing)** | **✅ ~12/13** | **1774** |
-| **H** | **Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer)** | **✅ Завершено** | **(в 1774)** |
-| **N** | **LLM Bridge (OpenAI/Anthropic, safety wrapper, CLI)** | **✅ Завершено** | **(в 1774)** |
-| **I** | **Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine)** | **⚡ Partial** | **(в 1774)** |
+| **P2** | **Medium Priority (algorithms, infra, product quality)** | **✅ Завершено 20/20** | **1800** |
+| **P3** | **Nice-to-have (DX, architecture, testing)** | **✅ 12/12** | **1800** |
+| **H** | **Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer)** | **✅ Завершено 4/5** | **31 (в 1800)** |
+| **N** | **LLM Bridge (OpenAI/Anthropic, safety wrapper, CLI)** | **✅ Завершено 5/5** | **70 (в 1800)** |
+| **LOG** | **BrainLogger Integration (LOG_PLAN.md v2.0, 13 фаз)** | **✅ Завершено 13/13** | **19 (в 1800)** |
+| **I** | **Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine)** | **⚡ Partial 3/3 модулей** | **35 (в 1800)** |
 | J | Vision/Audio Encoders | ⬜ Post-MVP | — |
 | K | Cross-Modal Fusion | ⬜ Post-MVP | — |
 | L | Safety & Boundaries | ⬜ Post-MVP | — |
@@ -1070,4 +1096,5 @@ tests/
 **Этап H** ✅ — Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer).  
 **Этап N** ✅ — LLM Bridge (OpenAI/Anthropic providers, safety wrapper, CLI integration).  
 **Этап I** ⚡ — Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули готовы, интеграция pending).  
+**LOG_PLAN.md v2.0** ✅ — BrainLogger интегрирован во все слои (CLI, CognitiveCore, Pipeline, MemoryManager, InputRouter, OutputPipeline, EventBus, Scheduler). NullObject pattern обеспечивает backward compatibility.  
 Roadmap: [`TODO.md`](TODO.md).

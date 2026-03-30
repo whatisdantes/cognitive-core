@@ -246,6 +246,10 @@ class Reasoner:
                     {eid for h in scored for eid in h.evidence_ids}
                 )
                 trace.final_confidence = best.confidence
+                # Сохраняем score лучшей гипотезы для ActionSelector
+                # (используется для понижения respond_direct → respond_hedged
+                # при нерелевантном совпадении с низким hypothesis score)
+                trace.metadata["best_hypothesis_score"] = best.final_score
 
             # 4b. Update uncertainty monitor
             uncertainty = self._uncertainty_monitor.update(state)
@@ -353,6 +357,21 @@ class Reasoner:
             logger.warning(
                 "[Reasoner] _retrieve_evidence error: %s", str(e)
             )
+
+        # --- Этап J: сохранить MemorySearchResult для KnowledgeGapDetector ---
+        # Вызываем retrieve() отдельно (возвращает MemorySearchResult с
+        # working/semantic/episodic), чтобы pipeline мог передать его в
+        # step_detect_knowledge_gaps() без повторного поиска.
+        if hasattr(self._memory, "retrieve"):
+            try:
+                search_result = self._memory.retrieve(  # type: ignore[union-attr]
+                    query, top_n=5,
+                )
+                trace.metadata["memory_search_result"] = search_result
+            except Exception as exc:
+                logger.debug(
+                    "[Reasoner] memory.retrieve() для gap detection: %s", exc
+                )
 
         step_duration = (time.perf_counter() - step_start) * 1000
 

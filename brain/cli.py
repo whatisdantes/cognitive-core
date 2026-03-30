@@ -25,6 +25,7 @@ from brain.core.contracts import Task
 from brain.core.event_bus import EventBus
 from brain.core.resource_monitor import ResourceMonitor, ResourceMonitorConfig
 from brain.core.scheduler import Scheduler, TaskPriority
+from brain.learning import ReplayEngine
 from brain.logging import BrainLogger, DigestGenerator, TraceBuilder
 from brain.memory.memory_manager import MemoryManager
 from brain.output.dialogue_responder import OutputPipeline
@@ -270,11 +271,14 @@ def run_autonomous(
     mm = MemoryManager(data_dir=str(data_path))
     mm.start()
 
+    # --- 5. ReplayEngine (Этап J) ---
+    replay_engine = ReplayEngine(memory=mm)
+
     try:
-        # --- 5. PolicyConstraints ---
+        # --- 6. PolicyConstraints ---
         policy = PolicyConstraints()
 
-        # --- 6. CognitiveCore ---
+        # --- 7. CognitiveCore ---
         core = CognitiveCore(
             memory_manager=mm,  # type: ignore[arg-type]
             event_bus=bus,
@@ -286,13 +290,13 @@ def run_autonomous(
             digest_gen=digest_gen,
         )
 
-        # --- 7. OutputPipeline ---
+        # --- 8. OutputPipeline ---
         output_pipeline = OutputPipeline(hedge_threshold=policy.hedge_threshold)
 
-        # --- 8. Scheduler ---
+        # --- 9. Scheduler ---
         scheduler = Scheduler(bus)
 
-        # --- 9. Регистрация обработчиков ---
+        # --- 10. Регистрация обработчиков ---
 
         def handle_cognitive_cycle(task: Task) -> dict:
             """Обработчик когнитивного цикла."""
@@ -311,7 +315,18 @@ def run_autonomous(
             }
 
         def handle_consolidate_memory(task: Task) -> dict:
-            """Обработчик консолидации памяти."""
+            """Обработчик консолидации памяти с replay (Этап J)."""
+            # Replay: повторное обучение на накопленных эпизодах (CPU-aware)
+            try:
+                session = replay_engine.run_replay_session(force=False)
+                logger.info(
+                    "[autonomous] replay: replayed=%d reinforced=%d stale=%d",
+                    session.episodes_replayed,
+                    session.reinforced,
+                    session.stale_removed,
+                )
+            except Exception as exc:
+                logger.warning("[autonomous] replay error: %s", exc)
             mm.save_all()
             logger.info("[autonomous] memory consolidated and saved")
             return {"status": "consolidated"}
@@ -319,7 +334,7 @@ def run_autonomous(
         scheduler.register_handler("cognitive_cycle", handle_cognitive_cycle)
         scheduler.register_handler("consolidate_memory", handle_consolidate_memory)
 
-        # --- 10. Начальные задачи ---
+        # --- 11. Начальные задачи ---
         for i, q in enumerate(_AUTONOMOUS_QUERIES):
             scheduler.enqueue(
                 Task(
@@ -339,7 +354,7 @@ def run_autonomous(
             TaskPriority.LOW,
         )
 
-        # --- 11. Запуск ---
+        # --- 12. Запуск ---
         max_ticks: int | None = ticks if ticks > 0 else None
         print(
             f"[autonomous] Запуск автономного режима. "
@@ -362,10 +377,10 @@ def run_autonomous(
             resource_provider=_resource_provider,
         )
 
-        # --- 12. Сохранение памяти ---
+        # --- 13. Сохранение памяти ---
         mm.save_all()
 
-        # --- 13. Статистика ---
+        # --- 14. Статистика ---
         stats = scheduler.stats
         print(
             f"[autonomous] Завершено. "

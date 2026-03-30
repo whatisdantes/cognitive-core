@@ -259,10 +259,22 @@ class HypothesisEngine:
                 len(e.contradiction_flags) for e in evs
             )
 
-            statement = (
-                f"Несколько источников ({len(evs)}) подтверждают "
-                f"связь с концептом «{concept}»"
-            )
+            # Включаем контент наиболее релевантного evidence в statement,
+            # чтобы ответ содержал фактическую информацию, а не только
+            # generic "несколько источников подтверждают концепт X".
+            best_ev = max(evs, key=lambda e: e.relevance_score * e.confidence)
+            best_content = best_ev.content.strip()[:200]
+
+            if best_content:
+                statement = (
+                    f"Несколько источников ({len(evs)}) подтверждают "
+                    f"связь с концептом «{concept}»: {best_content}"
+                )
+            else:
+                statement = (
+                    f"Несколько источников ({len(evs)}) подтверждают "
+                    f"связь с концептом «{concept}»"
+                )
 
             h = Hypothesis(
                 hypothesis_id=self._make_id("deduct", concept),

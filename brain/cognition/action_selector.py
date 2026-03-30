@@ -210,6 +210,30 @@ class ActionSelector:
 
         # Высокая уверенность → прямой ответ
         if conf >= min_conf:
+            # Проверяем качество гипотезы: если hypothesis score слишком низкий,
+            # значит факт найден случайно (нерелевантное совпадение по стоп-слову).
+            # Понижаем до respond_hedged, чтобы не выдавать мусор как достоверный ответ.
+            best_score = trace.metadata.get("best_hypothesis_score", 1.0)
+            if best_score < 0.3:
+                hedged_statement = trace.best_statement
+                if hedged_statement and not hedged_statement.startswith("Возможно"):
+                    hedged_statement = (
+                        f"Возможно, {hedged_statement[0].lower()}{hedged_statement[1:]}"
+                    )
+                return ActionDecision(
+                    action=ActionType.RESPOND_HEDGED.value,
+                    statement=hedged_statement or "Возможно, ответ связан с данной темой.",
+                    confidence=conf,
+                    reasoning=(
+                        f"Confidence {conf:.3f} ≥ threshold {min_conf:.3f}, "
+                        f"но hypothesis_score={best_score:.3f} < 0.3 → hedged"
+                    ),
+                    hypothesis_id=trace.best_hypothesis_id,
+                    metadata={
+                        "threshold": min_conf,
+                        "best_hypothesis_score": best_score,
+                    },
+                )
             return ActionDecision(
                 action=ActionType.RESPOND_DIRECT.value,
                 statement=trace.best_statement,
@@ -242,11 +266,22 @@ class ActionSelector:
                 },
             )
 
-        # Есть гипотезы, но низкая уверенность → уточнение
+        # Есть гипотезы, но низкая уверенность → уточнение.
+        # Включаем best_statement в ответ, чтобы пользователь видел,
+        # что именно нашла система (важно для must_contain проверок).
         if trace.hypothesis_count > 0:
+            if trace.best_statement:
+                clarification_statement = (
+                    f"{trace.best_statement}\n\n"
+                    "Можете уточнить вопрос?"
+                )
+            else:
+                clarification_statement = (
+                    "Мне нужно больше информации. Можете уточнить вопрос?"
+                )
             return ActionDecision(
                 action=ActionType.ASK_CLARIFICATION.value,
-                statement="Мне нужно больше информации. Можете уточнить вопрос?",
+                statement=clarification_statement,
                 confidence=conf,
                 reasoning=(
                     f"Confidence {conf:.3f} < hedged threshold "
