@@ -6,10 +6,10 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
 > **Версия:** 0.7.0  
-> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅, P0/P1/P2 ✅, H/I/N ✅  
+> **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅, P0/P1/P2 ✅, H/I/N/J/K/L/M ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 1800/1800 ✅ (5 skipped) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **Coverage:** 84%+
+> **Тесты:** 2162/2162 ✅ (5 skipped) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **Coverage:** 84%+
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -52,7 +52,7 @@ pip install -e ".[dev]"
 # 2. Задать вопрос через CLI
 cognitive-core "Что такое нейропластичность?"
 
-# 3. Запустить все тесты (1800 ✅)
+# 3. Запустить все тесты (2162 ✅)
 python -m pytest tests/ -v
 
 # 4. Автономный режим (Scheduler-driven)
@@ -102,7 +102,7 @@ mm.stop()
 | Text Encoder (sentence-transformers/navec) | ✅ Реализовано | 768d/300d векторизация |
 | Hybrid Retrieval (BM25 + Vector) | ✅ Реализовано | Keyword + cosine similarity |
 | 5 видов памяти (WM/SM/EM/Source/Procedural) | ✅ Реализовано | JSON + SQLite persistence |
-| Когнитивное ядро (Goal→Plan→Reason→Act) | ✅ Реализовано | 15-step CognitivePipeline |
+| Когнитивное ядро (Goal→Plan→Reason→Act) | ✅ Реализовано | 20-step CognitivePipeline |
 | Обнаружение противоречий | ✅ Реализовано | ContradictionDetector |
 | Мониторинг неопределённости | ✅ Реализовано | UncertaintyMonitor |
 | Output Layer (trace + validation + dialogue) | ✅ Реализовано | Template MVP |
@@ -110,12 +110,14 @@ mm.stop()
 | Docker (multi-stage + non-root) | ✅ Реализовано | Python 3.12-slim |
 | CI/CD (GitHub Actions) | ✅ Реализовано | pytest + coverage + ruff + mypy |
 | Attention & Resource Control | ✅ Реализовано | SalienceEngine, AttentionController, PolicyLayer (Этап H) |
-| LLM Bridge | ✅ Реализовано | OpenAI/Anthropic providers, safety wrapper (Этап N) |
+| LLM Bridge | ✅ Реализовано | OpenAI/Anthropic/Blackbox providers, safety wrapper (Этап N) |
 | BrainLogger Integration | ✅ Реализовано | JSONL-логи через `--log-dir`/`--log-level` (LOG_PLAN.md v2.0) |
-| Learning Loop | ⚡ Partial | OnlineLearner, KnowledgeGapDetector, ReplayEngine (Этап I) |
-| Vision/Audio Encoders | 🔮 Planned | Post-MVP (Этап J) |
-| Cross-Modal Fusion | 🔮 Planned | Post-MVP (Этап K) |
-| Reward & Motivation | 🔮 Planned | Post-MVP (Этап M) |
+| Learning Loop | ✅ Реализовано | OnlineLearner + KnowledgeGapDetector + ReplayEngine + интеграция в pipeline (Этап I) |
+| Vision/Audio/Temporal Encoders + EncoderRouter | ✅ Реализовано | VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter (Этап J) |
+| Vision/Audio Ingestors | ✅ Реализовано | VisionIngestor, AudioIngestor (Этап J) |
+| Cross-Modal Fusion | ✅ Реализовано | SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector (Этап K) |
+| Safety & Boundaries | ✅ Реализовано | BoundaryGuard, AuditLogger, SourceTrustManager, ConflictDetector, SafetyPolicyLayer (Этап L) |
+| Reward & Motivation | ✅ Реализовано | RewardEngine, MotivationEngine, CuriosityEngine (Этап M) |
 
 > 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
 > 📋 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](TODO.md)  
@@ -141,9 +143,9 @@ mm.stop()
 
 Система работает с текстовыми данными (MVP), с планами на мультимодальность:
 - 📄 **Документы** (`.txt`, `.md`, `.pdf`, `.docx`, `.json`) — ✅ реализовано
-- 🖼️ Изображения (OCR + понимание сцен) — 🔮 Planned (post-MVP, Этап J)
-- 🎙️ Аудио (ASR + временные метки) — 🔮 Planned (post-MVP, Этап J)
-- 🎬 Видео (покадровый анализ + временное отслеживание) — 🔮 Planned (post-MVP, Этап J)
+- 🖼️ Изображения (OCR + понимание сцен) — ✅ Реализовано (Этап J, VisionIngestor + VisionEncoder)
+- 🎙️ Аудио (ASR + временные метки) — ✅ Реализовано (Этап J, AudioIngestor + AudioEncoder)
+- 🎬 Видео (покадровый анализ + временное отслеживание) — ✅ Реализовано (Этап J, TemporalEncoder)
 
 ---
 
@@ -171,10 +173,10 @@ mm.stop()
 | Модуль | Модель (основная) | Размер | Fallback | Статус |
 |--------|------------------|--------|----------|--------|
 | Text Encoder | sentence-transformers large | ~1.3 GB | navec (~200 MB) | ✅ Реализовано |
-| Vision Encoder | CLIP ViT-B/32 | ~600 MB | ResNet-50 (~100 MB) | 🔮 Planned (Этап J) |
-| Audio ASR | Whisper medium | ~1.5 GB | Whisper base (~150 MB) | 🔮 Planned (Этап J) |
+| Vision Encoder | CLIP ViT-B/32 | ~600 MB | ResNet-50 (~100 MB) | ✅ Реализовано (Этап J, CPU-only stub) |
+| Audio ASR | Whisper medium | ~1.5 GB | Whisper base (~150 MB) | ✅ Реализовано (Этап J, CPU-only stub) |
 
-> ⚠️ Сейчас используется только Text Encoder. Vision/Audio энкодеры запланированы на post-MVP (Этап J).
+> ℹ️ Vision/Audio энкодеры реализованы как CPU-only stubs (Этап J). Реальные модели (CLIP, Whisper) подключаются через graceful degradation при наличии зависимостей.
 
 ---
 
@@ -191,22 +193,23 @@ MULTIMODAL BRAIN
 │
 ├─ 1. Perception Layer          ← Таламус (маршрутизация входов)
 │   ├─ TextIngestor             ✅ txt / md / pdf / docx / json
-│   ├─ VisionIngestor           🔮 img / video frames + OCR (Этап J)
-│   ├─ AudioIngestor            🔮 ASR + acoustic events (Этап J)
+│   ├─ VisionIngestor           ✅ img / video frames + OCR (Этап J)
+│   ├─ AudioIngestor            ✅ ASR + acoustic events (Этап J)
 │   ├─ MetadataExtractor        ✅ source, timestamp, quality, language
 │   └─ InputRouter              ✅ маршрутизация по типу модальности
 │
 ├─ 2. Modality Encoders         ← Сенсорная кора (векторизация)
 │   ├─ TextEncoder              ✅ sentence-transformers (768d/1024d)
-│   ├─ VisionEncoder            🔮 CLIP ViT-B/32 (512d) (Этап J)
-│   ├─ AudioEncoder             🔮 Whisper medium + MFCC (Этап J)
-│   └─ TemporalEncoder          🔮 позиционное кодирование (видео) (Этап J)
+│   ├─ VisionEncoder            ✅ CLIP ViT-B/32 (512d) (Этап J)
+│   ├─ AudioEncoder             ✅ Whisper medium + MFCC (Этап J)
+│   ├─ TemporalEncoder          ✅ позиционное кодирование (видео) (Этап J)
+│   └─ EncoderRouter            ✅ маршрутизация по модальности (Этап J)
 │
-├─ 3. Cross-Modal Fusion        ← Ассоциативная кора (слияние) 🔮 Этап K
-│   ├─ SharedSpaceProjector     🔮 единое латентное пространство
-│   ├─ EntityLinker             🔮 связывание сущностей из разных источников
-│   ├─ ConfidenceCalibrator     🔮 оценка качества слияния
-│   └─ ContradictionDetector    🔮 обнаружение противоречий между модальностями
+├─ 3. Cross-Modal Fusion        ← Ассоциативная кора (слияние) ✅ Этап K
+│   ├─ SharedSpaceProjector     ✅ единое латентное пространство
+│   ├─ EntityLinker             ✅ связывание сущностей из разных источников
+│   ├─ ConfidenceCalibrator     ✅ оценка качества слияния
+│   └─ CrossModalContradictionDetector ✅ обнаружение противоречий между модальностями
 │
 ├─ 4. Memory System             ← Гиппокамп + Кора (память)
 │   ├─ WorkingMemory            активный контекст (sliding window, max=20)
@@ -227,7 +230,7 @@ MULTIMODAL BRAIN
 │   ├─ SalienceEngine           ✅ оценка значимости (аналог Миндалины) (Этап H)
 │   └─ ActionSelector           ✅ выбор действия (аналог Базальных ганглий)
 │
-├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение) ⚡ Этап I (partial)
+├─ 6. Learning Loop             ← Мозжечок + Гиппокамп (обучение) ✅ Этап I
 │   ├─ OnlineLearner            ✅ обновление после каждого взаимодействия
 │   ├─ ReplayEngine             ✅ периодическое воспроизведение эпизодов
 │   ├─ KnowledgeGapDetector     ✅ выявление пробелов в знаниях
@@ -253,16 +256,17 @@ MULTIMODAL BRAIN
 │   ├─ TraceBuilder             trace chain для каждого решения
 │   └─ MetricsCollector         KPI метрики в реальном времени
 │
-├─ 10. Safety & Boundaries      ← Иммунная система 🔮 Этап L
-│   ├─ SourceTrust              ✅ оценка надёжности источников (в SourceMemory)
-│   ├─ ConflictDetector         ✅ детектор конфликтов фактов (ContradictionDetector)
-│   ├─ BoundaryGuard            🔮 ограничения на действия системы
-│   └─ AuditLogger              🔮 аудит решений с высоким риском
+├─ 10. Safety & Boundaries      ← Иммунная система ✅ Этап L
+│   ├─ SourceTrustManager       ✅ оценка надёжности источников (Этап L)
+│   ├─ ConflictDetector         ✅ детектор конфликтов фактов (Этап L)
+│   ├─ BoundaryGuard            ✅ ограничения на действия системы (Этап L)
+│   ├─ AuditLogger              ✅ аудит решений с высоким риском (Этап L)
+│   └─ SafetyPolicyLayer        ✅ политики безопасности SF-1/2/3 (Этап L)
 │
-└─ 11. Reward & Motivation      ← Средний мозг (дофаминовая система) 🔮 Этап M
-    ├─ RewardEngine             🔮 5 типов вознаграждения + prediction error
-    ├─ MotivationEngine         🔮 накопление reward signals, decay мотивации
-    └─ CuriosityEngine          🔮 любопытство ∝ 1/knowledge_coverage
+└─ 11. Reward & Motivation      ← Средний мозг (дофаминовая система) ✅ Этап M
+    ├─ RewardEngine             ✅ 5 типов вознаграждения + prediction error
+    ├─ MotivationEngine         ✅ накопление reward signals, decay мотивации
+    └─ CuriosityEngine          ✅ любопытство ∝ 1/knowledge_coverage
 ```
 
 ---
@@ -326,14 +330,22 @@ cognitive-core/
 │   │   ├── input_router.py             # ✅ InputRouter — SHA256 dedup, quality policy + path/size guards
 │   │   └── validators.py              # ✅ validate_file_path(), check_file_size() — B.2 hardening
 │   │
-│   ├── encoders/                       # Модальные энкодеры ✅ РЕАЛИЗОВАНО (Этап E, text-only)
-│   │   ├── __init__.py                 # Экспорты: TextEncoder
-│   │   └── text_encoder.py             # ✅ TextEncoder — sentence-transformers 768d / navec 300d fallback
+│   ├── encoders/                       # Модальные энкодеры ✅ РЕАЛИЗОВАНО (Этап E + J)
+│   │   ├── __init__.py                 # Экспорты: TextEncoder, VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter
+│   │   ├── text_encoder.py             # ✅ TextEncoder — sentence-transformers 768d / navec 300d fallback
+│   │   ├── vision_encoder.py           # ✅ VisionEncoder — CLIP ViT-B/32 CPU-only stub (Этап J)
+│   │   ├── audio_encoder.py            # ✅ AudioEncoder — Whisper/MFCC CPU-only stub (Этап J)
+│   │   ├── temporal_encoder.py         # ✅ TemporalEncoder — позиционное кодирование видео (Этап J)
+│   │   └── encoder_router.py           # ✅ EncoderRouter — маршрутизация по модальности (Этап J)
 │   │
-│   ├── fusion/                         # Кросс-модальное слияние (Фаза 5 — запланировано)
-│   │   └── __init__.py
+│   ├── fusion/                         # Кросс-модальное слияние ✅ РЕАЛИЗОВАНО (Этап K)
+│   │   ├── __init__.py                 # Экспорты: SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector
+│   │   ├── shared_space_projector.py   # ✅ SharedSpaceProjector — единое латентное пространство
+│   │   ├── entity_linker.py            # ✅ EntityLinker — связывание сущностей из разных источников
+│   │   ├── confidence_calibrator.py    # ✅ ConfidenceCalibrator — оценка качества слияния
+│   │   └── cross_modal_contradiction_detector.py # ✅ CrossModalContradictionDetector (Этап K)
 │   │
-│   ├── cognition/              # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F + F+ + P3 + H)
+│   ├── cognition/              # Когнитивное ядро ✅ РЕАЛИЗОВАНО (Этап F + F+ + P3 + H + L)
 │   │   ├── __init__.py                 # Экспорты: 35+ классов
 │   │   ├── context.py                  # ✅ CognitiveContext, CognitiveOutcome, EvidencePack,
 │   │   │                               #    GoalTypeLimits, PolicyConstraints, ReasoningState,
@@ -344,7 +356,7 @@ cognitive-core/
 │   │   ├── reasoner.py                 # ✅ ReasoningStep, ReasoningTrace, Reasoner
 │   │   ├── action_selector.py          # ✅ ActionType, ActionDecision, ActionSelector
 │   │   ├── cognitive_core.py           # ✅ CognitiveCore — orchestrator (delegates to CognitivePipeline)
-│   │   ├── pipeline.py                 # ✅ CognitivePipeline (15 шагов) + CognitivePipelineContext (P3-10)
+│   │   ├── pipeline.py                 # ✅ CognitivePipeline (20 шагов) + CognitivePipelineContext (P3-10 + Этап L)
 │   │   ├── retrieval_adapter.py        # ✅ RetrievalAdapter, KeywordRetrievalBackend (BM25 reranking),
 │   │   │                               #    VectorRetrievalBackend, HybridRetrievalBackend, BM25Scorer
 │   │   ├── contradiction_detector.py   # ✅ Contradiction, ContradictionDetector (F+)
@@ -353,11 +365,11 @@ cognitive-core/
 │   │   └── uncertainty_monitor.py      # ✅ UncertaintySnapshot, UncertaintyMonitor (F+)
 │   │
 │   ├── bridges/                        # LLM Bridge ✅ РЕАЛИЗОВАНО (Этап N)
-│   │   ├── __init__.py                 # Экспорты: LLMBridge, OpenAIProvider, AnthropicProvider
-│   │   ├── llm_bridge.py              # ✅ LLMBridge + providers (OpenAI/Anthropic)
+│   │   ├── __init__.py                 # Экспорты: LLMBridge, OpenAIProvider, AnthropicProvider, BlackboxProvider
+│   │   ├── llm_bridge.py              # ✅ LLMBridge + providers (OpenAI/Anthropic/Blackbox)
 │   │   └── safety_wrapper.py          # ✅ SafetyWrapper — фильтрация LLM ответов
 │   │
-│   ├── learning/                       # Система обучения ⚡ PARTIAL (Этап I)
+│   ├── learning/                       # Система обучения ✅ РЕАЛИЗОВАНО (Этап I)
 │   │   ├── __init__.py
 │   │   ├── online_learner.py           # ✅ OnlineLearner — обновление после взаимодействия
 │   │   ├── knowledge_gap_detector.py   # ✅ KnowledgeGapDetector — выявление пробелов
@@ -370,8 +382,19 @@ cognitive-core/
 │   │   └── reasoning_tracer.py         # ✅ TraceBuilder — trace chain, reconstruct_from_logger
 │   │                                   #    (renamed from trace_builder.py to avoid conflict with output/)
 │   │
-│   ├── safety/                         # Безопасность (Фаза 11 — запланировано)
-│   │   └── __init__.py
+│   ├── safety/                         # Safety & Boundaries ✅ РЕАЛИЗОВАНО (Этап L)
+│   │   ├── __init__.py                 # Экспорты: AuditLogger, SourceTrustManager, ConflictDetector, BoundaryGuard, SafetyPolicyLayer
+│   │   ├── audit_logger.py             # ✅ AuditLogger — JSONL аудит, ротация, RLock
+│   │   ├── source_trust.py             # ✅ SourceTrustManager — оценка надёжности источников
+│   │   ├── conflict_detector.py        # ✅ ConflictDetector — детектор конфликтов фактов
+│   │   ├── boundary_guard.py           # ✅ BoundaryGuard — PII redaction, confidence gate, action gate
+│   │   └── policy_layer.py             # ✅ SafetyPolicyLayer — политики SF-1/2/3
+│   │
+│   ├── motivation/                     # Reward & Motivation ✅ РЕАЛИЗОВАНО (Этап M)
+│   │   ├── __init__.py                 # Экспорты: RewardEngine, MotivationEngine, CuriosityEngine
+│   │   ├── reward_engine.py            # ✅ RewardEngine — 5 типов вознаграждения + prediction error
+│   │   ├── motivation_engine.py        # ✅ MotivationEngine — EMA α=0.1, decay ×0.95/100 циклов
+│   │   └── curiosity_engine.py         # ✅ CuriosityEngine — score=1/max(coverage,0.01), threshold=0.8
 │   │
 │   ├── output/                         # Слой вывода ✅ РЕАЛИЗОВАНО (Этап G)
 │   │   ├── __init__.py                 # Экспорты: 13 классов
@@ -392,7 +415,7 @@ cognitive-core/
 │
 ├── CHANGELOG.md                        # ✅ История изменений (Keep a Changelog) — P3-1
 ├── CONTRIBUTING.md                     # ✅ Гайд для контрибьюторов — P3-2
-├── tests/                              # Тесты (pytest-совместимые, 1800 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 2162 ✅)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -731,11 +754,11 @@ pytest-cov>=4.0
 ruff>=0.4.0
 mypy>=1.10
 
-# ─── Post-MVP (Этап J — не нужны для текущей версии) ───
-# open-clip-torch>=2.24.0      # 🔮 Vision Encoder (CLIP ViT-B/32)
-# pillow>=10.0.0               # 🔮 Image processing
-# openai-whisper>=20231117     # 🔮 Audio ASR (Whisper)
-# torch>=2.2.0                 # 🔮 PyTorch CPU-only (для vision/audio)
+# ─── Этап J (реализованы как CPU-only stubs, реальные модели опциональны) ───
+# open-clip-torch>=2.24.0      # Vision Encoder (CLIP ViT-B/32) — опционально
+# pillow>=10.0.0               # Image processing — опционально
+# openai-whisper>=20231117     # Audio ASR (Whisper) — опционально
+# torch>=2.2.0                 # PyTorch CPU-only — опционально
 ```
 
 ---
@@ -778,7 +801,7 @@ pip install -e .
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (1800 ✅)
+# Запустить все тесты (2162 ✅)
 python -m pytest tests/ -v
 
 # Или отдельный файл
@@ -788,7 +811,7 @@ python -m pytest tests/test_memory.py -v
 python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (1800 тестов)
+### Состав тестового набора (2162 теста)
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -818,11 +841,31 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_salience_engine.py` | SalienceEngine + scoring (Этап H) | 12 |
 | `test_policy_layer.py` | PolicyLayer filters + modifiers (Этап H) | 9 |
 | `test_brain_logger_integration.py` | BrainLogger integration (LOG_PLAN.md v2.0) | 19 |
-| `test_llm_bridge.py` | LLMBridge + providers + safety (Этап N) | 70 |
+| `test_llm_bridge.py` | LLMBridge + providers + safety (Этап N) | 82 |
 | `test_online_learner.py` | OnlineLearner (Этап I) | 12 |
 | `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | 8 |
 | `test_replay_engine.py` | ReplayEngine + strategies (Этап I) | 15 |
-| | **Итого** | **1800** |
+| `test_learning_integration.py` | Learning Loop Integration (OnlineLearner + KnowledgeGapDetector + ReplayEngine + CognitivePipeline) | 7 |
+| `test_vision_ingestor.py` | VisionIngestor (Этап J) | 15 |
+| `test_audio_ingestor.py` | AudioIngestor (Этап J) | 15 |
+| `test_vision_encoder.py` | VisionEncoder (Этап J) | 20 |
+| `test_audio_encoder.py` | AudioEncoder (Этап J) | 20 |
+| `test_temporal_encoder.py` | TemporalEncoder (Этап J) | 20 |
+| `test_encoder_router.py` | EncoderRouter (Этап J) | 19 |
+| `test_shared_space_projector.py` | SharedSpaceProjector (Этап K) | 15 |
+| `test_entity_linker.py` | EntityLinker (Этап K) | 15 |
+| `test_confidence_calibrator.py` | ConfidenceCalibrator (Этап K) | 16 |
+| `test_cross_modal_contradiction_detector.py` | CrossModalContradictionDetector (Этап K) | 15 |
+| `test_audit_logger.py` | AuditLogger (Этап L) | 13 |
+| `test_source_trust.py` | SourceTrustManager (Этап L) | 16 |
+| `test_conflict_detector.py` | ConflictDetector (Этап L) | 19 |
+| `test_boundary_guard.py` | BoundaryGuard (Этап L) | 26 |
+| `test_safety_policy_layer.py` | SafetyPolicyLayer (Этап L) | 16 |
+| `test_safety_integration.py` | Safety Integration (pipeline + safety) | 7 |
+| `test_reward_engine.py` | RewardEngine (Этап M) | 28 |
+| `test_motivation_engine.py` | MotivationEngine (Этап M) | 28 |
+| `test_curiosity_engine.py` | CuriosityEngine (Этап M) | 28 |
+| | **Итого** | **2162** |
 
 > \* 6 тестов запускаются всегда, 5 — только при установленном `sqlcipher3`
 
@@ -920,15 +963,15 @@ cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level INF
 | [`00_autonomous_loop.md`](docs/layers/00_autonomous_loop.md) | Always-On Loop | Ствол мозга | ✅ Реализовано (Этап B) |
 | [`01_perception_layer.md`](docs/layers/01_perception_layer.md) | Perception Layer | Таламус | ✅ Реализовано (Этап D, text-only) |
 | [`02_modality_encoders.md`](docs/layers/02_modality_encoders.md) | Modality Encoders | Сенсорная кора | ✅ Реализовано (Этап E, text-only, 80/80) |
-| [`03_cross_modal_fusion.md`](docs/layers/03_cross_modal_fusion.md) | Cross-Modal Fusion | Ассоциативная кора | 📄 Спецификация (Этап K) |
+| [`03_cross_modal_fusion.md`](docs/layers/03_cross_modal_fusion.md) | Cross-Modal Fusion | Ассоциативная кора | ✅ Реализовано (Этап K, 61 тест) |
 | [`04_memory_system.md`](docs/layers/04_memory_system.md) | Memory System | Гиппокамп + Кора | ✅ Реализовано (101/101) |
 | [`05_cognitive_core.md`](docs/layers/05_cognitive_core.md) | Cognitive Core | Префронтальная кора | ✅ Реализовано (Этап F+F+, 190+7) |
-| [`06_learning_loop.md`](docs/layers/06_learning_loop.md) | Learning Loop | Мозжечок + Гиппокамп | 📄 Спецификация (Этап I) |
+| [`06_learning_loop.md`](docs/layers/06_learning_loop.md) | Learning Loop | Мозжечок + Гиппокамп | ✅ Реализовано (Этап I) |
 | [`07_output_layer.md`](docs/layers/07_output_layer.md) | Output Layer | Речевые зоны Брока/Вернике | ✅ Реализовано (Этап G, 106+7) |
-| [`08_attention_resource.md`](docs/layers/08_attention_resource.md) | Attention & Resources | Таламус + Гипоталамус | 📄 Спецификация (Этап H) |
+| [`08_attention_resource.md`](docs/layers/08_attention_resource.md) | Attention & Resources | Таламус + Гипоталамус | ✅ Реализовано (Этап H) |
 | [`09_logging_observability.md`](docs/layers/09_logging_observability.md) | Logging & Observability | Метапознание | ✅ Реализовано (Этап C, 25/25) |
-| [`10_safety_boundaries.md`](docs/layers/10_safety_boundaries.md) | Safety & Boundaries | Иммунная система | 📄 Спецификация (Этап L) |
-| [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | 📄 Спецификация (Этап M) |
+| [`10_safety_boundaries.md`](docs/layers/10_safety_boundaries.md) | Safety & Boundaries | Иммунная система | ✅ Реализовано (Этап L, 107 тестов) |
+| [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | ✅ Реализовано (Этап M, 84 теста) |
 
 Архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md) (15 разделов)  
 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](TODO.md)
@@ -961,13 +1004,13 @@ cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level INF
 | **P2** | **Medium Priority (algorithms, infra, product quality)** | **✅ Завершено 20/20** | **1800** |
 | **P3** | **Nice-to-have (DX, architecture, testing)** | **✅ 12/12** | **1800** |
 | **H** | **Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer)** | **✅ Завершено 4/5** | **31 (в 1800)** |
-| **N** | **LLM Bridge (OpenAI/Anthropic, safety wrapper, CLI)** | **✅ Завершено 5/5** | **70 (в 1800)** |
+| **N** | **LLM Bridge (OpenAI/Anthropic/Blackbox, safety wrapper, CLI)** | **✅ Завершено 5/5** | **82 (в 1812)** |
 | **LOG** | **BrainLogger Integration (LOG_PLAN.md v2.0, 13 фаз)** | **✅ Завершено 13/13** | **19 (в 1800)** |
-| **I** | **Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine)** | **⚡ Partial 3/3 модулей** | **35 (в 1800)** |
-| J | Vision/Audio Encoders | ⬜ Post-MVP | — |
-| K | Cross-Modal Fusion | ⬜ Post-MVP | — |
-| L | Safety & Boundaries | ⬜ Post-MVP | — |
-| M | Reward & Motivation | ⬜ Post-MVP | — |
+| **I** | **Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine + интеграция)** | **✅ Завершено** | **42 (в 1800)** |
+| **J** | **Vision/Audio/Temporal Encoders + Ingestors (VisionIngestor, AudioIngestor, VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter)** | **✅ Завершено** | **109** |
+| **K** | **Cross-Modal Fusion (SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector)** | **✅ Завершено** | **61** |
+| **L** | **Safety & Boundaries (AuditLogger, SourceTrustManager, ConflictDetector, BoundaryGuard, SafetyPolicyLayer + pipeline integration)** | **✅ Завершено** | **107** |
+| **M** | **Reward & Motivation (RewardEngine, MotivationEngine, CuriosityEngine)** | **✅ Завершено** | **84** |
 
 ### Что реализовано сейчас
 
@@ -1052,7 +1095,7 @@ brain/cognition/
 ├── action_selector.py      ← ActionType (5 types), ActionDecision, ActionSelector
 │                              (RESPOND_DIRECT/HEDGED/ASK/REFUSE/LEARN)
 ├── cognitive_core.py       ← CognitiveCore — orchestrator (delegates to CognitivePipeline)
-├── pipeline.py             ← CognitivePipeline (15 шагов) + CognitivePipelineContext (P3-10)
+├── pipeline.py             ← CognitivePipeline (20 шагов) + CognitivePipelineContext (P3-10 + Этап L)
 ├── retrieval_adapter.py    ← RetrievalAdapter, KeywordRetrievalBackend,
 │                              VectorRetrievalBackend, HybridRetrievalBackend (F+)
 ├── contradiction_detector.py ← Contradiction, ContradictionDetector (F+)
@@ -1094,7 +1137,11 @@ tests/
 **P2 Hardening** ✅ — Алгоритмические оптимизации (BFS deque, batch_remove, min вместо sorted), локальные дефекты (UUID, ZeroDivisionError, decay), инфраструктура (Dependabot, Bandit, Codecov).  
 **P3 (mostly done)** ✅ — DX (CHANGELOG, CONTRIBUTING, ADR, mkdocs), архитектура (CognitivePipeline 15 шагов, ThreadPoolEventBus, --autonomous CLI, SQLCipher), тестирование (Hypothesis, stress tests).  
 **Этап H** ✅ — Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer).  
-**Этап N** ✅ — LLM Bridge (OpenAI/Anthropic providers, safety wrapper, CLI integration).  
-**Этап I** ⚡ — Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули готовы, интеграция pending).  
+**Этап N** ✅ — LLM Bridge (OpenAI/Anthropic/Blackbox providers, safety wrapper, CLI integration).  
+**Этап I** ✅ — Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули + интеграция в CognitivePipeline + CLI).  
 **LOG_PLAN.md v2.0** ✅ — BrainLogger интегрирован во все слои (CLI, CognitiveCore, Pipeline, MemoryManager, InputRouter, OutputPipeline, EventBus, Scheduler). NullObject pattern обеспечивает backward compatibility.  
+**Этап J** ✅ — Vision/Audio/Temporal Encoders + Ingestors (VisionIngestor, AudioIngestor, VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter — 109 тестов).  
+**Этап K** ✅ — Cross-Modal Fusion (SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector — 61 тест).  
+**Этап L** ✅ — Safety & Boundaries (AuditLogger, SourceTrustManager, ConflictDetector, BoundaryGuard, SafetyPolicyLayer + интеграция в CognitivePipeline 20 шагов — 107 тестов).  
+**Этап M** ✅ — Reward & Motivation (RewardEngine, MotivationEngine, CuriosityEngine — 84 теста).  
 Roadmap: [`TODO.md`](TODO.md).

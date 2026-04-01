@@ -1,7 +1,7 @@
 # 🧠 Слой 11: Reward & Motivation System (Средний мозг)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ⬜ Фаза 14 — не реализовано**
+> **Статус: ✅ Этап M — реализовано (84 теста, v0.7.0)**
 
 ---
 
@@ -467,11 +467,12 @@ MotivationEngine влияет на:
 
 ## Статус реализации
 
-| Компонент | Статус | Файл |
-|-----------|--------|------|
-| `RewardSignal` dataclass | ⬜ Фаза 14.1 | `brain/motivation/reward_engine.py` |
-| `RewardEngine` | ⬜ Фаза 14.1 | `brain/motivation/reward_engine.py` |
-| `MotivationState` dataclass | ⬜ Фаза 14.2 | `brain/motivation/motivation_engine.py` |
-| `MotivationEngine` | ⬜ Фаза 14.2 | `brain/motivation/motivation_engine.py` |
-| `CuriosityEngine` | ⬜ Фаза 14.3 | `brain/motivation/curiosity_engine.py` |
-| `brain/motivation/__init__.py` | ⬜ Фаза 14.1 | `brain/motivation/__init__.py` |
+| Компонент | Статус | Файл | Тесты |
+|-----------|--------|------|-------|
+| `RewardSignal` dataclass | ✅ Этап M.1 | `brain/motivation/reward_engine.py` | — |
+| `RewardEngine` | ✅ Этап M.1 | `brain/motivation/reward_engine.py` | 28/28 |
+| `MotivationState` dataclass | ✅ Этап M.2 | `brain/motivation/motivation_engine.py` | — |
+| `MotivationEngine` | ✅ Этап M.2 | `brain/motivation/motivation_engine.py` | 30/30 |
+| `CuriosityEngine` | ✅ Этап M.3 | `brain/motivation/curiosity_engine.py` | 26/26 |
+| `brain/motivation/__init__.py` | ✅ Этап M.1 | `brain/motivation/__init__.py` | — |
+| `ReplayEngine.mark_as_high_value()` | ✅ Этап M.4 | `brain/learning/replay_engine.py` | — |

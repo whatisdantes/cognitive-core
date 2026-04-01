@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Примеры:\n"
             '  cognitive-core "Что такое нейрон?"\n'
             '  cognitive-core --verbose "Запомни: нейрон — клетка"\n'
+            '  cognitive-core --llm-provider blackbox --llm-api-key KEY "Что такое синапс?"\n'
             "  cognitive-core --version\n"
         ),
     )
@@ -92,16 +93,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--llm-provider",
         default=None,
-        choices=["openai", "anthropic", "mock"],
+        choices=["openai", "anthropic", "blackbox", "mock"],
         metavar="PROVIDER",
-        help="LLM провайдер: openai | anthropic | mock (по умолчанию: нет LLM)",
+        help="LLM провайдер: openai | anthropic | blackbox | mock (по умолчанию: нет LLM)",
     )
 
     parser.add_argument(
         "--llm-api-key",
         default=None,
         metavar="KEY",
-        help="API ключ для LLM провайдера (или переменная окружения OPENAI_API_KEY / ANTHROPIC_API_KEY)",
+        help=(
+            "API ключ для LLM провайдера "
+            "(или переменная окружения OPENAI_API_KEY / ANTHROPIC_API_KEY / BLACKBOX_API_KEY)"
+        ),
     )
 
     parser.add_argument(
@@ -110,7 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="MODEL",
         help=(
             "Модель LLM провайдера "
-            "(openai: gpt-4o-mini, anthropic: claude-3-haiku-20240307)"
+            "(openai: gpt-4o-mini, anthropic: claude-3-haiku-20240307, blackbox: gpt-5.4)"
         ),
     )
 
@@ -207,6 +211,21 @@ def _build_llm_provider(
             bridge = LLMBridge(provider=raw)
             wrapped = LLMSafetyWrapper(bridge=bridge)
             logger.info("[CLI] LLM провайдер: %s (модель=%s)", provider_name, model)
+            return wrapped
+        if provider_name == "blackbox":
+            if not api_key:
+                logger.warning(
+                    "[CLI] LLM провайдер 'blackbox' требует api_key (передайте --llm-api-key)"
+                )
+                return None
+            from brain.bridges.llm_bridge import BlackboxProvider  # type: ignore[attr-defined]
+            raw = BlackboxProvider(  # type: ignore[assignment]
+                api_key=api_key,
+                model=model or "gpt-5.4",
+            )
+            bridge = LLMBridge(provider=raw)
+            wrapped = LLMSafetyWrapper(bridge=bridge)
+            logger.info("[CLI] LLM провайдер: %s (модель=%s)", provider_name, model or "gpt-5.4")
             return wrapped
         logger.warning("[CLI] Неизвестный LLM провайдер: %s", provider_name)
         return None

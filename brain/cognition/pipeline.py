@@ -3,24 +3,27 @@ brain/cognition/pipeline.py
 
 Явный пайплайн когнитивного цикла (P3-10).
 
-Заменяет «god-method» CognitiveCore.run() на цепочку явных шагов (17 шагов, Этап H + N + J):
+Заменяет «god-method» CognitiveCore.run() на цепочку явных шагов (20 шагов, Этап H + N + J + L):
   1.  create_context           — создание контекста (session_id, cycle_id, trace_id)
   2.  auto_encode              — кодирование запроса через TextEncoder
-  3.  get_resources            — получение состояния ресурсов
-  4.  build_retrieval_query    — обогащение запроса ключевыми словами
-  5.  create_goal              — определение типа цели и создание Goal
-  6.  evaluate_salience        — оценка значимости стимула (SalienceEngine) [Этап H]
-  7.  compute_budget           — вычисление AttentionBudget (AttentionController) [Этап H]
-  8.  index_percept_vector     — индексация вектора перцепта
-  9.  reason                   — reasoning loop → ReasoningTrace
-  10. detect_knowledge_gaps    — обнаружение пробелов в знаниях (KnowledgeGapDetector) [Этап J]
-  11. llm_enhance              — LLM-обогащение best_statement (no-op если LLM нет) [Этап N]
-  12. select_action            — выбор действия + PolicyLayer фильтрация [Этап H]
-  13. execute_action           — выполнение действия (LEARN → store)
-  14. complete_goal            — завершение/провал цели в GoalManager
-  15. build_result             — сборка CognitiveResult + salience/budget/llm metadata
-  16. publish_event            — публикация события через EventBus
-  17. post_cycle               — пост-цикловое обучение (OnlineLearner) [Этап J]
+  3.  safety_input_check       — PII-редакция и блокировка входа (BoundaryGuard) [Этап L]
+  4.  get_resources            — получение состояния ресурсов
+  5.  build_retrieval_query    — обогащение запроса ключевыми словами
+  6.  create_goal              — определение типа цели и создание Goal
+  7.  evaluate_salience        — оценка значимости стимула (SalienceEngine) [Этап H]
+  8.  compute_budget           — вычисление AttentionBudget (AttentionController) [Этап H]
+  9.  index_percept_vector     — индексация вектора перцепта
+  10. reason                   — reasoning loop → ReasoningTrace
+  11. detect_knowledge_gaps    — обнаружение пробелов в знаниях (KnowledgeGapDetector) [Этап J]
+  12. llm_enhance              — LLM-обогащение best_statement (no-op если LLM нет) [Этап N]
+  13. select_action            — выбор действия + PolicyLayer фильтрация [Этап H]
+  14. safety_policy_check      — проверка действия через SafetyPolicyLayer [Этап L]
+  15. execute_action           — выполнение действия (LEARN → store)
+  16. complete_goal            — завершение/провал цели в GoalManager
+  17. build_result             — сборка CognitiveResult + salience/budget/llm metadata
+  18. safety_audit_log         — аудит-лог цикла через AuditLogger [Этап L]
+  19. publish_event            — публикация события через EventBus
+  20. post_cycle               — пост-цикловое обучение (OnlineLearner) [Этап J]
 
 Преимущества:
   - Каждый шаг тестируется изолированно
@@ -57,6 +60,9 @@ from brain.core.contracts import (
 )
 from brain.learning.knowledge_gap_detector import KnowledgeGapDetector
 from brain.learning.online_learner import OnlineLearner
+from brain.safety.audit_logger import AuditLogger
+from brain.safety.boundary_guard import BoundaryGuard, GuardResult
+from brain.safety.policy_layer import SafetyDecision, SafetyPolicyLayer
 from brain.logging import (
     _NULL_LOGGER,
     _NULL_TRACE_BUILDER,
@@ -121,6 +127,10 @@ class CognitivePipelineContext:
     # --- Этап J: Learning ---
     memory_search_result: Optional[Any] = None  # MemorySearchResult из Reasoner._retrieve_evidence()
     knowledge_gap: Optional[Any] = None          # KnowledgeGap из KnowledgeGapDetector
+
+    # --- Этап L: Safety & Boundaries ---
+    safety_input_result: Optional[GuardResult] = None
+    safety_policy_result: Optional[SafetyDecision] = None
 
     # --- Метрики ---
     start_time: float = field(default_factory=time.perf_counter)
@@ -189,6 +199,9 @@ class CognitivePipeline:
         trace_builder: Optional[TraceBuilder] = None,
         gap_detector: Optional[KnowledgeGapDetector] = None,
         online_learner: Optional[OnlineLearner] = None,
+        boundary_guard: Optional[BoundaryGuard] = None,
+        safety_policy: Optional[SafetyPolicyLayer] = None,
+        audit_logger: Optional[AuditLogger] = None,
     ) -> None:
         self._memory = memory
         self._encoder = encoder
@@ -216,6 +229,11 @@ class CognitivePipeline:
         # --- Этап J: Learning (NullObject pattern — None = no-op) ---
         self._gap_detector: Optional[KnowledgeGapDetector] = gap_detector
         self._online_learner: Optional[OnlineLearner] = online_learner
+
+        # --- Этап L: Safety & Boundaries (NullObject pattern — None = no-op) ---
+        self._boundary_guard: Optional[BoundaryGuard] = boundary_guard
+        self._safety_policy: Optional[SafetyPolicyLayer] = safety_policy
+        self._audit_logger: Optional[AuditLogger] = audit_logger
 
     # ------------------------------------------------------------------
     # Основной метод
@@ -254,25 +272,28 @@ class CognitivePipeline:
             state={"query_preview": query[:80]},
         )
 
-        # Явная последовательность шагов (17 шагов, Этап H + N + J)
+        # Явная последовательность шагов (20 шагов, Этап H + N + J + L)
         steps: List[PipelineStep] = [
             self.step_create_context,           # 1
             self.step_auto_encode,              # 2
-            self.step_get_resources,            # 3
-            self.step_build_retrieval_query,    # 4
-            self.step_create_goal,              # 5
-            self.step_evaluate_salience,        # 6  ← Этап H (после goal)
-            self.step_compute_budget,           # 7  ← Этап H (после salience)
-            self.step_index_percept_vector,     # 8
-            self.step_reason,                   # 9
-            self.step_detect_knowledge_gaps,    # 10 ← Этап J (no-op если gap_detector нет)
-            self.step_llm_enhance,              # 11 ← Этап N (no-op если LLM нет)
-            self.step_select_action,            # 12 ← + PolicyLayer
-            self.step_execute_action,           # 13
-            self.step_complete_goal,            # 14
-            self.step_build_result,             # 15 ← + salience/budget/llm metadata
-            self.step_publish_event,            # 16
-            self.step_post_cycle,               # 17 ← Этап J (no-op если online_learner нет)
+            self.step_safety_input_check,       # 3  ← Этап L (no-op если boundary_guard нет)
+            self.step_get_resources,            # 4
+            self.step_build_retrieval_query,    # 5
+            self.step_create_goal,              # 6
+            self.step_evaluate_salience,        # 7  ← Этап H (после goal)
+            self.step_compute_budget,           # 8  ← Этап H (после salience)
+            self.step_index_percept_vector,     # 9
+            self.step_reason,                   # 10
+            self.step_detect_knowledge_gaps,    # 11 ← Этап J (no-op если gap_detector нет)
+            self.step_llm_enhance,              # 12 ← Этап N (no-op если LLM нет)
+            self.step_select_action,            # 13 ← + PolicyLayer
+            self.step_safety_policy_check,      # 14 ← Этап L (no-op если safety_policy нет)
+            self.step_execute_action,           # 15
+            self.step_complete_goal,            # 16
+            self.step_build_result,             # 17 ← + salience/budget/llm metadata
+            self.step_safety_audit_log,         # 18 ← Этап L (no-op если audit_logger нет)
+            self.step_publish_event,            # 19
+            self.step_post_cycle,               # 20 ← Этап J (no-op если online_learner нет)
         ]
 
         for step in steps:
@@ -374,8 +395,45 @@ class CognitivePipeline:
             logger.warning("[CognitivePipeline] auto-encode failed: %s", e)
             ctx.encoded_percept = None
 
+    def step_safety_input_check(self, ctx: CognitivePipelineContext) -> None:
+        """
+        Шаг 3: Проверка входного запроса через BoundaryGuard (Этап L).
+
+        No-op если boundary_guard не задан.
+        Если запрос заблокирован (is_blocked) — прерывает пайплайн.
+        Если запрос редактирован (redacted_count > 0) — обновляет ctx.query.
+        Результат записывается в ctx.safety_input_result.
+        """
+        if self._boundary_guard is None:
+            return  # no-op: BoundaryGuard не настроен
+        try:
+            result = self._boundary_guard.check(
+                text=ctx.query,
+                confidence=1.0,
+                action=None,
+            )
+            ctx.safety_input_result = result
+            if result.is_blocked:
+                logger.warning(
+                    "[CognitivePipeline] safety_input_check: BLOCKED — %s",
+                    result.reasons,
+                )
+                ctx.aborted = True
+                ctx.abort_reason = (
+                    f"safety_input_check: blocked — {', '.join(result.reasons)}"
+                )
+                return
+            if result.redacted_count > 0:
+                logger.info(
+                    "[CognitivePipeline] safety_input_check: redacted %d items",
+                    result.redacted_count,
+                )
+                ctx.query = result.sanitized_text
+        except Exception as exc:
+            logger.warning("[CognitivePipeline] step_safety_input_check error: %s", exc)
+
     def step_get_resources(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 3: Получить состояние ресурсов."""
+        """Шаг 4: Получить состояние ресурсов."""
         if ctx.resources:
             return  # уже заполнено извне
         if self._resource_monitor and hasattr(self._resource_monitor, "snapshot"):
@@ -760,8 +818,57 @@ class CognitivePipeline:
                 },
             )
 
+    def step_safety_policy_check(self, ctx: CognitivePipelineContext) -> None:
+        """
+        Шаг 14: Проверка выбранного действия через SafetyPolicyLayer (Этап L).
+
+        No-op если safety_policy не задан или decision отсутствует.
+        Если действие не разрешено (not allowed) — переопределяет ctx.decision
+        на filtered_action из SafetyDecision.
+        Результат записывается в ctx.safety_policy_result.
+        """
+        if self._safety_policy is None or ctx.decision is None:
+            return  # no-op: SafetyPolicyLayer не настроен
+        try:
+            session_id = (
+                ctx.cognitive_context.session_id if ctx.cognitive_context else ""
+            )
+            cycle_id = (
+                ctx.cognitive_context.cycle_id if ctx.cognitive_context else ""
+            )
+            sd = self._safety_policy.evaluate(
+                text=ctx.query,
+                action=ctx.decision.action,
+                confidence=ctx.decision.confidence,
+                session_id=session_id,
+                cycle_id=cycle_id,
+            )
+            ctx.safety_policy_result = sd
+            if not sd.allowed and sd.filtered_action:
+                logger.info(
+                    "[CognitivePipeline] safety_policy_check: %s → %s (filters=%s)",
+                    ctx.decision.action, sd.filtered_action, sd.filters_applied,
+                )
+                ctx.decision = ActionDecision(
+                    action=sd.filtered_action,
+                    statement=ctx.decision.statement,
+                    confidence=round(ctx.decision.confidence * 0.8, 4),
+                    reasoning=(
+                        f"SafetyPolicyLayer: {ctx.decision.action} не разрешён, "
+                        f"filtered → {sd.filtered_action}"
+                    ),
+                    metadata={
+                        **ctx.decision.metadata,
+                        "safety_policy_applied": True,
+                        "safety_filters": sd.filters_applied,
+                        "safety_reasons": sd.reasons,
+                    },
+                )
+        except Exception as exc:
+            logger.warning("[CognitivePipeline] step_safety_policy_check error: %s", exc)
+
     def step_execute_action(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 13: Выполнить действие (LEARN → store + инкрементальная индексация)."""
+        """Шаг 15: Выполнить действие (LEARN → store + инкрементальная индексация)."""
         if ctx.decision is None:
             return
         if ctx.decision.action == ActionType.LEARN.value:
@@ -896,8 +1003,41 @@ class CognitivePipeline:
             },
         )
 
+    def step_safety_audit_log(self, ctx: CognitivePipelineContext) -> None:
+        """
+        Шаг 18: Аудит-лог завершённого цикла через AuditLogger (Этап L).
+
+        No-op если audit_logger не задан или result/cognitive_context отсутствуют.
+        Логирует событие "cycle_complete" с деталями цикла.
+        """
+        if self._audit_logger is None or ctx.result is None or ctx.cognitive_context is None:
+            return  # no-op: AuditLogger не настроен
+        try:
+            details: Dict[str, Any] = {
+                "action": ctx.result.action,
+                "confidence": ctx.result.confidence,
+                "query_preview": ctx.query[:80],
+                "total_duration_ms": ctx.elapsed_ms,
+            }
+            if ctx.safety_input_result is not None:
+                details["safety_input_status"] = ctx.safety_input_result.status
+                details["safety_input_redacted"] = ctx.safety_input_result.redacted_count
+            if ctx.safety_policy_result is not None:
+                details["safety_policy_allowed"] = ctx.safety_policy_result.allowed
+                details["safety_policy_filters"] = ctx.safety_policy_result.filters_applied
+            self._audit_logger.log_event(
+                event_type="cycle_complete",
+                details=details,
+                session_id=ctx.cognitive_context.session_id,
+                cycle_id=ctx.cognitive_context.cycle_id,
+                level="INFO",
+                module="pipeline",
+            )
+        except Exception as exc:
+            logger.warning("[CognitivePipeline] step_safety_audit_log error: %s", exc)
+
     def step_publish_event(self, ctx: CognitivePipelineContext) -> None:
-        """Шаг 16: Публикация события через EventBus."""
+        """Шаг 19: Публикация события через EventBus."""
         if ctx.result is None or ctx.cognitive_context is None or ctx.decision is None or ctx.trace is None:
             return
         if self._event_bus and hasattr(self._event_bus, "publish"):
@@ -915,7 +1055,7 @@ class CognitivePipeline:
 
     def step_post_cycle(self, ctx: CognitivePipelineContext) -> None:
         """
-        Шаг 17: Пост-цикловое обучение (OnlineLearner, Этап J).
+        Шаг 20: Пост-цикловое обучение (OnlineLearner, Этап J).
 
         Вызывается ПОСЛЕ publish_event, чтобы не блокировать основной цикл.
         No-op если online_learner не задан или result отсутствует.

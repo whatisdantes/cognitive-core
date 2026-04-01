@@ -1,28 +1,31 @@
 # 🧠 BRAIN.md — Полный разбор человеческого мозга  
 ## и проектирование искусственного мультимодального мозга (text + media)
 
-> ⚠️ **Disclaimer (март 2026):** Этот документ — **проектная спецификация и vision-документ**.
-> Он описывает целевую архитектуру мультимодального мозга, но **не всё из описанного реализовано**.
+> ⚠️ **Disclaimer (апрель 2026):** Этот документ — **проектная спецификация и vision-документ**.
+> Он описывает целевую архитектуру мультимодального мозга.
 >
-> **Что реализовано (v0.7.0):**
-> - ✅ Perception Layer (текст: txt/md/pdf/docx/json) — Этап B
+> **Что реализовано (v0.7.0) — 2162 теста ✅:**
+> - ✅ Perception Layer (текст: txt/md/pdf/docx/json + Vision/Audio Ingestors) — Этапы B + J
 > - ✅ Text Encoder (sentence-transformers 768d, fallback navec 300d) — Этап E
+> - ✅ Vision/Audio/Temporal Encoders + EncoderRouter (CPU-only stubs) — Этап J (109 тестов)
+> - ✅ Cross-Modal Fusion (SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector) — Этап K (61 тест)
 > - ✅ Memory System (5 типов памяти + SQLite WAL persistence + SQLCipher encryption + embedding persistence) — Этапы D + P0/P1 + P3-12
-> - ✅ Cognitive Core (15-step pipeline, BM25 + Vector + Hybrid retrieval, planning, reasoning) — Этапы F/F+/P0/P1/P3-10
+> - ✅ Cognitive Core (20-step pipeline, BM25 + Vector + Hybrid retrieval, planning, reasoning) — Этапы F/F+/P0/P1/P3-10 + L
 > - ✅ Output Layer (trace, validation, dialogue, pipeline) — Этап G
 > - ✅ Logging & Observability (JSONL, categories, rotation, atexit) — Этап C
 > - ✅ Core Infrastructure (EventBus + ThreadPool, ResourceMonitor, Scheduler, Contracts) — Этап A + P3-9
 > - ✅ Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer) — Этап H
-> - ✅ LLM Bridge (OpenAI/Anthropic providers, safety wrapper, CLI integration) — Этап N
-> - ⚡ Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули готовы, интеграция в pipeline pending) — Этап I
+> - ✅ LLM Bridge (OpenAI/Anthropic/Blackbox providers, safety wrapper, CLI integration) — Этап N
+> - ✅ Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine + интеграция в pipeline) — Этап I
+> - ✅ Safety & Boundaries (AuditLogger, SourceTrustManager, ConflictDetector, BoundaryGuard, SafetyPolicyLayer + pipeline integration) — Этап L (107 тестов)
+> - ✅ Reward & Motivation (RewardEngine, MotivationEngine, CuriosityEngine) — Этап M (84 теста)
+> - ✅ brain/motivation/ директория — реализована (4 файла)
 >
-> **Что НЕ реализовано:**
-> - ⬜ Vision/Audio/Video Ingestors (Этап J — post-MVP)
-> - ⬜ Cross-Modal Fusion (Этап K — post-MVP)
-> - ⬜ Safety Boundaries (Этап L — post-MVP)
-> - ⬜ Motivation/Reward System (секция 15) — post-MVP
-> - ⬜ CuriosityEngine, MotivationEngine — post-MVP
-> - ⬜ brain/motivation/ директория — не существует
+> **Что НЕ реализовано (Post-MVP):**
+> - ⬜ Temporal indexing + retrieval by evidence
+> - ⬜ Reflection dashboard с метриками качества мышления
+> - ⬜ SelfSupervisedLearner (согласованность картинка ↔ текст ↔ аудио)
+> - ⬜ Persisted ANN/FAISS индексы
 >
 > Актуальный roadmap: [`TODO.md`](../TODO.md)
 

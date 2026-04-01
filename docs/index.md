@@ -2,7 +2,7 @@
 
 **Биоинспирированная когнитивная система на Python**
 
-[![Tests](https://img.shields.io/badge/tests-1774%20passed-brightgreen)](https://github.com/whatisdantes/cognitive-core)
+[![Tests](https://img.shields.io/badge/tests-2162%20passed-brightgreen)](https://github.com/whatisdantes/cognitive-core)
 [![Coverage](https://img.shields.io/badge/coverage-84.44%25-green)](https://codecov.io)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../LICENSE)
@@ -21,20 +21,23 @@
 ## Быстрый старт
 
 ```bash
-pip install cognitive-core
-cognitive-core run "что такое нейрон?"
-```
-
-Интерактивный режим:
-
-```bash
-cognitive-core interactive
+git clone https://github.com/whatisdantes/cognitive-core.git
+cd cognitive-core
+python -m venv .venv && .venv\Scripts\activate
+pip install -e ".[dev]"
+cognitive-core "что такое нейрон?"
 ```
 
 Автономный режим (5 тиков планировщика):
 
 ```bash
-cognitive-core run --autonomous --ticks 5
+cognitive-core --autonomous --ticks 5
+```
+
+С JSONL-логированием:
+
+```bash
+cognitive-core --log-dir brain/data/logs --log-level DEBUG "что такое нейрон?"
 ```
 
 ## Архитектура — 12 слоёв
@@ -44,32 +47,34 @@ cognitive-core run --autonomous --ticks 5
 | 00 Autonomous Loop | `brain/core/scheduler.py` | ✅ |
 | 01 Perception | `brain/perception/` | ✅ |
 | 02 Modality Encoders | `brain/encoders/` | ✅ |
-| 03 Cross-Modal Fusion | `brain/fusion/` | 🔵 stub |
+| 03 Cross-Modal Fusion | `brain/fusion/` | ✅ Этап K (61 тест) |
 | 04 Memory System | `brain/memory/` | ✅ |
-| 05 Cognitive Core | `brain/cognition/` | ✅ 15-step pipeline |
-| 06 Learning Loop | `brain/learning/` | ⚡ partial (3 модуля) |
+| 05 Cognitive Core | `brain/cognition/` | ✅ 20-step pipeline |
+| 06 Learning Loop | `brain/learning/` | ✅ (OnlineLearner + KnowledgeGapDetector + ReplayEngine + интеграция) |
 | 07 Output Layer | `brain/output/` | ✅ |
 | 08 Attention/Resource | `brain/core/`, `brain/cognition/` | ✅ Этап H |
 | 09 Logging/Observability | `brain/logging/` | ✅ |
-| 10 Safety Boundaries | `brain/safety/` | 🔵 stub |
-| 11 Midbrain/Reward | — | 🔵 planned |
+| 10 Safety Boundaries | `brain/safety/` | ✅ Этап L (107 тестов) |
+| 11 Midbrain/Reward | `brain/motivation/` | ✅ Этап M (84 теста) |
 | — LLM Bridge | `brain/bridges/` | ✅ Этап N |
 
 ## Ключевые возможности
 
 - **5 видов памяти**: рабочая, семантическая, эпизодическая, процедурная, источников
 - **Гибридный retrieval**: BM25 + векторный поиск (cosine similarity)
-- **15-шаговый CognitivePipeline**: каждый шаг тестируется изолированно (включая salience, budget, LLM enhance)
+- **20-шаговый CognitivePipeline**: каждый шаг тестируется изолированно (salience, budget, LLM enhance, safety input/policy/audit)
+- **Safety & Boundaries**: BoundaryGuard (PII redaction), SafetyPolicyLayer (SF-1/2/3), AuditLogger (JSONL)
+- **Reward & Motivation**: RewardEngine (5 типов), MotivationEngine (EMA + decay), CuriosityEngine
+- **Cross-Modal Fusion**: SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector
 - **Thread-safe**: `threading.RLock` во всех модулях памяти
 - **SQLite WAL**: персистентность с WAL mode, опциональное шифрование (SQLCipher)
 - **EventBus**: синхронный + ThreadPool dispatch
 - **Планировщик**: автономный цикл с приоритетами задач
-- **CLI**: `cognitive-core run / interactive / --autonomous`
+- **CLI**: `cognitive-core "запрос"` / `cognitive-core --autonomous --ticks N` / `cognitive-core --log-dir DIR`
 
 ## Документация
 
 - [Архитектура (BRAIN.md)](BRAIN.md) — полная спецификация 12 слоёв
-- [Action Plan](ACTION_PLAN.md) — детальный план с effort-оценками
 - [ADR](adr/README.md) — Architecture Decision Records (7 решений)
 - [API Reference](api/index.md) — автогенерированная документация модулей
 - [CHANGELOG](../CHANGELOG.md) — история изменений
@@ -79,7 +84,7 @@ cognitive-core run --autonomous --ticks 5
 
 | Параметр | Значение |
 |----------|----------|
-| Тесты | **1774 / 1774 ✅** (5 skipped) |
+| Тесты | **2162 / 2162 ✅** (5 skipped) |
 | Coverage | **84%+** (gate 70%) |
 | Ruff | **0 errors** |
 | Mypy | **0 errors** |

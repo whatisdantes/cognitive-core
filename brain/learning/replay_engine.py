@@ -371,6 +371,33 @@ class ReplayEngine:
     # Статус и repr
     # ------------------------------------------------------------------
 
+    def mark_as_high_value(self, episode_id: str) -> bool:
+        """
+        Пометить эпизод как высокоценный (importance = 1.0).
+
+        Вызывается из MotivationEngine когда prediction_error > 0.2 —
+        эпизод с неожиданно высоким вознаграждением должен воспроизводиться чаще.
+
+        Args:
+            episode_id: ID эпизода в эпизодической памяти
+
+        Returns:
+            True если эпизод найден и обновлён, False иначе
+        """
+        try:
+            episodes = self._memory.episodic.get_recent(n=500)
+            for episode in episodes:
+                if getattr(episode, "episode_id", None) == episode_id:
+                    episode.importance = 1.0
+                    logger.debug(
+                        "[ReplayEngine] mark_as_high_value: episode=%s importance=1.0",
+                        episode_id,
+                    )
+                    return True
+        except Exception as exc:
+            logger.debug("[ReplayEngine] mark_as_high_value error: %s", exc)
+        return False
+
     def status(self) -> Dict[str, Any]:
         """Статус движка воспроизведения."""
         return {

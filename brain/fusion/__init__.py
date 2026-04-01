@@ -1,17 +1,31 @@
 """
-fusion — Кросс-модальное слияние (аналог ассоциативной коры).
+brain/fusion — Stage K: Cross-Modal Fusion.
 
-Модули:
-    cross_modal_fusion.py   — объединение векторов разных модальностей
-    entity_linker.py        — связывание одних и тех же сущностей из разных источников
-    confidence_calibrator.py — калибровка уверенности по согласованности модальностей
-    contradiction_detector.py — обнаружение противоречий между модальностями
-
-TODO (Stage K): Реализовать кросс-модальное слияние.
-    - SharedSpaceProjector: проекция векторов разных модальностей в единое пространство
-    - EntityLinker: связывание сущностей из text/image/audio
-    - ConfidenceCalibrator: калибровка confidence по согласованности модальностей
-    - ContradictionDetector: обнаружение противоречий между модальностями
-    Зависимости: TextEncoder (Stage E), VisionEncoder, AudioEncoder
-    См. docs/layers/03_cross_modal_fusion.md
+Публичный API:
+  SharedSpaceProjector          — проекция перцептов в общее 512d пространство
+  EntityLinker / CrossModalLink / EntityCluster — связывание сущностей между модальностями
+  ConfidenceCalibrator          — калибровка итогового confidence слияния
+  CrossModalContradictionDetector / CrossModalContradiction — детекция противоречий
 """
+
+from brain.fusion.shared_space_projector import SharedSpaceProjector
+from brain.fusion.entity_linker import (
+    CrossModalLink,
+    EntityCluster,
+    EntityLinker,
+)
+from brain.fusion.confidence_calibrator import ConfidenceCalibrator
+from brain.fusion.cross_modal_contradiction_detector import (
+    CrossModalContradiction,
+    CrossModalContradictionDetector,
+)
+
+__all__ = [
+    "SharedSpaceProjector",
+    "CrossModalLink",
+    "EntityCluster",
+    "EntityLinker",
+    "ConfidenceCalibrator",
+    "CrossModalContradiction",
+    "CrossModalContradictionDetector",
+]

@@ -1,7 +1,7 @@
 # 🧠 Слой 10: Safety & Boundaries (Иммунная система мозга)
 ## Подробное описание архитектуры и работы
 
-> **Статус: ⬜ Фаза 11 — не реализовано**
+> **Статус: ✅ Этап L — реализовано (107 тестов, v0.7.0)**
 
 ---
 
@@ -474,11 +474,13 @@ Learning Loop:
 
 ## Статус реализации
 
-| Компонент | Статус | Файл |
-|-----------|--------|------|
-| `SourceTrust` | ⬜ Фаза 11.1 | `brain/safety/source_trust.py` |
-| `ConflictDetector` | ⬜ Фаза 11.2 | `brain/safety/conflict_detector.py` |
-| `BoundaryGuard` | ⬜ Фаза 11.3 | `brain/safety/boundary_guard.py` |
-| `AuditLogger` | ⬜ Фаза 11.4 | `brain/safety/audit_logger.py` |
+| Компонент | Статус | Файл | Тесты |
+|-----------|--------|------|-------|
+| `SourceTrustManager` | ✅ Этап L.1 | `brain/safety/source_trust.py` | 16/16 |
+| `ConflictDetector` | ✅ Этап L.2 | `brain/safety/conflict_detector.py` | 19/19 |
+| `BoundaryGuard` | ✅ Этап L.3 | `brain/safety/boundary_guard.py` | 26/26 |
+| `AuditLogger` | ✅ Этап L.4 | `brain/safety/audit_logger.py` | 13/13 |
+| `SafetyPolicyLayer` | ✅ Этап L.5 | `brain/safety/policy_layer.py` | 16/16 |
+| Pipeline integration | ✅ Этап L.6 | `brain/cognition/pipeline.py` | 17/17 |
 
-> **Примечание:** `SourceMemory` (из Фазы 6 ✅) уже реализует базовый trust score для источников. `SourceTrust` в Safety layer — это более высокоуровневая политика поверх `SourceMemory`.
+> **Примечание:** `SourceMemory` (из Фазы 6 ✅) уже реализует базовый trust score для источников. `SourceTrustManager` в Safety layer — это более высокоуровневая политика поверх `SourceMemory`. Pipeline интегрирует 3 новых шага: `step_safety_input_check`, `step_safety_policy_check`, `step_safety_audit_log`.

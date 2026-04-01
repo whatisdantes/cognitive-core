@@ -10,7 +10,7 @@ LLM Bridge — абстракция для подключения языковы
                     ↓
                 LLMBridge       (owns provider, retry + timeout + logging)
                     ↓
-              LLMProvider impl: MockProvider | OpenAIProvider | AnthropicProvider
+              LLMProvider impl: MockProvider | OpenAIProvider | AnthropicProvider | BlackboxProvider
 
 Принципы:
   - LLMProvider — Protocol (@runtime_checkable), DI-совместимый
@@ -345,6 +345,91 @@ class AnthropicProvider:
     @property
     def provider_name(self) -> str:
         return "anthropic"
+
+
+# ---------------------------------------------------------------------------
+# BlackboxProvider — Blackbox AI (OpenAI-совместимый API)
+# ---------------------------------------------------------------------------
+
+class BlackboxProvider:
+    """
+    Blackbox AI LLM провайдер.
+
+    Использует OpenAI-совместимый Chat Completions API с кастомным base_url.
+    Требует: pip install openai>=1.0 (та же зависимость, что и OpenAIProvider).
+    Если openai не установлен — is_available() возвращает False,
+    complete() выбрасывает LLMUnavailableError.
+
+    Использование:
+        provider = BlackboxProvider(api_key="...", model="gpt-5.4")
+    """
+
+    BLACKBOX_BASE_URL = "https://api.blackbox.ai/v1"
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-5.4",
+    ) -> None:
+        self._model = model
+        self._client: Any = None
+        self._available = False
+
+        try:
+            import openai  # type: ignore[import]
+            self._client = openai.OpenAI(
+                api_key=api_key,
+                base_url=self.BLACKBOX_BASE_URL,
+            )
+            self._available = True
+            logger.info("[BlackboxProvider] инициализирован: model=%s", model)
+        except ImportError:
+            logger.warning(
+                "[BlackboxProvider] openai не установлен. "
+                "Установите: pip install openai>=1.0"
+            )
+
+    def complete(self, request: LLMRequest) -> LLMResponse:
+        """Выполнить запрос через Blackbox AI API (OpenAI-совместимый)."""
+        if not self._available or self._client is None:
+            raise LLMUnavailableError(
+                "Blackbox провайдер недоступен. Установите: pip install openai>=1.0"
+            )
+
+        start = time.perf_counter()
+
+        messages: List[Dict[str, str]] = []
+        if request.system_prompt:
+            messages.append({"role": "system", "content": request.system_prompt})
+        messages.append({"role": "user", "content": request.prompt})
+
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            stop=request.stop_sequences or None,
+        )
+
+        latency_ms = (time.perf_counter() - start) * 1000
+        choice = response.choices[0]
+        tokens_used = response.usage.total_tokens if response.usage else 0
+
+        return LLMResponse(
+            text=choice.message.content or "",
+            model=self._model,
+            provider="blackbox",
+            tokens_used=tokens_used,
+            latency_ms=round(latency_ms, 2),
+            finish_reason=choice.finish_reason or "stop",
+        )
+
+    def is_available(self) -> bool:
+        return self._available
+
+    @property
+    def provider_name(self) -> str:
+        return "blackbox"
 
 
 # ---------------------------------------------------------------------------

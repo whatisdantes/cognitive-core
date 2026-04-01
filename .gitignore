@@ -139,3 +139,6 @@ chatgpt_dialog.txt
 test_logging_output.txt
 tests/test_logging_output.txt
 test_results.txt
+docs/superpowers/
+AGENT_WORKFLOW.md
+.blackbox/

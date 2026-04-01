@@ -32,6 +32,8 @@ from brain.logging import _NULL_LOGGER, BrainLogger
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import check_file_size, validate_file_path
+from brain.perception.vision_ingestor import VisionIngestor
+from brain.perception.audio_ingestor import AudioIngestor
 
 # ─── Тип входных данных ──────────────────────────────────────────────────────
 
@@ -149,6 +151,8 @@ class InputRouter:
         event_bus=None,
         dedup: bool = True,
         brain_logger: Optional[BrainLogger] = None,
+        vision_ingestor: Optional[VisionIngestor] = None,
+        audio_ingestor: Optional[AudioIngestor] = None,
     ):
         self._ingestor = text_ingestor or TextIngestor()
         self._bus = event_bus
@@ -158,6 +162,10 @@ class InputRouter:
 
         # --- Phase 5: BrainLogger (NullObject pattern) ---
         self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
+
+        # --- Этап J: Multimodal ingestors (NullObject pattern — None = skip) ---
+        self._vision_ingestor: Optional[VisionIngestor] = vision_ingestor
+        self._audio_ingestor: Optional[AudioIngestor] = audio_ingestor
 
     # ─── Публичный API ───────────────────────────────────────────────────────
 
@@ -363,26 +371,31 @@ class InputRouter:
         # Определяем модальность
         modality = _detect_modality(file_path)
 
-        # MVP: только text
+        # Этап J: image → VisionIngestor (если задан), иначе пропуск
         if modality == "image":
-            _logger.warning(
-                "InputRouter: image не поддерживается в MVP (Этап D), пропуск: %s",
-                file_path,
-            )
-            self._stats.unsupported_modality += 1
-            return []
+            if self._vision_ingestor is None:
+                _logger.warning(
+                    "InputRouter: image — vision_ingestor не задан, пропуск: %s",
+                    file_path,
+                )
+                self._stats.unsupported_modality += 1
+                return []
+            return self._route_vision(file_path, session_id, trace_id, force)
 
+        # Этап J: audio → AudioIngestor (если задан), иначе пропуск
         if modality == "audio":
-            _logger.warning(
-                "InputRouter: audio не поддерживается в MVP (Этап D), пропуск: %s",
-                file_path,
-            )
-            self._stats.unsupported_modality += 1
-            return []
+            if self._audio_ingestor is None:
+                _logger.warning(
+                    "InputRouter: audio — audio_ingestor не задан, пропуск: %s",
+                    file_path,
+                )
+                self._stats.unsupported_modality += 1
+                return []
+            return self._route_audio_file(file_path, session_id, trace_id, force)
 
         if modality == "video":
             _logger.warning(
-                "InputRouter: video не поддерживается в MVP (Этап D), пропуск: %s",
+                "InputRouter: video не поддерживается (Этап J+), пропуск: %s",
                 file_path,
             )
             self._stats.unsupported_modality += 1
@@ -450,6 +463,84 @@ class InputRouter:
             },
         )
 
+        return events
+
+    def _route_vision(
+        self,
+        file_path: str,
+        session_id: str,
+        trace_id: str,
+        force: bool,
+    ) -> List[PerceptEvent]:
+        """Маршрутизировать изображение через VisionIngestor (Этап J)."""
+        # Дедупликация
+        if self._dedup and not force:
+            file_hash = _sha256_file(file_path)
+            if file_hash in self._seen_hashes:
+                _logger.debug("InputRouter: дубликат image пропущен: %s", file_path)
+                self._stats.duplicates_skipped += 1
+                return []
+            self._seen_hashes.add(file_hash)
+
+        try:
+            events = self._vision_ingestor.ingest(  # type: ignore[union-attr]
+                file_path=file_path,
+                session_id=session_id,
+                trace_id=trace_id,
+            )
+        except Exception as exc:
+            _logger.error("InputRouter: ошибка VisionIngestor %s: %s", file_path, exc)
+            self._stats.errors += 1
+            return []
+
+        if not events:
+            _logger.warning("InputRouter: image не дал событий: %s", file_path)
+            self._stats.hard_rejected += 1
+            return []
+
+        events = self._apply_quality_policy(events)
+        self._stats.record("image", len(events))
+        self._publish_events(events)
+        _logger.info("InputRouter: image %s → %d событий", file_path, len(events))
+        return events
+
+    def _route_audio_file(
+        self,
+        file_path: str,
+        session_id: str,
+        trace_id: str,
+        force: bool,
+    ) -> List[PerceptEvent]:
+        """Маршрутизировать аудио через AudioIngestor (Этап J)."""
+        # Дедупликация
+        if self._dedup and not force:
+            file_hash = _sha256_file(file_path)
+            if file_hash in self._seen_hashes:
+                _logger.debug("InputRouter: дубликат audio пропущен: %s", file_path)
+                self._stats.duplicates_skipped += 1
+                return []
+            self._seen_hashes.add(file_hash)
+
+        try:
+            events = self._audio_ingestor.ingest(  # type: ignore[union-attr]
+                file_path=file_path,
+                session_id=session_id,
+                trace_id=trace_id,
+            )
+        except Exception as exc:
+            _logger.error("InputRouter: ошибка AudioIngestor %s: %s", file_path, exc)
+            self._stats.errors += 1
+            return []
+
+        if not events:
+            _logger.warning("InputRouter: audio не дал событий: %s", file_path)
+            self._stats.hard_rejected += 1
+            return []
+
+        events = self._apply_quality_policy(events)
+        self._stats.record("audio", len(events))
+        self._publish_events(events)
+        _logger.info("InputRouter: audio %s → %d событий", file_path, len(events))
         return events
 
     def _apply_quality_policy(self, events: List[PerceptEvent]) -> List[PerceptEvent]:

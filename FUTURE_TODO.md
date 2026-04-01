@@ -1,10 +1,16 @@
 # 🔮 FUTURE_TODO.md — Нереализованные функции для автономности системы
 
 > **Версия:** 0.7.0  
-> **Дата:** 2025  
+> **Дата:** 2026  
 > **Контекст:** Инфраструктура автономности (Scheduler, EventBus, ResourceMonitor,
 > KnowledgeGapDetector, ReplayEngine) реализована. Не хватает интеграционного слоя —
 > логики "что делать в idle" и механизма приёма внешних запросов в работающий процесс.
+>
+> **Обновление v0.7.0:** F-AUTO-4, F-AUTO-5, F-LOG-1, F-LOG-2, F-LOG-3, F-LOG-4 — ✅ ВЫПОЛНЕНО.
+> BrainLogger интегрирован в CLI/Pipeline/MemoryManager/OutputPipeline (NullObject pattern).
+> OnlineLearner вызывается в `step_post_cycle` (pipeline.py шаг 20).
+> ReplayEngine интегрирован в `run_autonomous()` (cli.py).
+> `--log-dir` / `--log-level` флаги добавлены в CLI.
 
 ---
 
@@ -95,44 +101,27 @@ class Scheduler:
 
 ## 📋 Блок 2: Фоновое обучение
 
-### F-AUTO-4 — ReplayEngine в автономном цикле
+### F-AUTO-4 — ReplayEngine в автономном цикле ✅ ВЫПОЛНЕНО
 
-**Проблема:** `ReplayEngine` реализован, но не интегрирован в `run_autonomous()`.
+~~**Проблема:** `ReplayEngine` реализован, но не интегрирован в `run_autonomous()`.~~
 
-**Решение:** Периодическая задача `replay_episodes` каждые 30 тиков при idle:
-```python
-def handle_replay(task: Task) -> dict:
-    """Воспроизвести эпизоды для укрепления памяти."""
-    replayed = replay_engine.replay(memory_manager, n_episodes=10)
-    return {"replayed": replayed}
+**Статус:** ✅ Реализовано в v0.7.0. `ReplayEngine` интегрирован в `run_autonomous()` в `brain/cli.py`
+(строки 155–170). Периодически воспроизводит эпизоды из `EpisodicMemory` для укрепления памяти.
 
-scheduler.register_recurring("replay_episodes", handle_replay, every_n_ticks=30)
-```
-
-**Файлы:** `brain/cli.py`, `brain/learning/replay_engine.py`  
-**Зависимости:** `ReplayEngine` реализован ✅, нужна интеграция  
-**Приоритет:** 🟡 Средний
+**Файлы:** `brain/cli.py` ✅, `brain/learning/replay_engine.py` ✅  
+**Приоритет:** ~~🟡 Средний~~ → ✅ Завершено
 
 ---
 
-### F-AUTO-5 — OnlineLearner в когнитивном цикле
+### F-AUTO-5 — OnlineLearner в когнитивном цикле ✅ ВЫПОЛНЕНО
 
-**Проблема:** `OnlineLearner` реализован, но не вызывается после каждого взаимодействия.
+~~**Проблема:** `OnlineLearner` реализован, но не вызывается после каждого взаимодействия.~~
 
-**Решение:** В `handle_cognitive_cycle` после `core.run()` вызывать `online_learner.update()`:
-```python
-result = core.run(query)
-online_learner.update(
-    query=query,
-    response=result.response,
-    action=result.action,
-    confidence=result.confidence,
-)
-```
+**Статус:** ✅ Реализовано в v0.7.0. `OnlineLearner.update()` вызывается в `step_post_cycle`
+(шаг 20 `CognitivePipeline`, `brain/cognition/pipeline.py`) после каждого когнитивного цикла.
 
-**Файлы:** `brain/cli.py`, `brain/learning/online_learner.py`  
-**Зависимости:** `OnlineLearner` реализован ✅, нужна интеграция  
-**Приоритет:** 🟡 Средний
+**Файлы:** `brain/cognition/pipeline.py` ✅, `brain/learning/online_learner.py` ✅  
+**Приоритет:** ~~🟡 Средний~~ → ✅ Завершено
 
 ---
 
@@ -302,86 +291,62 @@ else:
 
 ## 📋 Блок 6: Интеграция системы логирования
 
-> **Статус:** `BrainLogger`, `DigestGenerator`, `TraceBuilder` реализованы и протестированы
-> (25 тестов), но **нигде не вызываются** в production-коде. Ghost modules.
+> **Статус v0.7.0:** `BrainLogger`, `DigestGenerator`, `TraceBuilder` реализованы, протестированы
+> (25 тестов) и **полностью интегрированы** в production-код (CLI, Pipeline, MemoryManager,
+> OutputPipeline, EventBus, Scheduler). NullObject pattern обеспечивает backward compatibility.
+> F-LOG-1 / F-LOG-2 / F-LOG-3 / F-LOG-4 — ✅ ВЫПОЛНЕНО.
 
-### F-LOG-1 — BrainLogger интеграция в CognitivePipeline
+### F-LOG-1 — BrainLogger интеграция в CognitivePipeline ✅ ВЫПОЛНЕНО
 
-**Проблема:** `brain/cognition/pipeline.py` использует только `logging.getLogger()`. JSONL-логи не пишутся.
+~~**Проблема:** `brain/cognition/pipeline.py` использует только `logging.getLogger()`. JSONL-логи не пишутся.~~
 
-**Решение:** Передать `BrainLogger` в `CognitivePipeline` и логировать каждый шаг:
-```python
-# brain/cognition/pipeline.py
-class CognitivePipeline:
-    def __init__(self, ..., brain_logger: Optional[BrainLogger] = None):
-        self._brain_logger = brain_logger
+**Статус:** ✅ Реализовано в v0.7.0. `BrainLogger` интегрирован в `CognitivePipeline`, `MemoryManager`,
+`InputRouter`, `OutputPipeline`, `EventBus`, `Scheduler` и `CLI` через NullObject pattern
+(backward compatibility сохранена). JSONL-логи пишутся при передаче `--log-dir`.
 
-    def _step_reason(self, ctx):
-        result = self._reasoner.reason(...)
-        if self._brain_logger:
-            self._brain_logger.info(
-                module="reasoner",
-                event="reasoning_complete",
-                trace_id=ctx.trace_id,
-                state={"confidence": result.confidence, "action": result.action},
-            )
-```
-
-**Файлы:** `brain/cognition/pipeline.py`, `brain/cli.py`  
-**Приоритет:** 🔴 Высокий — без этого observability отсутствует
+**Файлы:** `brain/cognition/pipeline.py` ✅, `brain/cli.py` ✅  
+**Приоритет:** ~~🔴 Высокий~~ → ✅ Завершено
 
 ---
 
-### F-LOG-2 — DigestGenerator интеграция в run_query / run_autonomous
+### F-LOG-2 — DigestGenerator интеграция в run_query / run_autonomous ✅ ВЫПОЛНЕНО
 
-**Проблема:** После каждого когнитивного цикла дайджест не генерируется. `brain/data/logs/digests/` пуст.
+~~**Проблема:** После каждого когнитивного цикла дайджест не генерируется. `brain/data/logs/digests/` пуст.~~
 
-**Решение:** В `run_query()` и `handle_cognitive_cycle()` вызывать `DigestGenerator`:
-```python
-from brain.logging import BrainLogger, DigestGenerator, CycleInfo
+**Статус:** ✅ Реализовано в v0.7.0. `DigestGenerator` создаётся в `brain/cli.py` и вызывается
+после каждого когнитивного цикла. Дайджесты записываются в `brain/data/logs/digests/YYYY-MM-DD.txt`
+при активном `--log-dir`.
 
-digest_gen = DigestGenerator()
-
-# После core.run():
-cycle_info = CycleInfo(
-    cycle_id=f"cycle_{core.cycle_count}",
-    goal=query,
-    confidence=result.confidence,
-    action=result.action,
-    response_preview=output.text[:120],
-    duration_ms=elapsed_ms,
-)
-digest_gen.generate_cycle_digest(cycle_info)
-```
-
-**Файлы:** `brain/cli.py`  
-**Приоритет:** 🟡 Средний
+**Файлы:** `brain/cli.py` ✅  
+**Приоритет:** ~~🟡 Средний~~ → ✅ Завершено
 
 ---
 
-### F-LOG-3 — BrainLogger в CLI (--log-dir флаг)
+### F-LOG-3 — BrainLogger в CLI (--log-dir флаг) ✅ ВЫПОЛНЕНО
 
-**Проблема:** Нет способа включить JSONL-логирование через CLI.
+~~**Проблема:** Нет способа включить JSONL-логирование через CLI.~~
 
-**Решение:** Добавить `--log-dir` и `--log-level` флаги:
+**Статус:** ✅ Реализовано в v0.7.0. Флаги `--log-dir` и `--log-level` добавлены в `build_parser()`
+в `brain/cli.py`. Примеры:
 ```bash
 cognitive-core --log-dir brain/data/logs --log-level INFO "Что такое нейрон?"
-cognitive-core --autonomous --log-dir /var/log/brain --ticks 0
+cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level DEBUG
 ```
 
-**Файлы:** `brain/cli.py`  
-**Приоритет:** 🟡 Средний
+**Файлы:** `brain/cli.py` ✅  
+**Приоритет:** ~~🟡 Средний~~ → ✅ Завершено
 
 ---
 
-### F-LOG-4 — TraceBuilder интеграция (trace_id сквозной)
+### F-LOG-4 — TraceBuilder интеграция (trace_id сквозной) ✅ ВЫПОЛНЕНО
 
-**Проблема:** `trace_id` генерируется в `OutputTraceBuilder` (output layer), но не передаётся в `BrainLogger`. Нет сквозной трассировки запрос → память → рассуждение → ответ.
+~~**Проблема:** `trace_id` генерируется в `OutputTraceBuilder` (output layer), но не передаётся в `BrainLogger`. Нет сквозной трассировки запрос → память → рассуждение → ответ.~~
 
-**Решение:** Генерировать `trace_id` в начале `CognitivePipeline.run()` и передавать во все шаги + `BrainLogger`.
+**Статус:** ✅ Реализовано в v0.7.0. `TraceBuilder` создаётся в `brain/cli.py`. `trace_id` генерируется
+в начале `CognitivePipeline.run()` и сквозно передаётся во все шаги pipeline и в `BrainLogger`.
 
-**Файлы:** `brain/cognition/pipeline.py`, `brain/output/trace_builder.py`  
-**Приоритет:** 🟡 Средний
+**Файлы:** `brain/cognition/pipeline.py` ✅, `brain/cli.py` ✅  
+**Приоритет:** ~~🟡 Средний~~ → ✅ Завершено
 
 ---
 
@@ -408,17 +373,17 @@ cognitive-core --show-trace <trace_id>         # трассировка по ID
 | F-AUTO-3 | Recurring Task API в Scheduler | 🔴 Высокий | Средняя | — |
 | F-AUTO-1 | KnowledgeGapDetector → Scheduler | 🔴 Высокий | Малая | F-AUTO-3 |
 | F-AUTO-7 | Stdin Reader | 🔴 Высокий | Малая | — |
-| **F-LOG-1** | **BrainLogger → CognitivePipeline** | **🔴 Высокий** | **Малая** | **—** |
+| ~~**F-LOG-1**~~ | ~~**BrainLogger → CognitivePipeline**~~ | ✅ Завершено | — | — |
 | F-AUTO-11 | Форматирование факта (без LLM) | 🟠 Средний-высокий | Малая | — |
 | F-AUTO-6 | Периодическая консолидация | 🟠 Средний-высокий | Малая | F-AUTO-3 |
-| F-AUTO-4 | ReplayEngine интеграция | 🟡 Средний | Малая | F-AUTO-3 |
-| F-AUTO-5 | OnlineLearner интеграция | 🟡 Средний | Малая | — |
+| ~~F-AUTO-4~~ | ~~ReplayEngine интеграция~~ | ✅ Завершено | — | — |
+| ~~F-AUTO-5~~ | ~~OnlineLearner интеграция~~ | ✅ Завершено | — | — |
 | F-AUTO-10 | LLM Bridge → OutputPipeline | 🟡 Средний | Средняя | — |
 | F-AUTO-2 | Self-Reflection Loop | 🟡 Средний | Средняя | F-AUTO-3 |
 | F-AUTO-14 | Метрики автономного режима | 🟡 Средний | Малая | — |
-| F-LOG-2 | DigestGenerator интеграция | 🟡 Средний | Малая | F-LOG-1 |
-| F-LOG-3 | --log-dir CLI флаг | 🟡 Средний | Малая | F-LOG-1 |
-| F-LOG-4 | TraceBuilder сквозной trace_id | 🟡 Средний | Средняя | F-LOG-1 |
+| ~~F-LOG-2~~ | ~~DigestGenerator интеграция~~ | ✅ Завершено | — | — |
+| ~~F-LOG-3~~ | ~~--log-dir CLI флаг~~ | ✅ Завершено | — | — |
+| ~~F-LOG-4~~ | ~~TraceBuilder сквозной trace_id~~ | ✅ Завершено | — | — |
 | F-AUTO-8 | Unix Socket IPC | 🟡 Средний | Средняя | — |
 | F-AUTO-9 | File Watcher | 🟢 Низкий | Средняя | — |
 | F-AUTO-13 | Персистентный Scheduler | 🟢 Низкий | Средняя | — |
@@ -436,16 +401,16 @@ cognitive-core --show-trace <trace_id>         # трассировка по ID
 4. F-AUTO-11 — Форматирование ответа (UX)
 
 **Фаза 2 (обучение в фоне):**
-5. F-AUTO-4 — ReplayEngine
-6. F-AUTO-5 — OnlineLearner
+5. ~~F-AUTO-4 — ReplayEngine~~ ✅ Завершено
+6. ~~F-AUTO-5 — OnlineLearner~~ ✅ Завершено
 7. F-AUTO-6 — Периодическая консолидация
 8. F-AUTO-2 — Self-Reflection
 
 **Фаза 3 (качество и наблюдаемость):**
-9. F-LOG-1 — BrainLogger → CognitivePipeline
-10. F-LOG-2 — DigestGenerator
-11. F-LOG-3 — --log-dir CLI
-12. F-LOG-4 — сквозной trace_id
+9. ~~F-LOG-1 — BrainLogger → CognitivePipeline~~ ✅ Завершено
+10. ~~F-LOG-2 — DigestGenerator~~ ✅ Завершено
+11. ~~F-LOG-3 — --log-dir CLI~~ ✅ Завершено
+12. ~~F-LOG-4 — сквозной trace_id~~ ✅ Завершено
 13. F-AUTO-10 — LLM Bridge → Output
 14. F-AUTO-14 — Метрики
 15. F-AUTO-8 — IPC
