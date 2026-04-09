@@ -36,11 +36,11 @@
 
 ---
 
-## TraceBuilder
+## OutputTraceBuilder
 
-Построение цепочки трейсов для observability.
+Построение explainability-trace для output layer.
 
-::: brain.output.trace_builder.TraceBuilder
+::: brain.output.trace_builder.OutputTraceBuilder
     options:
       show_source: false
       show_root_heading: true
@@ -48,5 +48,5 @@
       members:
         - __init__
         - build
-        - add_step
-        - finalize
+        - to_digest
+        - to_json

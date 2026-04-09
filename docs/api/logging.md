@@ -41,18 +41,20 @@
 
 ---
 
-## ReasoningTracer
+## TraceBuilder
 
-Трейсинг шагов рассуждения для отладки и анализа.
+Построение и восстановление цепочки причинности по `trace_id`.
 
-::: brain.logging.reasoning_tracer.ReasoningTracer
+::: brain.logging.reasoning_tracer.TraceBuilder
     options:
       show_source: false
       show_root_heading: true
       heading_level: 3
       members:
         - __init__
-        - start_trace
         - add_step
+        - start_trace
         - finish_trace
-        - get_trace
+        - reconstruct
+        - reconstruct_from_logger
+        - to_human_readable

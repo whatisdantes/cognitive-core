@@ -14,8 +14,8 @@
 | [memory](memory.md) | Система памяти: 5 видов + MemoryManager + Storage | 8 |
 | [perception](perception.md) | Слой восприятия: InputRouter, TextIngestor, validators | 4 |
 | [core](core.md) | Ядро системы: EventBus, Scheduler, contracts, utils | 6 |
-| [output](output.md) | Слой вывода: DialogueResponder, ResponseValidator, TraceBuilder | 3 |
-| [logging](logging.md) | Логирование: BrainLogger, DigestGenerator, ReasoningTracer | 3 |
+| [output](output.md) | Слой вывода: DialogueResponder, ResponseValidator, OutputTraceBuilder | 3 |
+| [logging](logging.md) | Логирование: BrainLogger, DigestGenerator, TraceBuilder | 3 |
 | [encoders](encoders.md) | Кодировщики: TextEncoder (4 режима) | 1 |
 
 ---
