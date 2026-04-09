@@ -4,12 +4,12 @@
 > ⚠️ **Disclaimer (апрель 2026):** Этот документ — **проектная спецификация и vision-документ**.
 > Он описывает целевую архитектуру мультимодального мозга.
 >
-> **Что реализовано (v0.7.0) — 2162 теста ✅:**
+> **Что реализовано (v0.7.0):**
 > - ✅ Perception Layer (текст: txt/md/pdf/docx/json + Vision/Audio Ingestors) — Этапы B + J
 > - ✅ Text Encoder (sentence-transformers 768d, fallback navec 300d) — Этап E
 > - ✅ Vision/Audio/Temporal Encoders + EncoderRouter (CPU-only stubs) — Этап J (109 тестов)
 > - ✅ Cross-Modal Fusion (SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector) — Этап K (61 тест)
-> - ✅ Memory System (5 типов памяти + SQLite WAL persistence + SQLCipher encryption + embedding persistence) — Этапы D + P0/P1 + P3-12
+> - ✅ Memory System (5 типов памяти + SQLite WAL persistence + optional SQLCipher encryption + embedding persistence) — Этапы D + P0/P1 + P3-12
 > - ✅ Cognitive Core (20-step pipeline, BM25 + Vector + Hybrid retrieval, planning, reasoning) — Этапы F/F+/P0/P1/P3-10 + L
 > - ✅ Output Layer (trace, validation, dialogue, pipeline) — Этап G
 > - ✅ Logging & Observability (JSONL, categories, rotation, atexit) — Этап C
@@ -28,6 +28,7 @@
 > - ⬜ Persisted ANN/FAISS индексы
 >
 > Актуальный roadmap: [`TODO.md`](../TODO.md)
+> Установка extras и dev-инструментов: [`development.md`](development.md)
 
 ---
 

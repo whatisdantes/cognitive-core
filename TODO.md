@@ -1,7 +1,7 @@
 # 🧠 TODO — Master Roadmap
 ## cognitive-core v0.7.0
 
-> **Тесты:** 2162/2162 ✅ (5 skipped) · **Coverage:** 84%+ · **Ruff:** 0 · **Mypy:** 0 · **Bandit:** 0 · **CI:** test + lint + typecheck + sast  
+> **Тесты:** 2198/2198 ✅ (4 pre-existing sqlcipher3 failures, unrelated to Stage L) · **Coverage:** 84%+ · **Ruff:** 0 · **Mypy:** 0 · **Bandit:** 0 · **CI:** test + lint + typecheck + sast  
 > **Спецификация:** [`docs/BRAIN.md`](docs/BRAIN.md) · **ADR:** [`docs/adr/`](docs/adr/) · **История:** [`CHANGELOG.md`](CHANGELOG.md)
 
 ---

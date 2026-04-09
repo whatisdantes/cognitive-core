@@ -83,8 +83,6 @@ nav:
   - Главная: index.md
   - Архитектура:
       - Обзор (BRAIN.md): BRAIN.md
-      - R&D концепт: ARCHITECTURE.md
-      - Анализ проекта: PROJECT_ANALYSIS.md
       - Слои:
           - "00 · Autonomous Loop": layers/00_autonomous_loop.md
           - "01 · Perception": layers/01_perception_layer.md
@@ -116,11 +114,7 @@ nav:
       - output: api/output.md
       - logging: api/logging.md
       - encoders: api/encoders.md
-  - Разработка:
-      - Планы (PLANS.md): PLANS.md
-      - Action Plan: ACTION_PLAN.md
-      - CONTRIBUTING: ../CONTRIBUTING.md
-      - CHANGELOG: ../CHANGELOG.md
+  - Разработка: development.md
 
 extra:
   social:

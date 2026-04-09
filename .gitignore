@@ -141,4 +141,4 @@ tests/test_logging_output.txt
 test_results.txt
 docs/superpowers/
 AGENT_WORKFLOW.md
-.blackbox/
+.ai/

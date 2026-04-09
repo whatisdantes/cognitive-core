@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -45,6 +46,39 @@ except ImportError:
     _SQLCIPHER_AVAILABLE = False
 
 _logger = logging.getLogger(__name__)
+
+# ─── Валидация ключа шифрования ──────────────────────────────────────────────
+
+_ENCRYPTION_KEY_RE = re.compile(r"^[a-zA-Z0-9_\-]{8,128}$")
+
+
+def _validate_encryption_key(key: str) -> None:
+    """
+    Валидировать ключ шифрования перед передачей в PRAGMA key.
+
+    Допустимые символы: [a-zA-Z0-9_-], длина 8–128 символов.
+    Вызывает ValueError при невалидном ключе — до выполнения любого SQL.
+
+    Ограничения формата:
+        - Только ASCII: буквы, цифры, дефис, подчёркивание
+        - Минимум 8 символов (достаточная энтропия)
+        - Максимум 128 символов (SQLCipher limit)
+        - Без пробелов, кавычек, спецсимволов (защита от SQL injection)
+
+    Args:
+        key: строка ключа шифрования
+
+    Raises:
+        ValueError: если ключ не соответствует формату
+    """
+    if not _ENCRYPTION_KEY_RE.match(key):
+        raise ValueError(
+            f"encryption_key должен содержать только символы [a-zA-Z0-9_-] "
+            f"и иметь длину 8–128 символов. "
+            f"Получено: {len(key)} символов. "
+            f"Недопустимые символы или неверная длина."
+        )
+
 
 # ─── Версия схемы ────────────────────────────────────────────────────────────
 
@@ -221,6 +255,8 @@ class MemoryDatabase:
 
         # Выбираем backend: sqlcipher3 (если ключ задан) или sqlite3
         if encryption_key:
+            # CC-01: валидация ключа до любого SQL (защита от injection)
+            _validate_encryption_key(encryption_key)
             if not _SQLCIPHER_AVAILABLE:
                 raise ImportError(
                     "sqlcipher3 не установлен. "
@@ -240,8 +276,9 @@ class MemoryDatabase:
         self._conn.row_factory = sqlite3.Row
 
         # Применяем ключ шифрования (должно быть первым PRAGMA)
+        # Ключ уже прошёл валидацию _validate_encryption_key выше
         if encryption_key:
-            self._conn.execute(f"PRAGMA key = '{encryption_key}'")  # nosec B608
+            self._conn.execute(f"PRAGMA key = '{encryption_key}'")
 
         self._conn.execute("PRAGMA foreign_keys = ON")
 

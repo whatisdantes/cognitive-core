@@ -6,6 +6,13 @@ brain/safety/boundary_guard.py — Граничный страж системы.
   2. Confidence gate: >0.85 PASS, >=0.60 HEDGE, >=0.40 WARN, <0.40 BLOCK
   3. Action gate: RESTRICTED_ACTIONS dict → WARN/BLOCK
 
+CC-02: Защита от Unicode-обфускации:
+  - Fullwidth ASCII (＠→@, ．→.) через NFKD нормализацию
+  - Лигатуры (ﬁ→fi) через NFKD нормализацию
+  - [at]→@, (at)→@, [dot]→., (dot)→. через подстановку
+  - Spaced text: "u s e r @ e x a m p l e . c o m" → "user@example.com"
+  - Международные телефоны (+44 20 7946 0958)
+
 Использование:
     guard = BoundaryGuard(audit_logger=audit)
     result = guard.check("Ответ системы", confidence=0.75, action="answer")
@@ -16,10 +23,75 @@ brain/safety/boundary_guard.py — Граничный страж системы.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from brain.safety.audit_logger import AuditLogger
+
+# ─── CC-02: Нормализация текста перед PII-редакцией ─────────────────────────
+
+# Unicode-диапазоны, к которым применяется NFKD (не Кириллица/Арабский/etc.)
+# Basic Latin + Latin Extended-A/B: U+0000–U+024F
+# Alphabetic Presentation Forms (лигатуры ﬁ, ﬂ, etc.): U+FB00–U+FB4F
+# Halfwidth and Fullwidth Forms (＠, ．, etc.): U+FF00–U+FFEF
+_NFKD_RANGES: Tuple[Tuple[int, int], ...] = (
+    (0x0000, 0x024F),   # Basic Latin + Latin Extended
+    (0xFB00, 0xFB4F),   # Alphabetic Presentation Forms (ligatures)
+    (0xFF00, 0xFFEF),   # Halfwidth and Fullwidth Forms
+)
+
+# Подстановки для текстовой обфускации (применяются после NFKD)
+_OBFUSCATION_SUBS: List[Tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\[at\]",  re.IGNORECASE), "@"),
+    (re.compile(r"\(at\)",  re.IGNORECASE), "@"),
+    (re.compile(r"\[dot\]", re.IGNORECASE), "."),
+    (re.compile(r"\(dot\)", re.IGNORECASE), "."),
+]
+
+# Spaced text: "u s e r @ e x a m p l e . c o m" → "user@example.com"
+# Совпадает с последовательностями одиночных символов, разделённых пробелами (≥5 символов)
+_SPACED_PATTERN = re.compile(
+    r"(?:[a-zA-Z0-9@._\-] ){4,}[a-zA-Z0-9@._\-]"
+)
+
+
+def _normalize_text(text: str) -> str:
+    """
+    Нормализация текста перед PII-редакцией (CC-02).
+
+    Применяет NFKD только к символам в безопасных диапазонах
+    (Basic Latin, лигатуры, fullwidth) — Кириллица и другие скрипты
+    остаются без изменений.
+
+    Шаги:
+      1. Selective NFKD: fullwidth ＠→@, лигатуры ﬁ→fi, etc.
+      2. Obfuscation: [at]→@, (at)→@, [dot]→., (dot)→.
+      3. Spaced text collapse: "u s e r @ e x a m p l e . c o m" → "user@example.com"
+    """
+    # 1. Selective NFKD — только для символов в _NFKD_RANGES
+    chars: List[str] = []
+    for ch in text:
+        cp = ord(ch)
+        in_range = any(lo <= cp <= hi for lo, hi in _NFKD_RANGES)
+        if in_range:
+            chars.append(unicodedata.normalize("NFKD", ch))
+        else:
+            chars.append(ch)
+    result = "".join(chars)
+
+    # 2. Obfuscation substitutions
+    for pattern, replacement in _OBFUSCATION_SUBS:
+        result = pattern.sub(replacement, result)
+
+    # 3. Spaced text collapse
+    def _collapse(m: re.Match) -> str:  # type: ignore[type-arg]
+        return m.group(0).replace(" ", "")
+
+    result = _SPACED_PATTERN.sub(_collapse, result)
+
+    return result
+
 
 # ─── Паттерны редакции PII ───────────────────────────────────────────────────
 
@@ -36,6 +108,10 @@ _REDACTION_PATTERNS: Dict[str, re.Pattern[str]] = {
     ),
     "phone": re.compile(
         r"(?<!\d)(?:\+7|8)?[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}(?!\d)",
+    ),
+    # CC-02: международные номера (+44 20 7946 0958, +1 (555) 123-4567, etc.)
+    "phone_intl": re.compile(
+        r"(?<!\d)\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{2,4}[\s\-]?\d{2,4}(?!\d)",
     ),
     "passport": re.compile(
         r"\b\d{4}\s?\d{6}\b",
@@ -168,9 +244,16 @@ class BoundaryGuard:
         )
 
     def _redact(self, text: str) -> tuple[str, int]:
-        """Применить все паттерны редакции. Возвращает (sanitized, count)."""
+        """
+        Нормализовать текст и применить все паттерны редакции.
+
+        CC-02: нормализация перед PII-редакцией защищает от Unicode-обфускации.
+        Возвращает (sanitized, count).
+        """
+        # CC-02: нормализация (fullwidth, лигатуры, [at]/[dot], spaced text)
+        normalized = _normalize_text(text)
         count = 0
-        result = text
+        result = normalized
         for pattern in _REDACTION_PATTERNS.values():
             new_result, n = pattern.subn(_REDACTED_PLACEHOLDER, result)
             count += n

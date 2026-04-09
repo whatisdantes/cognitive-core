@@ -73,7 +73,7 @@ anthropic = [
     "anthropic>=0.20",
 ]
 all = [
-    "cognitive-core[dev,nlp,vision,audio,docs,apidocs,openai,anthropic]",
+    "cognitive-core[dev,nlp,vision,audio,docs,apidocs,encrypted,openai,anthropic]",
 ]
 
 [project.scripts]

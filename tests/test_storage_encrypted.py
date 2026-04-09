@@ -100,7 +100,7 @@ class TestMissingSqlcipher:
             with pytest.raises(ImportError) as exc_info:
                 MemoryDatabase(
                     str(tmp_path / "secure.db"),
-                    encryption_key="any-key",
+                    encryption_key="any-valid-key",  # 13 chars, passes validation
                 )
             assert "pip install" in str(exc_info.value)
             assert "encrypted" in str(exc_info.value)
@@ -116,7 +116,7 @@ class TestEncryptedDatabase:
         """Зашифрованная БД создаётся без ошибок."""
         db = MemoryDatabase(
             str(tmp_path / "secure.db"),
-            encryption_key="test-secret-key-32chars-minimum!!",
+            encryption_key="test-secret-key-32chars-minimum00",
         )
         try:
             assert db.is_encrypted is True
@@ -127,7 +127,7 @@ class TestEncryptedDatabase:
     def test_encrypted_db_write_and_read(self, tmp_path):
         """Запись и чтение данных в зашифрованной БД."""
         db_path = str(tmp_path / "secure.db")
-        key = "test-secret-key-32chars-minimum!!"
+        key = "test-secret-key-32chars-minimum00"
 
         # Запись
         db = MemoryDatabase(db_path, encryption_key=key)
@@ -167,7 +167,7 @@ class TestEncryptedDatabase:
         """status() возвращает encrypted=True для зашифрованной БД."""
         db = MemoryDatabase(
             str(tmp_path / "secure.db"),
-            encryption_key="my-key-32chars-minimum-padding!!",
+            encryption_key="my-key-32chars-minimum-padding00",
         )
         try:
             st = db.status()
@@ -183,8 +183,8 @@ class TestEncryptedDatabase:
         при первом обращении к данным.
         """
         db_path = str(tmp_path / "secure.db")
-        correct_key = "correct-key-32chars-minimum!!!!!"
-        wrong_key = "wrong-key-32chars-minimum!!!!!!!!"
+        correct_key = "correct-key-32chars-minimum00000"
+        wrong_key = "wrong-key-32chars-minimum0000000"
 
         # Создаём с правильным ключом
         db = MemoryDatabase(db_path, encryption_key=correct_key)
@@ -209,7 +209,7 @@ class TestEncryptedDatabase:
         """Зашифрованная и обычная БД работают независимо."""
         plain_path = str(tmp_path / "plain.db")
         secure_path = str(tmp_path / "secure.db")
-        key = "independent-key-32chars-minimum!!"
+        key = "independent-key-32chars-minimum00"
 
         plain_db = MemoryDatabase(plain_path)
         secure_db = MemoryDatabase(secure_path, encryption_key=key)
@@ -242,3 +242,109 @@ class TestEncryptedDatabase:
         finally:
             plain_db.close()
             secure_db.close()
+
+
+# ─── CC-01: encryption_key validation tests ──────────────────────────────────
+
+
+class TestEncryptionKeyValidation:
+    """Тесты валидации encryption_key (CC-01: SQL injection fix)."""
+
+    def test_valid_key_alphanumeric(self, tmp_path):
+        """Валидный ключ из букв и цифр — не должен вызывать исключение."""
+        db_path = str(tmp_path / "test.db")
+        try:
+            db = MemoryDatabase(db_path, encryption_key="ValidKey123")
+            db.close()
+        except ImportError:
+            pytest.skip("sqlcipher3 не установлен")
+
+    def test_valid_key_with_dash_underscore(self, tmp_path):
+        """Валидный ключ с дефисом и подчёркиванием."""
+        db_path = str(tmp_path / "test2.db")
+        try:
+            db = MemoryDatabase(db_path, encryption_key="valid-key_123")
+            db.close()
+        except ImportError:
+            pytest.skip("sqlcipher3 не установлен")
+
+    def test_valid_key_min_length(self, tmp_path):
+        """Ключ минимальной длины (8 символов) — валиден."""
+        db_path = str(tmp_path / "test3.db")
+        try:
+            db = MemoryDatabase(db_path, encryption_key="Abcd1234")
+            db.close()
+        except ImportError:
+            pytest.skip("sqlcipher3 не установлен")
+
+    def test_valid_key_max_length(self, tmp_path):
+        """Ключ максимальной длины (128 символов) — валиден."""
+        db_path = str(tmp_path / "test4.db")
+        try:
+            db = MemoryDatabase(db_path, encryption_key="A" * 128)
+            db.close()
+        except ImportError:
+            pytest.skip("sqlcipher3 не установлен")
+
+    def test_invalid_key_too_short(self, tmp_path):
+        """Ключ короче 8 символов — ValueError."""
+        db_path = str(tmp_path / "test5.db")
+        with pytest.raises(ValueError, match="encryption_key"):
+            MemoryDatabase(db_path, encryption_key="short")
+
+    def test_invalid_key_too_long(self, tmp_path):
+        """Ключ длиннее 128 символов — ValueError."""
+        db_path = str(tmp_path / "test6.db")
+        with pytest.raises(ValueError, match="encryption_key"):
+            MemoryDatabase(db_path, encryption_key="A" * 129)
+
+    def test_none_key_no_encryption(self, tmp_path):
+        """encryption_key=None — шифрование не активируется, БД открывается."""
+        db_path = str(tmp_path / "test7.db")
+        db = MemoryDatabase(db_path, encryption_key=None)
+        assert db.is_encrypted is False
+        db.close()
+
+    def test_invalid_key_sql_injection_attempt(self, tmp_path):
+        """Попытка SQL injection — ValueError до выполнения PRAGMA."""
+        db_path = str(tmp_path / "test8.db")
+        with pytest.raises(ValueError, match="encryption_key"):
+            MemoryDatabase(
+                db_path,
+                encryption_key="key'; DROP TABLE semantic_nodes; --",
+            )
+
+    def test_invalid_key_spaces(self, tmp_path):
+        """Ключ с пробелами — ValueError."""
+        db_path = str(tmp_path / "test9.db")
+        with pytest.raises(ValueError, match="encryption_key"):
+            MemoryDatabase(db_path, encryption_key="key with spaces")
+
+    def test_invalid_key_special_chars(self, tmp_path):
+        """Ключ со спецсимволами — ValueError."""
+        db_path = str(tmp_path / "test10.db")
+        with pytest.raises(ValueError, match="encryption_key"):
+            MemoryDatabase(db_path, encryption_key="key@#$%^&*()")
+
+    def test_validate_function_directly_valid(self):
+        """Прямой вызов _validate_encryption_key с валидным ключом — нет исключения."""
+        from brain.memory.storage import _validate_encryption_key
+        _validate_encryption_key("ValidKey-123_abc")  # не должен поднимать
+
+    def test_validate_function_directly_invalid(self):
+        """Прямой вызов _validate_encryption_key с невалидным ключом — ValueError."""
+        from brain.memory.storage import _validate_encryption_key
+        with pytest.raises(ValueError, match="encryption_key"):
+            _validate_encryption_key("bad key!")
+
+    def test_validate_function_empty_string(self):
+        """Пустая строка — ValueError (слишком короткая)."""
+        from brain.memory.storage import _validate_encryption_key
+        with pytest.raises(ValueError, match="encryption_key"):
+            _validate_encryption_key("")
+
+    def test_validate_function_quotes_injection(self):
+        """Одинарные кавычки в ключе — ValueError."""
+        from brain.memory.storage import _validate_encryption_key
+        with pytest.raises(ValueError, match="encryption_key"):
+            _validate_encryption_key("valid'quote")

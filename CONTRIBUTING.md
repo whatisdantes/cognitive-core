@@ -34,9 +34,10 @@ source .venv/bin/activate        # Linux/macOS
 # 3. Установить зависимости для разработки
 pip install -e ".[dev]"
 
-# 4. Опциональные зависимости (NLP, vision, audio, docs)
+# 4. Опциональные зависимости
 pip install -e ".[nlp]"          # pymorphy3, razdel, sentence-transformers
-pip install -e ".[all]"          # все зависимости
+pip install -e ".[encrypted]"    # SQLCipher / шифрование памяти
+pip install -e ".[all]"          # все optional extras
 
 # 5. Проверить установку
 cognitive-core --version
@@ -66,13 +67,12 @@ cognitive-core/
 │   ├── layers/                 # Спецификации слоёв (00–11)
 │   ├── adr/                    # Architecture Decision Records
 │   ├── BRAIN.md                # Архитектурная спецификация
-│   ├── ACTION_PLAN.md          # Детальный план разработки
-│   └── PLANS.md                # Стратегический контекст
+│   ├── index.md                # Главная страница документации
+│   └── development.md          # Актуальная dev-навигация и extras
 ├── examples/                   # Примеры использования
 ├── pyproject.toml              # Конфигурация проекта (setuptools, ruff, mypy, pytest, bandit)
 ├── TODO.md                     # Мастер-роадмап
-├── CHANGELOG.md                # История изменений
-└── claude.md                   # Инструкции для AI-ассистента
+└── README.md                   # Обзор проекта и quick start
 ```
 
 ---
@@ -158,7 +158,7 @@ python -m pytest tests/test_memory.py::TestSemanticMemory::test_learn_fact -v
 
 ### Coverage gate
 
-Минимальный coverage: **70%** (текущий: 84.44%)
+Минимальный coverage: **70%** (ориентируйтесь на актуальный отчёт CI/codecov, а не на зафиксированное число в документации)
 
 ```bash
 # Проверка coverage gate
@@ -215,7 +215,7 @@ class TestSemanticMemory:
 ### Перед началом работы
 
 1. Свериться с [`TODO.md`](TODO.md) — текущий прогресс и приоритеты
-2. Прочитать [`docs/ACTION_PLAN.md`](docs/ACTION_PLAN.md) — детали задачи
+2. Прочитать [`docs/development.md`](docs/development.md) — установка и dev-навигация
 3. Убедиться, что задача соответствует текущему этапу
 
 ### Правило принятия решений
@@ -279,7 +279,6 @@ perf(semantic): заменить sorted() на min() в _evict_least_important()
 - [ ] Тесты написаны для новой функциональности
 - [ ] Все тесты проходят (`pytest tests/`)
 - [ ] Coverage не упал ниже 70%
-- [ ] CHANGELOG.md обновлён (секция `[Unreleased]`)
 - [ ] TODO.md обновлён (задача отмечена как выполненная)
 - [ ] Docstrings на русском языке
 
@@ -331,10 +330,9 @@ perf(semantic): заменить sorted() на min() в _evict_least_important()
 
 - [`TODO.md`](TODO.md) — мастер-роадмап
 - [`docs/BRAIN.md`](docs/BRAIN.md) — архитектурная спецификация
-- [`docs/ACTION_PLAN.md`](docs/ACTION_PLAN.md) — детальный план с effort-оценками
+- [`docs/development.md`](docs/development.md) — установка, extras и dev-поток
 - [`docs/layers/`](docs/layers/) — спецификации каждого из 12 слоёв
-- [`CHANGELOG.md`](CHANGELOG.md) — история изменений
-- [`claude.md`](claude.md) — инструкции для AI-ассистента
+- [`README.md`](README.md) — обзор проекта и quick start
 
 ---
 

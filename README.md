@@ -9,7 +9,7 @@
 > **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅, P0/P1/P2 ✅, H/I/N/J/K/L/M ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тесты:** 2162/2162 ✅ (5 skipped) · **Ruff:** 0 errors · **Mypy:** 0 errors · **Bandit:** 0 issues · **Coverage:** 84%+
+> **Тестовый набор:** 2198 collected в текущем дереве · **Ruff/Mypy/Bandit:** проверяются в CI · **Coverage gate:** 70%
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -49,10 +49,16 @@ python -m venv .venv
 # source .venv/bin/activate     # Linux/macOS
 pip install -e ".[dev]"
 
+# Полный набор optional extras
+pip install -e ".[all]"
+
+# SQLCipher отдельно
+pip install -e ".[encrypted]"
+
 # 2. Задать вопрос через CLI
 cognitive-core "Что такое нейропластичность?"
 
-# 3. Запустить все тесты (2162 ✅)
+# 3. Запустить тесты
 python -m pytest tests/ -v
 
 # 4. Автономный режим (Scheduler-driven)
@@ -413,9 +419,8 @@ cognitive-core/
 ├── examples/                           # Примеры использования
 │   └── demo.py                         # ✅ Демо: полный pipeline в 30 строк
 │
-├── CHANGELOG.md                        # ✅ История изменений (Keep a Changelog) — P3-1
 ├── CONTRIBUTING.md                     # ✅ Гайд для контрибьюторов — P3-2
-├── tests/                              # Тесты (pytest-совместимые, 2162 ✅)
+├── tests/                              # Тесты (pytest-совместимые, 2198 collected в текущем дереве)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -445,7 +450,7 @@ cognitive-core/
 │   ├── test_online_learner.py         # ✅ OnlineLearner (Этап I)
 │   ├── test_knowledge_gap_detector.py # ✅ KnowledgeGapDetector (Этап I)
 │   ├── test_replay_engine.py          # ✅ ReplayEngine (Этап I)
-│   └── test_storage_encrypted.py      # ✅ SQLCipher encryption (P3-12)
+│   └── test_storage_encrypted.py      # ✅ SQLCipher encryption (P3-12, optional extra `encrypted`)
 │
 ├── docs/                               # Документация
 │   ├── BRAIN.md                        # Архитектурная спецификация (15 разделов)
@@ -787,11 +792,19 @@ source .venv/bin/activate
 # Установить проект с dev-зависимостями
 pip install -e ".[dev]"
 
+# Полный набор optional extras, включая SQLCipher
+pip install -e ".[all]"
+
+# Только SQLCipher
+pip install -e ".[encrypted]"
+
 # Или минимальная установка (только ядро)
 pip install -e .
 ```
 
 > **Рекомендуемый способ установки:** `pip install -e ".[dev]"`
+>
+> `.[all]` включает optional extras для NLP, vision, audio, docs, API docs, OpenAI, Anthropic и SQLCipher.
 
 ---
 
@@ -801,7 +814,7 @@ pip install -e .
 # Активировать окружение
 .venv\Scripts\activate
 
-# Запустить все тесты (2162 ✅)
+# Запустить все тесты
 python -m pytest tests/ -v
 
 # Или отдельный файл
@@ -811,7 +824,9 @@ python -m pytest tests/test_memory.py -v
 python -m pytest tests/ --cov=brain --cov-report=term-missing
 ```
 
-### Состав тестового набора (2162 теста)
+### Состав тестового набора
+
+В текущем рабочем дереве `pytest` собирает 2198 тестов. Точный total может меняться по мере развития проекта, поэтому ниже приведён состав набора по файлам, а актуальный status лучше сверять по CI и локальному `pytest --collect-only`.
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -865,9 +880,9 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_reward_engine.py` | RewardEngine (Этап M) | 28 |
 | `test_motivation_engine.py` | MotivationEngine (Этап M) | 28 |
 | `test_curiosity_engine.py` | CuriosityEngine (Этап M) | 28 |
-| | **Итого** | **2162** |
+| | **Итого** | **см. `pytest --collect-only`** |
 
-> \* 6 тестов запускаются всегда, 5 — только при установленном `sqlcipher3`
+> Тесты SQLCipher требуют установленного extra `encrypted` (`pip install -e ".[encrypted]"` или `pip install -e ".[all]"`).
 
 ---
 
@@ -1135,7 +1150,7 @@ tests/
 **P0 Hardening** ✅ — Thread safety (6 модулей), memory leaks, real vector/hybrid retrieval (60 тестов).  
 **P1 Hardening** ✅ — CI coverage gate 70%, ruff rules (B/SIM/C4/RET/PIE), mypy 0 errors, Docker multi-stage + non-root, Protocol types.  
 **P2 Hardening** ✅ — Алгоритмические оптимизации (BFS deque, batch_remove, min вместо sorted), локальные дефекты (UUID, ZeroDivisionError, decay), инфраструктура (Dependabot, Bandit, Codecov).  
-**P3 (mostly done)** ✅ — DX (CHANGELOG, CONTRIBUTING, ADR, mkdocs), архитектура (CognitivePipeline 15 шагов, ThreadPoolEventBus, --autonomous CLI, SQLCipher), тестирование (Hypothesis, stress tests).  
+**P3 (mostly done)** ✅ — DX (CONTRIBUTING, ADR, mkdocs, development docs), архитектура (CognitivePipeline 15 шагов, ThreadPoolEventBus, --autonomous CLI, SQLCipher), тестирование (Hypothesis, stress tests).  
 **Этап H** ✅ — Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer).  
 **Этап N** ✅ — LLM Bridge (OpenAI/Anthropic/Blackbox providers, safety wrapper, CLI integration).  
 **Этап I** ✅ — Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули + интеграция в CognitivePipeline + CLI).  

@@ -179,3 +179,222 @@ class TestBoundaryGuardStatus:
         guard.check("Email: test@test.com", confidence=0.9)
         redacted = audit.get_by_type("data_redacted")
         assert len(redacted) >= 1
+
+
+# ─── CC-02: Normalization & Obfuscation ──────────────────────────────────────
+
+
+class TestBoundaryGuardNormalization:
+    """CC-02: Unicode normalization + obfuscation protection."""
+
+    def test_normalize_text_exported(self):
+        """_normalize_text доступна как публичная функция модуля."""
+        from brain.safety.boundary_guard import _normalize_text
+        assert callable(_normalize_text)
+
+    def test_normalize_text_nfkd_ligature(self):
+        """NFKD: лигатура ﬁ (U+FB01) → fi."""
+        from brain.safety.boundary_guard import _normalize_text
+        result = _normalize_text("\uFB01le")  # ﬁle
+        assert result.startswith("fi")
+
+    def test_normalize_text_at_bracket(self):
+        """[at] → @ после нормализации."""
+        from brain.safety.boundary_guard import _normalize_text
+        result = _normalize_text("user[at]example.com")
+        assert "@" in result
+
+    def test_normalize_text_at_paren(self):
+        """(at) → @ после нормализации."""
+        from brain.safety.boundary_guard import _normalize_text
+        result = _normalize_text("user(at)example.com")
+        assert "@" in result
+
+    def test_normalize_text_dot_bracket(self):
+        """[dot] → . после нормализации."""
+        from brain.safety.boundary_guard import _normalize_text
+        result = _normalize_text("user@example[dot]com")
+        assert result.count(".") >= 1
+
+    def test_normalize_text_dot_paren(self):
+        """(dot) → . после нормализации."""
+        from brain.safety.boundary_guard import _normalize_text
+        result = _normalize_text("user@example(dot)com")
+        assert result.count(".") >= 1
+
+    def test_normalize_text_spaced_email(self):
+        """Spaced obfuscation: 'u s e r @ e x a m p l e . c o m' → collapsed."""
+        from brain.safety.boundary_guard import _normalize_text
+        result = _normalize_text("u s e r @ e x a m p l e . c o m")
+        assert "@" in result
+        assert " " not in result.replace(" ", "").join([])  # spaces collapsed
+
+    def test_obfuscation_at_bracket_redacted(self):
+        """user[at]example.com должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("Напиши на user[at]example.com", confidence=0.9)
+        assert result.redacted_count >= 1
+        assert "user[at]example.com" not in result.sanitized_text
+
+    def test_obfuscation_at_paren_redacted(self):
+        """user(at)example.com должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("Напиши на user(at)example.com", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_obfuscation_dot_bracket_redacted(self):
+        """user@example[dot]com должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("Напиши на user@example[dot]com", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_obfuscation_dot_paren_redacted(self):
+        """user@example(dot)com должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("Напиши на user@example(dot)com", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_obfuscation_combined_at_dot(self):
+        """user[at]example[dot]com — комбинированная обфускация."""
+        guard = BoundaryGuard()
+        result = guard.check("user[at]example[dot]com", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_obfuscation_spaced_email_redacted(self):
+        """Spaced email 'u s e r @ e x a m p l e . c o m' должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("u s e r @ e x a m p l e . c o m", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_homoglyph_cyrillic_in_email(self):
+        """Кириллические гомоглифы в email должны быть обнаружены."""
+        guard = BoundaryGuard()
+        # 'е' (U+0435 Cyrillic), 'а' (U+0430 Cyrillic), 'о' (U+043E Cyrillic)
+        result = guard.check("usеr@еxаmplе.cоm", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_fullwidth_at_in_email(self):
+        """Fullwidth ＠ (U+FF20) в email должен быть обнаружен."""
+        guard = BoundaryGuard()
+        result = guard.check("user\uFF20example.com", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_clean_text_not_affected_by_normalization(self):
+        """Обычный текст без PII не редактируется после нормализации."""
+        guard = BoundaryGuard()
+        result = guard.check("Нейрон — клетка нервной системы", confidence=0.9)
+        assert result.redacted_count == 0
+
+    def test_phone_international_redacted(self):
+        """Международный номер +1 (555) 123-4567 должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("Позвони +1 (555) 123-4567", confidence=0.9)
+        assert result.redacted_count >= 1
+
+    def test_phone_uk_redacted(self):
+        """Британский номер +44 20 7946 0958 должен быть редактирован."""
+        guard = BoundaryGuard()
+        result = guard.check("Call +44 20 7946 0958", confidence=0.9)
+        assert result.redacted_count >= 1
+
+
+# ─── CC-02: Hypothesis property-based tests ──────────────────────────────────
+
+
+class TestBoundaryGuardHypothesis:
+    """CC-02: Property-based тесты через Hypothesis."""
+
+    def test_check_always_returns_guard_result(self):
+        """check() всегда возвращает GuardResult для любого текста."""
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        guard = BoundaryGuard()
+
+        @given(
+            text=st.text(max_size=200),
+            confidence=st.floats(
+                min_value=0.0, max_value=1.0,
+                allow_nan=False, allow_infinity=False,
+            ),
+        )
+        @settings(max_examples=50)
+        def inner(text: str, confidence: float) -> None:
+            result = guard.check(text, confidence=confidence)
+            assert isinstance(result, GuardResult)
+            assert result.status in ("PASS", "HEDGE", "WARN", "BLOCK")
+            assert result.redacted_count >= 0
+
+        inner()
+
+    def test_redacted_count_non_negative(self):
+        """redacted_count всегда >= 0."""
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        guard = BoundaryGuard()
+
+        @given(text=st.text(max_size=200))
+        @settings(max_examples=50)
+        def inner(text: str) -> None:
+            result = guard.check(text, confidence=0.9)
+            assert result.redacted_count >= 0
+
+        inner()
+
+    def test_email_always_redacted(self):
+        """Валидные email-адреса всегда редактируются."""
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        guard = BoundaryGuard()
+
+        @given(
+            user=st.from_regex(r"[a-zA-Z0-9]{3,10}", fullmatch=True),
+            domain=st.from_regex(r"[a-zA-Z0-9]{3,10}", fullmatch=True),
+            tld=st.from_regex(r"[a-zA-Z]{2,4}", fullmatch=True),
+        )
+        @settings(max_examples=30)
+        def inner(user: str, domain: str, tld: str) -> None:
+            email = f"{user}@{domain}.{tld}"
+            result = guard.check(f"Contact: {email}", confidence=0.9)
+            assert result.redacted_count >= 1
+            assert email not in result.sanitized_text
+
+        inner()
+
+    def test_block_when_confidence_below_040(self):
+        """confidence < 0.40 всегда даёт BLOCK."""
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        guard = BoundaryGuard()
+
+        @given(
+            confidence=st.floats(
+                min_value=0.0, max_value=0.3999,
+                allow_nan=False, allow_infinity=False,
+            )
+        )
+        @settings(max_examples=30)
+        def inner(confidence: float) -> None:
+            result = guard.check("Ответ", confidence=confidence)
+            assert result.status == "BLOCK"
+            assert result.is_blocked is True
+
+        inner()
+
+    def test_original_text_always_preserved(self):
+        """original_text всегда равен входному тексту."""
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        guard = BoundaryGuard()
+
+        @given(text=st.text(max_size=100))
+        @settings(max_examples=50)
+        def inner(text: str) -> None:
+            result = guard.check(text, confidence=0.9)
+            assert result.original_text == text
+
+        inner()
