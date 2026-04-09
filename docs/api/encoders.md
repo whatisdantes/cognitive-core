@@ -51,10 +51,5 @@ print(len(result.vector))  # 300
 
 ### EncodedPercept
 
-Результат кодирования.
-
-::: brain.core.contracts.EncodedPercept
-    options:
-      show_source: false
-      show_root_heading: true
-      heading_level: 3
+Результат кодирования описан в contracts:
+[EncodedPercept](core.md#brain.core.contracts.EncodedPercept).

@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/test%20suite-2198%20collected-brightgreen)](https://github.com/whatisdantes/cognitive-core)
 [![Coverage](https://img.shields.io/badge/coverage-gate%2070%25-green)](https://codecov.io)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/whatisdantes/cognitive-core/blob/main/LICENSE)
 
 ---
 
@@ -90,7 +90,7 @@ cognitive-core --log-dir brain/data/logs --log-level DEBUG "что такое н
 - [ADR](adr/README.md) — Architecture Decision Records (7 решений)
 - [API Reference](api/index.md) — автогенерированная документация модулей
 - [Разработка](development.md) — установка extras, проверка и инструменты разработки
-- [CONTRIBUTING](../CONTRIBUTING.md) — руководство для контрибьюторов
+- [CONTRIBUTING](https://github.com/whatisdantes/cognitive-core/blob/main/CONTRIBUTING.md) — руководство для контрибьюторов
 
 ## Метрики
 

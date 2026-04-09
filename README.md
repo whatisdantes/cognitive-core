@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/whatisdantes/cognitive-core/graph/badge.svg)](https://codecov.io/gh/whatisdantes/cognitive-core)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://whatisdantes.github.io/cognitive-core/)
 
 > **Версия:** 0.7.0  
 > **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅, P0/P1/P2 ✅, H/I/N/J/K/L/M ✅  
@@ -972,6 +973,8 @@ cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level INF
 ## 📚 Документация
 
 Подробная документация по каждому слою архитектуры находится в [`docs/layers/`](docs/layers/):
+
+Сайт документации: [https://whatisdantes.github.io/cognitive-core/](https://whatisdantes.github.io/cognitive-core/)
 
 | Файл | Слой | Биологический аналог | Статус |
 |------|------|---------------------|--------|

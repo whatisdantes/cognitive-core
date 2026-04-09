@@ -27,7 +27,7 @@
 > - ⬜ SelfSupervisedLearner (согласованность картинка ↔ текст ↔ аудио)
 > - ⬜ Persisted ANN/FAISS индексы
 >
-> Актуальный roadmap: [`TODO.md`](../TODO.md)
+> Актуальный roadmap: [`TODO.md`](https://github.com/whatisdantes/cognitive-core/blob/main/TODO.md)
 > Установка extras и dev-инструментов: [`development.md`](development.md)
 
 ---
@@ -300,7 +300,7 @@ MULTIMODAL BRAIN
 ## 12) Roadmap реализации (под CPU-only, media-aware архитектуру)
 
 > **Примечание:** Этот roadmap — оригинальный vision из BRAIN.md.
-> Актуальный roadmap с точными статусами: [`TODO.md`](../TODO.md).
+> Актуальный roadmap с точными статусами: [`TODO.md`](https://github.com/whatisdantes/cognitive-core/blob/main/TODO.md).
 > Ниже — обновлённые статусы по состоянию на v0.7.0.
 
 ### Фаза A — Multimodal Perception

@@ -119,8 +119,9 @@ class TextIngestor:
         Returns:
             List[PerceptEvent] — пустой список при ошибке или hard reject
 
-        Raises:
-            Не бросает исключений — все ошибки логируются.
+        Note:
+            Метод не бросает исключений наружу. Ошибки логируются, а при
+            неуспешной обработке возвращается пустой список.
         """
         path = Path(file_path)
         ext = path.suffix.lower()
