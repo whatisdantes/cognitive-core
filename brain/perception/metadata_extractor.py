@@ -115,9 +115,11 @@ class MetadataExtractor:
         if extra:
             meta.update(extra)
 
-        # Логируем предупреждения
+        # Логируем только реально сниженное качество как WARNING; нормальные чанки
+        # могут сохранять диагностические warnings без шума в консоли daemon-а.
         if warnings:
-            _logger.warning(
+            log_fn = _logger.warning if self.quality_label(quality) != "normal" else _logger.debug
+            log_fn(
                 "MetadataExtractor: source='%s' chunk=%d quality=%.2f warnings=%s",
                 source, chunk_id, quality, warnings,
             )

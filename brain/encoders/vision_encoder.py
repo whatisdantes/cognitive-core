@@ -40,8 +40,8 @@ except ImportError:
     logger.debug("Pillow не установлен — VisionEncoder работает в degraded режиме")
 
 try:
-    import torch as _torch  # type: ignore[import-untyped]
     import clip as _clip  # type: ignore[import-untyped]
+    import torch as _torch  # type: ignore[import-untyped]
     _CLIP_AVAILABLE = True
 except ImportError:
     _CLIP_AVAILABLE = False

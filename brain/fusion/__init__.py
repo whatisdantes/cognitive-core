@@ -8,17 +8,17 @@ brain/fusion — Stage K: Cross-Modal Fusion.
   CrossModalContradictionDetector / CrossModalContradiction — детекция противоречий
 """
 
-from brain.fusion.shared_space_projector import SharedSpaceProjector
-from brain.fusion.entity_linker import (
-    CrossModalLink,
-    EntityCluster,
-    EntityLinker,
-)
 from brain.fusion.confidence_calibrator import ConfidenceCalibrator
 from brain.fusion.cross_modal_contradiction_detector import (
     CrossModalContradiction,
     CrossModalContradictionDetector,
 )
+from brain.fusion.entity_linker import (
+    CrossModalLink,
+    EntityCluster,
+    EntityLinker,
+)
+from brain.fusion.shared_space_projector import SharedSpaceProjector
 
 __all__ = [
     "SharedSpaceProjector",

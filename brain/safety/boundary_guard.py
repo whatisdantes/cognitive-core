@@ -85,7 +85,7 @@ def _normalize_text(text: str) -> str:
         result = pattern.sub(replacement, result)
 
     # 3. Spaced text collapse
-    def _collapse(m: re.Match) -> str:  # type: ignore[type-arg]
+    def _collapse(m: re.Match[str]) -> str:
         return m.group(0).replace(" ", "")
 
     result = _SPACED_PATTERN.sub(_collapse, result)

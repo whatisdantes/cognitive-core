@@ -1,9 +1,8 @@
 # tests/test_entity_linker.py
 """Тесты для brain/fusion/entity_linker.py (K.2)."""
 from __future__ import annotations
-import math
 
-import pytest
+import math
 
 from brain.core.contracts import EncodedPercept, Modality
 
@@ -27,7 +26,7 @@ def _unit(dim: int) -> list:
 # ---------------------------------------------------------------------------
 
 def test_import():
-    from brain.fusion.entity_linker import EntityLinker, EntityCluster, CrossModalLink
+    from brain.fusion.entity_linker import CrossModalLink, EntityCluster, EntityLinker
     assert EntityLinker is not None
     assert EntityCluster is not None
     assert CrossModalLink is not None

@@ -3,7 +3,7 @@
 **Дата:** 2026-04-21
 **Версия проекта на момент дизайна:** cognitive-core v0.7.0
 **Автор:** brainstorming-сессия (пользователь + Claude Opus 4.7), ревью: OpenAI Codex (2 раунда)
-**Статус:** approved → готов к декомпозиции в `UPGRADE_TODO.md`
+**Статус:** approved → готов к декомпозиции в [`planning/UPDATE_TODO.md`](../../planning/UPDATE_TODO.md)
 
 ---
 
@@ -835,7 +835,7 @@ Coverage-gate остаётся **70%** (`--cov-fail-under=70`). Ожидаемы
 - U-E (output) зависит только от U-0 и U-B.
 - U-G (fixtures) требует U-F, но готовится параллельно.
 
-## 13. Явно deferred (не входит в UPGRADE_TODO.md)
+## 13. Явно deferred (не входит в [`planning/UPDATE_TODO.md`](../../planning/UPDATE_TODO.md))
 
 - **U-0.7 — Legacy backfill SemanticNode → Claim.** Опциональная миграция: по каждому существующему `SemanticNode` создать один `Claim(evidence_kind=timeless, status=active, confidence=node.confidence)`. Если не делать, старые SemanticNode остаются как legacy fallback.
 - **F-AUTO-8 IPC / Unix socket.** Post-MVP.
@@ -847,7 +847,7 @@ Coverage-gate остаётся **70%** (`--cov-fail-under=70`). Ожидаемы
 
 ## 14. Связи с существующими документами
 
-- `docs/planning/FUTURE_TODO.md` — `U-AUTO-*` задачи в `UPGRADE_TODO.md` ссылаются на открытые `F-AUTO-*` (F-AUTO-1/2/3/6/7/9/14), эти ссылки **заменяют** соответствующие F-задачи (они закрываются).
+- [`planning/FUTURE_TODO.md`](../../planning/FUTURE_TODO.md) — `U-AUTO-*` задачи в [`planning/UPDATE_TODO.md`](../../planning/UPDATE_TODO.md) ссылаются на открытые `F-AUTO-*` (F-AUTO-1/2/3/6/7/9/14), эти ссылки **заменяют** соответствующие F-задачи (они закрываются).
 - `docs/layers/09_logging_observability.md` — logging wiring fix (U-0.6) закрывает 5 из 8 пунктов предыдущего анализа логов (trace chain, memory session_id, cycle_start timing, step префикс, safety_audit file).
 - `docs/adr/` — потенциально новый ADR (опционально, после реализации U-0 и U-B): **ADR-008 Claim-Store модель памяти и детерминированная resolution**.
 - `docs/BRAIN.md` — §5 (Memory) и §14 (Logging) потребуют обновления после U-0; §12 (Autonomy) — после U-F.
@@ -866,7 +866,7 @@ Coverage-gate остаётся **70%** (`--cov-fail-under=70`). Ожидаемы
 
 ## 16. Implementation invariants and open engineering decisions
 
-Этот раздел фиксирует решения, которые должны быть одинаково поняты при декомпозиции spec-а в `UPGRADE_TODO.md`. Если будущая задача противоречит этим инвариантам, менять нужно сначала spec/ADR, а не локальную реализацию.
+Этот раздел фиксирует решения, которые должны быть одинаково поняты при декомпозиции spec-а в [`planning/UPDATE_TODO.md`](../../planning/UPDATE_TODO.md). Если будущая задача противоречит этим инвариантам, менять нужно сначала spec/ADR, а не локальную реализацию.
 
 ### 16.1. SQLite schema migration
 
@@ -957,4 +957,4 @@ Coverage-gate остаётся **70%** (`--cov-fail-under=70`). Ожидаемы
 
 ---
 
-**Конец документа.** Готов к декомпозиции в `UPGRADE_TODO.md` через skill writing-plans.
+**Конец документа.** Готов к декомпозиции в [`planning/UPDATE_TODO.md`](../../planning/UPDATE_TODO.md) через skill writing-plans.

@@ -206,7 +206,10 @@ r = subprocess.run(
     capture_output=True, text=True, encoding="utf-8", env=env,
 )
 lines = [line for line in r.stdout.splitlines() if line.strip()]
-summary = next((line for line in lines if "101" in line and "провалено" in line), None)
+summary = next(
+    (line for line in lines if "пройдено" in line and "0 провалено" in line),
+    None,
+)
 if summary and "0 провалено" in summary:
     ok(f"memory regression ({summary.strip()})")
 else:

@@ -18,6 +18,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from brain.bridges.llm_bridge import LLMProvider
+from brain.bridges.llm_budget import LLMRateLimiter
 from brain.core.contracts import (
     CognitiveResult,
     EncodedPercept,
@@ -88,6 +89,7 @@ class CognitiveCore:
         resource_monitor: Optional[ResourceMonitorProtocol] = None,
         policy: Optional[PolicyConstraints] = None,
         llm_provider: Optional[LLMProvider] = None,
+        llm_rate_limiter: Optional[LLMRateLimiter] = None,
         brain_logger: Optional[BrainLogger] = None,
         trace_builder: Optional[TraceBuilder] = None,
         digest_gen: Optional[DigestGenerator] = None,
@@ -148,6 +150,7 @@ class CognitiveCore:
 
         # LLM Bridge (Этап N, опциональный)
         self._llm_provider: Optional[LLMProvider] = llm_provider
+        self._llm_rate_limiter: Optional[LLMRateLimiter] = llm_rate_limiter
 
         # --- Этап J: Learning (активируется только при конкретном MemoryManager) ---
         # NullObject-паттерн: None = no-op в CognitivePipeline
@@ -179,6 +182,7 @@ class CognitiveCore:
             vector_backend=self._vector_backend,
             cycle_count_fn=lambda: self._cycle_count,
             llm_provider=self._llm_provider,
+            llm_rate_limiter=self._llm_rate_limiter,
             brain_logger=brain_logger,
             trace_builder=trace_builder,
             gap_detector=self._gap_detector,
@@ -481,6 +485,11 @@ class CognitiveCore:
         """Количество выполненных циклов."""
         return self._cycle_count
 
+    @property
+    def gap_detector(self) -> Optional[KnowledgeGapDetector]:
+        """Доступ к detector-у пробелов знаний для daemon/idle wiring."""
+        return self._gap_detector
+
     def status(self) -> Dict[str, Any]:
         """Статус когнитивного ядра для observability."""
         policy_dict = self._policy.to_dict()
@@ -497,6 +506,7 @@ class CognitiveCore:
             "has_contradiction_detector": True,
             "has_uncertainty_monitor": True,
             "has_llm_provider": self._llm_provider is not None,
+            "has_llm_rate_limiter": self._llm_rate_limiter is not None,
             "llm_provider_name": (
                 self._llm_provider.provider_name
                 if self._llm_provider is not None

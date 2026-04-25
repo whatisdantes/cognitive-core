@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from brain.core.contracts import (
+    ClaimRef,
     CognitiveResult,
     ContractMixin,
     TraceRef,
@@ -67,7 +68,7 @@ class ExplainabilityTrace(ContractMixin):
     contradictions_found: List[str] = field(default_factory=list)
 
     # Источники
-    memory_facts: List[TraceRef] = field(default_factory=list)
+    memory_facts: List[Union[TraceRef, ClaimRef]] = field(default_factory=list)
 
     # Производительность
     total_duration_ms: float = 0.0
@@ -120,7 +121,9 @@ class OutputTraceBuilder:
         contradictions = list(result.contradictions) if result.contradictions else []
 
         # --- Memory facts ---
-        memory_facts = list(result.memory_refs) if result.memory_refs else []
+        memory_facts: List[Union[TraceRef, ClaimRef]] = (
+            list(result.memory_refs) if result.memory_refs else []
+        )
 
         # --- Duration ---
         total_duration_ms = meta.get("total_duration_ms", 0.0)

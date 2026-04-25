@@ -17,6 +17,7 @@ OnlineLearner обновляет память после каждого цикл
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -26,6 +27,15 @@ from brain.core.contracts import CognitiveResult, ContractMixin
 from brain.memory.memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
+
+_CONCEPT_STOP_WORDS = {
+    "что", "как", "это", "для", "при", "или", "и", "в", "на",
+    "с", "по", "из", "к", "о", "не", "но", "а", "то", "же",
+    "бы", "ли", "если", "когда", "где", "кто", "чем", "так",
+    "ты", "вы", "тебя", "тебе", "вам", "вас", "мне",
+    "помнишь", "знаешь", "скажи", "расскажи", "напомни",
+    "remember", "know", "tell", "about", "what", "which",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -126,19 +136,19 @@ class OnlineLearner:
         # --- Подтверждение фактов (action == "learn") ---
         if result.action == "learn":
             for ref in result.memory_refs:
-                concept = ref.ref_id
-                self.confirm_fact(concept, source_ref=ref.note)
+                concept = self._memory_ref_concept(ref)
+                self.confirm_fact(concept, source_ref=self._memory_ref_source(ref))
                 update.facts_confirmed.append(concept)
 
         # --- Опровержение фактов (action == "contradict") ---
         elif result.action == "contradict":
             for ref in result.memory_refs:
-                concept = ref.ref_id
-                self.deny_fact(concept, source_ref=ref.note)
+                concept = self._memory_ref_concept(ref)
+                self.deny_fact(concept, source_ref=self._memory_ref_source(ref))
                 update.facts_denied.append(concept)
 
         # --- Хеббовское обучение (confidence > 0.7) ---
-        if result.confidence > 0.7 and result.goal:
+        if self._should_update_associations(result):
             concepts = self._extract_concepts(result.goal)
             if len(concepts) >= 2:
                 assoc_updates = self._update_associations(concepts, result.confidence)
@@ -146,11 +156,11 @@ class OnlineLearner:
 
         # --- Обновление доверия к источникам ---
         confirmed_action = result.action in ("learn", "answer", "respond")
-        for ref in result.source_refs:
-            if ref.ref_id:
-                self._update_source_trust(ref.ref_id, confirmed=confirmed_action)
+        for source_ref in result.source_refs:
+            if source_ref.ref_id:
+                self._update_source_trust(source_ref.ref_id, confirmed=confirmed_action)
                 update.sources_updated.append({
-                    "source": ref.ref_id,
+                    "source": source_ref.ref_id,
                     "confirmed": confirmed_action,
                 })
 
@@ -169,6 +179,14 @@ class OnlineLearner:
             update.duration_ms,
         )
         return update
+
+    @staticmethod
+    def _memory_ref_concept(ref: Any) -> str:
+        return str(getattr(ref, "concept", "") or getattr(ref, "ref_id", ""))
+
+    @staticmethod
+    def _memory_ref_source(ref: Any) -> str:
+        return str(getattr(ref, "source_ref", "") or getattr(ref, "note", ""))
 
     def confirm_fact(self, concept: str, source_ref: str = "") -> None:
         """
@@ -269,6 +287,15 @@ class OnlineLearner:
             )
 
     @staticmethod
+    def _should_update_associations(result: CognitiveResult) -> bool:
+        """Не обучать ассоциации на обычных пользовательских вопросах."""
+        if result.confidence <= 0.7 or not result.goal:
+            return False
+        metadata = dict(result.metadata or {})
+        goal_type = str(metadata.get("goal_type", "") or "").strip().lower()
+        return goal_type != "answer_question"
+
+    @staticmethod
     def _extract_concepts(text: str) -> List[str]:
         """
         Извлечь ключевые слова из текста (простая токенизация).
@@ -276,15 +303,10 @@ class OnlineLearner:
         Фильтрует стоп-слова и слова короче 4 символов.
         Возвращает не более 5 концептов.
         """
-        _STOP_WORDS = {
-            "что", "как", "это", "для", "при", "или", "и", "в", "на",
-            "с", "по", "из", "к", "о", "не", "но", "а", "то", "же",
-            "бы", "ли", "если", "когда", "где", "кто", "чем", "так",
-        }
-        words = text.lower().split()
+        words = re.findall(r"\w+", text.lower())
         concepts = [
-            w.strip(".,!?;:\"'()[]{}") for w in words
-            if len(w) > 3 and w.strip(".,!?;:\"'()[]{}") not in _STOP_WORDS
+            w for w in words
+            if len(w) > 3 and w not in _CONCEPT_STOP_WORDS
         ]
         # Дедупликация с сохранением порядка
         seen: set[str] = set()

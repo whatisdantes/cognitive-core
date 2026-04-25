@@ -23,14 +23,21 @@ from brain.output.dialogue_responder import OutputPipeline
 # ===========================================================================
 
 @pytest.fixture
-def memory_manager():
+def memory_manager(tmp_path):
     """Реальный MemoryManager без автоконсолидации."""
-    mm = MemoryManager(auto_consolidate=False)
-    # Добавляем несколько фактов (concept, description)
-    mm.store_fact("нейрон", "Нейрон — это клетка нервной системы.")
-    mm.store_fact("синапс", "Синапс — это место контакта между нейронами.")
-    mm.store_fact("аксон", "Аксон передаёт сигналы от нейрона.")
-    return mm
+    mm = MemoryManager(
+        data_dir=str(tmp_path / "memory"),
+        auto_consolidate=False,
+        storage_backend="sqlite",
+    )
+    try:
+        # Добавляем несколько фактов (concept, description)
+        mm.store_fact("нейрон", "Нейрон — это клетка нервной системы.")
+        mm.store_fact("синапс", "Синапс — это место контакта между нейронами.")
+        mm.store_fact("аксон", "Аксон передаёт сигналы от нейрона.")
+        yield mm
+    finally:
+        mm.stop(save=False)
 
 
 @pytest.fixture

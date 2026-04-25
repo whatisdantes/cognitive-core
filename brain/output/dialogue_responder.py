@@ -21,7 +21,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from brain.core.contracts import BrainOutput, CognitiveResult
+from brain.core.contracts import BrainOutput, ClaimRef, ClaimStatus, CognitiveResult
 from brain.core.text_utils import detect_language as _canonical_detect_language
 from brain.logging import _NULL_LOGGER, BrainLogger
 
@@ -108,8 +108,10 @@ class DialogueResponder:
     def __init__(
         self,
         trace_builder: Optional[OutputTraceBuilder] = None,
+        source_memory: Optional[Any] = None,
     ) -> None:
         self._trace_builder = trace_builder or OutputTraceBuilder()
+        self._source_memory = source_memory
 
     def generate(
         self,
@@ -131,17 +133,27 @@ class DialogueResponder:
         # --- 1. Язык ---
         lang = self._detect_language(result)
 
-        # --- 2. Текст ответа ---
-        text = validation.corrected_response or result.response or ""
+        disputed_groups = self._disputed_claim_groups(result)
+        if disputed_groups:
+            text = self._format_disputed_claims(disputed_groups, lang)
+        else:
+            # --- 2. Текст ответа ---
+            text = validation.corrected_response or result.response or ""
 
-        # --- 3. Шаблон по ActionType ---
-        text = self._apply_template(text, result.action, result.confidence, lang)
+            # --- 3. Шаблон по ActionType ---
+            text = self._apply_template(text, result.action, result.confidence, lang)
 
         # --- 4. Digest ---
         digest = self._trace_builder.to_digest(trace)
 
         # --- 5. Metadata ---
-        metadata = self._build_metadata(result, validation, trace, lang)
+        metadata = self._build_metadata(
+            result,
+            validation,
+            trace,
+            lang,
+            disputed_groups=disputed_groups,
+        )
 
         # --- 6. BrainOutput ---
         return BrainOutput(
@@ -278,6 +290,86 @@ class DialogueResponder:
 
         return ""
 
+    def _disputed_claim_groups(
+        self,
+        result: CognitiveResult,
+    ) -> Dict[str, List[ClaimRef]]:
+        grouped: Dict[str, Dict[str, ClaimRef]] = {}
+        for ref in result.memory_refs or []:
+            if not isinstance(ref, ClaimRef):
+                continue
+            status_value = getattr(ref.status, "value", str(ref.status))
+            if status_value != ClaimStatus.DISPUTED.value:
+                continue
+            concept = ref.concept.strip()
+            if not concept:
+                continue
+            grouped.setdefault(concept, {})[ref.claim_id or ref.claim_text] = ref
+
+        resolved: Dict[str, List[ClaimRef]] = {}
+        for concept, refs_by_id in grouped.items():
+            refs = sorted(
+                refs_by_id.values(),
+                key=lambda ref: (-ref.confidence, ref.claim_id, ref.claim_text),
+            )
+            if len(refs) >= 2:
+                resolved[concept] = refs
+        return resolved
+
+    def _format_disputed_claims(
+        self,
+        groups: Dict[str, List[ClaimRef]],
+        lang: str,
+    ) -> str:
+        if lang == "en":
+            lines = ["There is an unresolved conflict in the available claims."]
+            for concept, refs in groups.items():
+                lines.append(f'Concept "{concept}":')
+                for ref in refs:
+                    lines.append(self._format_claim_line(ref, lang))
+                lines.append(
+                    "I will not present either disputed claim as settled until the conflict is resolved."
+                )
+            return "\n".join(lines)
+
+        lines = ["По этому вопросу есть неразрешённый конфликт в claims."]
+        for concept, refs in groups.items():
+            lines.append(f"Концепт «{concept}»:")
+            for ref in refs:
+                lines.append(self._format_claim_line(ref, lang))
+            lines.append(
+                "Я не буду выдавать ни один disputed claim как установленный факт, пока конфликт не разрешён."
+            )
+        return "\n".join(lines)
+
+    def _format_claim_line(self, ref: ClaimRef, lang: str) -> str:
+        source_ref = ref.source_ref or "unknown"
+        source_group_id = ref.source_group_id or "unknown"
+        trust = self._claim_trust(ref)
+        if lang == "en":
+            return (
+                f'- "{ref.claim_text}"; source_ref={source_ref}; '
+                f"source_group_id={source_group_id}; trust={trust:.2f}; "
+                f"confidence={ref.confidence:.2f}."
+            )
+        return (
+            f"- «{ref.claim_text}»; source_ref={source_ref}; "
+            f"source_group_id={source_group_id}; trust={trust:.2f}; "
+            f"confidence={ref.confidence:.2f}."
+        )
+
+    def _claim_trust(self, ref: ClaimRef) -> float:
+        if self._source_memory is not None and ref.source_group_id:
+            get_trust = getattr(self._source_memory, "get_trust", None)
+            if callable(get_trust):
+                try:
+                    return float(get_trust(ref.source_group_id))
+                except Exception:
+                    pass
+        if ref.trust is not None:
+            return float(ref.trust)
+        return 0.5
+
     # ------------------------------------------------------------------
     # Metadata
     # ------------------------------------------------------------------
@@ -288,6 +380,7 @@ class DialogueResponder:
         validation: ValidationResult,
         trace: ExplainabilityTrace,
         lang: str,
+        disputed_groups: Optional[Dict[str, List[ClaimRef]]] = None,
     ) -> Dict[str, Any]:
         """
         Собрать стабильный metadata для BrainOutput.
@@ -312,17 +405,37 @@ class DialogueResponder:
         output_style = result.action
         if result.action == "respond_hedged":
             output_style = f"hedged_{trace.uncertainty_level}"
+        if disputed_groups:
+            output_style = "hedged_dispute"
 
-        return {
+        validation_reasons = list(validation.reasons)
+        if disputed_groups and "respond_hedged_due_to_dispute" not in validation_reasons:
+            validation_reasons.append("respond_hedged_due_to_dispute")
+
+        metadata = {
             "reasoning_type": trace.reasoning_type,
             "uncertainty_level": trace.uncertainty_level,
             "validation_issues": validation_issues,
+            "validation_reasons": validation_reasons,
             "language": lang,
             "output_style": output_style,
             "corrections_applied": validation.applied_corrections,
             "goal_type": (result.metadata or {}).get("goal_type", ""),
             "total_duration_ms": trace.total_duration_ms,
         }
+        if disputed_groups:
+            metadata.update(
+                {
+                    "decision": {"reason": "dispute"},
+                    "dispute_concepts": list(disputed_groups.keys()),
+                    "disputed_claim_ids": [
+                        ref.claim_id
+                        for refs in disputed_groups.values()
+                        for ref in refs
+                    ],
+                }
+            )
+        return metadata
 
     # ------------------------------------------------------------------
     # Утилиты
@@ -375,6 +488,7 @@ class OutputPipeline:
         responder: Optional[DialogueResponder] = None,
         hedge_threshold: Optional[float] = None,
         brain_logger: Optional[BrainLogger] = None,
+        source_memory: Optional[Any] = None,
     ) -> None:
         self._trace_builder = trace_builder or OutputTraceBuilder()
         # Если передан hedge_threshold и нет кастомного validator — создаём
@@ -389,6 +503,7 @@ class OutputPipeline:
             self._validator = ResponseValidator()
         self._responder = responder or DialogueResponder(
             trace_builder=self._trace_builder,
+            source_memory=source_memory,
         )
 
         # --- Phase 6: BrainLogger (NullObject pattern) ---
@@ -440,6 +555,8 @@ class OutputPipeline:
                 "confidence": result.confidence,
                 "issues_count": validation.issue_count,
                 "corrections_applied": validation.applied_corrections,
+                "validation_reasons": validation.reasons,
+                "decision": output.metadata.get("decision", {}),
                 "trace_id": output.trace_id,
             },
             latency_ms=elapsed,

@@ -1,8 +1,6 @@
 """Tests for brain/safety/conflict_detector.py"""
 from __future__ import annotations
 
-import pytest
-
 from brain.memory.semantic_memory import SemanticNode
 from brain.safety.conflict_detector import Conflict, ConflictDetector
 

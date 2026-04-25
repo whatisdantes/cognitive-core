@@ -66,12 +66,12 @@ cognitive-core/
 ├── docs/                       # Документация
 │   ├── layers/                 # Спецификации слоёв (00–11)
 │   ├── adr/                    # Architecture Decision Records
+│   ├── planning/               # Roadmap: TODO.md + FUTURE_TODO.md
 │   ├── BRAIN.md                # Архитектурная спецификация
 │   ├── index.md                # Главная страница документации
 │   └── development.md          # Актуальная dev-навигация и extras
 ├── examples/                   # Примеры использования
 ├── pyproject.toml              # Конфигурация проекта (setuptools, ruff, mypy, pytest, bandit)
-├── TODO.md                     # Мастер-роадмап
 └── README.md                   # Обзор проекта и quick start
 ```
 
@@ -214,7 +214,7 @@ class TestSemanticMemory:
 
 ### Перед началом работы
 
-1. Свериться с [`TODO.md`](TODO.md) — текущий прогресс и приоритеты
+1. Свериться с [`docs/planning/TODO.md`](docs/planning/TODO.md) — текущий прогресс и приоритеты
 2. Прочитать [`docs/development.md`](docs/development.md) — установка и dev-навигация
 3. Убедиться, что задача соответствует текущему этапу
 
@@ -279,7 +279,7 @@ perf(semantic): заменить sorted() на min() в _evict_least_important()
 - [ ] Тесты написаны для новой функциональности
 - [ ] Все тесты проходят (`pytest tests/`)
 - [ ] Coverage не упал ниже 70%
-- [ ] TODO.md обновлён (задача отмечена как выполненная)
+- [ ] `docs/planning/TODO.md` обновлён (задача отмечена как выполненная)
 - [ ] Docstrings на русском языке
 
 ### Шаблон описания PR
@@ -291,7 +291,7 @@ perf(semantic): заменить sorted() на min() в _evict_least_important()
 
 ## Задача
 
-Ссылка на задачу из TODO.md (например, P3-10).
+Ссылка на задачу из `docs/planning/TODO.md` (например, P3-10).
 
 ## Тип изменений
 
@@ -328,7 +328,8 @@ perf(semantic): заменить sorted() на min() в _evict_least_important()
 
 ## 📚 Полезные ссылки
 
-- [`TODO.md`](TODO.md) — мастер-роадмап
+- [`docs/planning/TODO.md`](docs/planning/TODO.md) — мастер-роадмап
+- [`docs/planning/FUTURE_TODO.md`](docs/planning/FUTURE_TODO.md) — post-MVP backlog
 - [`docs/BRAIN.md`](docs/BRAIN.md) — архитектурная спецификация
 - [`docs/development.md`](docs/development.md) — установка, extras и dev-поток
 - [`docs/layers/`](docs/layers/) — спецификации каждого из 12 слоёв

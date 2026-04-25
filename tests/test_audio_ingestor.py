@@ -5,15 +5,12 @@ tests/test_audio_ingestor.py — TDD тесты для AudioIngestor (J.2).
 """
 from __future__ import annotations
 
-import struct
 import wave
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from brain.perception.audio_ingestor import AUDIO_EXTENSIONS, AudioIngestor
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 

@@ -1,8 +1,8 @@
-name: Docs
+name: Docs / Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - "docs/**"
       - "brain/**"
@@ -10,7 +10,7 @@ on:
       - "pyproject.toml"
       - ".github/workflows/docs.yml"
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - "docs/**"
       - "brain/**"
@@ -54,10 +54,32 @@ jobs:
       - name: Build documentation
         run: python -m mkdocs build --strict
 
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkdocs-site
+          path: site
+          retention-days: 7
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+      - name: Write workflow summary
+        run: |
+          {
+            echo "## MkDocs"
+            echo "- Сайт успешно собран в \`site/\`."
+            echo "- В артефактах workflow доступен архив \`mkdocs-site\`."
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "- Для pull request выполняется только build-проверка и preview-артефакт."
+            elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "- Для \`main\` после build запускается deploy в GitHub Pages."
+            else
+              echo "- Для веток без deploy сохраняется preview-артефакт."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: Deploy to GitHub Pages

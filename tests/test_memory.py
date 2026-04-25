@@ -507,6 +507,7 @@ try:
 
     # Очистка тестовых файлов
     import shutil
+    mm.stop(save=False)
     if os.path.exists("brain/data/memory/test_mm"):
         shutil.rmtree("brain/data/memory/test_mm")
 

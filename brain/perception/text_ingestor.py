@@ -25,6 +25,8 @@ import re
 from pathlib import Path
 from typing import Any, List, Optional
 
+import numpy as np
+
 from brain.core.events import EventFactory, PerceptEvent
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.validators import check_file_size, validate_file_path
@@ -39,6 +41,13 @@ try:
 except ImportError:
     _FITZ_AVAILABLE = False
     _logger.debug("pymupdf (fitz) не установлен — PDF будет читаться как plain text")
+
+try:
+    from rapidocr_onnxruntime import RapidOCR
+    _RAPIDOCR_AVAILABLE = True
+except ImportError:
+    _RAPIDOCR_AVAILABLE = False
+    _logger.debug("rapidocr_onnxruntime не установлен — OCR fallback для PDF отключён")
 
 try:
     import docx  # python-docx
@@ -59,6 +68,8 @@ except ImportError:
 CHUNK_MIN_CHARS = 1000   # минимальный размер чанка
 CHUNK_MAX_CHARS = 1500   # максимальный размер чанка (жёсткий лимит)
 CHUNK_OVERLAP   = 120    # перекрытие между чанками
+PDF_OCR_RENDER_SCALE = 2.0
+PDF_OCR_MIN_SCORE = 0.45
 
 # Поддерживаемые расширения
 TEXT_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv"}
@@ -94,11 +105,14 @@ class TextIngestor:
         chunk_max: int = CHUNK_MAX_CHARS,
         overlap: int = CHUNK_OVERLAP,
         extractor: Optional[MetadataExtractor] = None,
+        enable_pdf_ocr: bool = True,
     ):
         self._chunk_min = chunk_min
         self._chunk_max = chunk_max
         self._overlap = overlap
         self._extractor = extractor or MetadataExtractor()
+        self._enable_pdf_ocr = enable_pdf_ocr
+        self._pdf_ocr_engine: Optional[Any] = None
 
     # ─── Публичный API ───────────────────────────────────────────────────────
 
@@ -311,16 +325,96 @@ class TextIngestor:
             return self._read_plain(file_path)
 
         pages: List[tuple[int, str]] = []
+        total_pages = 0
+        ocr_pages = 0
         try:
             doc = fitz.open(file_path)
             for page_num, page in enumerate(doc, start=1):
+                total_pages = page_num
                 text = page.get_text("text")
                 if text and text.strip():
                     pages.append((page_num, text))
+                    continue
+
+                ocr_text = self._ocr_pdf_page(page, file_path, page_num)
+                if ocr_text:
+                    pages.append((page_num, ocr_text))
+                    ocr_pages += 1
             doc.close()
         except Exception as e:
             _logger.error("TextIngestor: ошибка чтения PDF %s: %s", file_path, e)
+
+        if ocr_pages:
+            _logger.info(
+                "TextIngestor: PDF OCR fallback использован для %d/%d страниц: %s",
+                ocr_pages,
+                total_pages,
+                file_path,
+            )
+        elif total_pages and not pages:
+            _logger.warning(
+                "TextIngestor: PDF не содержит текстового слоя и OCR недоступен/не сработал: %s",
+                file_path,
+            )
         return pages
+
+    def _get_pdf_ocr_engine(self) -> Optional[Any]:
+        """Ленивая инициализация OCR-движка для image-only PDF."""
+        if not self._enable_pdf_ocr or not _RAPIDOCR_AVAILABLE:
+            return None
+        if self._pdf_ocr_engine is not None:
+            return self._pdf_ocr_engine
+        try:
+            self._pdf_ocr_engine = RapidOCR()
+        except Exception as e:
+            _logger.warning("TextIngestor: не удалось инициализировать PDF OCR: %s", e)
+            return None
+        return self._pdf_ocr_engine
+
+    def _ocr_pdf_page(self, page: Any, file_path: str, page_num: int) -> str:
+        """Снять OCR с PDF-страницы без текстового слоя."""
+        engine = self._get_pdf_ocr_engine()
+        if engine is None:
+            return ""
+
+        try:
+            pix = page.get_pixmap(
+                matrix=fitz.Matrix(PDF_OCR_RENDER_SCALE, PDF_OCR_RENDER_SCALE),
+                alpha=False,
+            )
+            image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                pix.height,
+                pix.width,
+                pix.n,
+            )
+            result, _ = engine(image)
+        except Exception as e:
+            _logger.warning(
+                "TextIngestor: OCR fallback не сработал для %s#p%d: %s",
+                file_path,
+                page_num,
+                e,
+            )
+            return ""
+
+        if not result:
+            return ""
+
+        lines: List[str] = []
+        for item in result:
+            if not isinstance(item, (list, tuple)) or len(item) < 3:
+                continue
+            text = str(item[1]).strip()
+            if not text:
+                continue
+            try:
+                score = float(item[2])
+            except (TypeError, ValueError):
+                score = 0.0
+            if score < PDF_OCR_MIN_SCORE:
+                continue
+            lines.append(text)
+        return "\n".join(lines).strip()
 
     def _read_docx(self, file_path: str) -> List[tuple[int, str]]:
         """Читать .docx файл."""

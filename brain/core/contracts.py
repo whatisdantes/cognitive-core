@@ -16,7 +16,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, TypeVar, Union, cast, get_type_hints, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, Tuple, TypeVar, Union, cast, get_type_hints, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Mixin: единый стиль сериализации для всех контрактов
@@ -96,6 +96,12 @@ def _restore_typed_value(value: Any, hint: Any) -> Any:
             return [_restore_typed_value(item, inner) for item in value]
         return value
 
+    # --- Tuple[X, Y] ---
+    if origin is tuple and args:
+        if isinstance(value, (list, tuple)):
+            return tuple(value)
+        return value
+
     # --- Enum ---
     if isinstance(hint, type) and issubclass(hint, Enum):
         if isinstance(value, str):
@@ -145,6 +151,31 @@ class TaskStatus(str, Enum):
     FAILED = "failed"
 
 
+class ClaimStatus(str, Enum):
+    """Lifecycle-статус отдельного claim-а."""
+    UNVERIFIED = "unverified"
+    ACTIVE = "active"
+    POSSIBLY_CONFLICTING = "possibly_conflicting"
+    DISPUTED = "disputed"
+    SUPERSEDED = "superseded"
+    RETRACTED = "retracted"
+
+
+class ConflictStatus(str, Enum):
+    """Lifecycle-статус пары claim_conflicts."""
+    CANDIDATE = "candidate"
+    DISPUTED = "disputed"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
+class EvidenceKind(str, Enum):
+    """Тип evidence для deterministic resolution."""
+    TIMELESS = "timeless"
+    VERSIONED = "versioned"
+    OPINION = "opinion"
+
+
 @dataclass
 class ResourceState(ContractMixin):
     """
@@ -173,6 +204,107 @@ class Task(ContractMixin):
     trace_id: str = ""
     session_id: str = ""
     cycle_id: str = ""
+
+
+@dataclass
+class DaemonConfig(ContractMixin):
+    """Настройки long-running daemon-режима."""
+    reconcile_every_ticks: int = 10
+    replay_every_ticks: int = 50
+    consolidate_every_ticks: int = 100
+    self_reflect_every_ticks: int = 20
+    llm_calls_per_hour: int = 20
+
+
+@dataclass
+class Claim(ContractMixin):
+    """Первичная единица фактического знания."""
+    claim_id: str = ""
+    concept: str = ""
+    claim_text: str = ""
+    claim_family_key: str = ""
+    stance_key: str = ""
+    source_ref: str = ""
+    material_sha256: Optional[str] = None
+    source_group_id: str = ""
+    evidence_span: Optional[Tuple[int, int]] = None
+    evidence_kind: EvidenceKind = EvidenceKind.TIMELESS
+    confidence: float = 1.0
+    status: ClaimStatus = ClaimStatus.UNVERIFIED
+    supersedes: Optional[str] = None
+    superseded_by: Optional[str] = None
+    conflict_refs: List[str] = field(default_factory=list)
+    created_ts: float = 0.0
+    updated_ts: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ClaimRef(ContractMixin):
+    """Снимок claim-а для reasoning/output без дополнительного DB lookup."""
+    claim_id: str = ""
+    concept: str = ""
+    claim_text: str = ""
+    source_ref: str = ""
+    source_group_id: str = ""
+    confidence: float = 0.0
+    status: ClaimStatus = ClaimStatus.ACTIVE
+    conflict_refs: List[str] = field(default_factory=list)
+    claim_family_key: str = ""
+    stance_key: str = ""
+    material_sha256: Optional[str] = None
+    trust: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_claim(cls, claim: Claim, trust: Optional[float] = None) -> "ClaimRef":
+        """Собрать output-friendly ссылку из Claim."""
+        return cls(
+            claim_id=getattr(claim, "claim_id", ""),
+            concept=getattr(claim, "concept", ""),
+            claim_text=getattr(claim, "claim_text", ""),
+            source_ref=getattr(claim, "source_ref", ""),
+            source_group_id=getattr(claim, "source_group_id", ""),
+            confidence=float(getattr(claim, "confidence", 0.0) or 0.0),
+            status=getattr(claim, "status", ClaimStatus.ACTIVE),
+            conflict_refs=list(getattr(claim, "conflict_refs", []) or []),
+            claim_family_key=getattr(claim, "claim_family_key", ""),
+            stance_key=getattr(claim, "stance_key", ""),
+            material_sha256=getattr(claim, "material_sha256", None),
+            trust=trust,
+            metadata=dict(getattr(claim, "metadata", {}) or {}),
+        )
+
+    @property
+    def ref_type(self) -> str:
+        """Back-compat alias для code paths, которые ещё форматируют TraceRef."""
+        return "claim"
+
+    @property
+    def ref_id(self) -> str:
+        """Back-compat alias: stable ID для логов/trace digest."""
+        return self.claim_id or self.concept
+
+    @property
+    def note(self) -> str:
+        """Back-compat alias с кратким provenance."""
+        bits = []
+        if self.source_ref:
+            bits.append(self.source_ref)
+        if self.confidence:
+            bits.append(f"conf={self.confidence:.2f}")
+        return " ".join(bits)
+
+
+@dataclass
+class ConflictPair(ContractMixin):
+    """DTO для строки claim_conflicts вместе с двумя claims."""
+    a: Claim
+    b: Claim
+    detected_ts: float
+    status: ConflictStatus = ConflictStatus.CANDIDATE
+    resolution: Optional[str] = None
+    resolved_ts: Optional[float] = None
 
 
 @dataclass
@@ -269,7 +401,7 @@ class CognitiveResult(ContractMixin):
     contradictions: List[str] = field(default_factory=list)
     uncertainty: float = 0.0
     salience: float = 0.0
-    memory_refs: List[TraceRef] = field(default_factory=list)
+    memory_refs: List[ClaimRef] = field(default_factory=list)
     source_refs: List[TraceRef] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 

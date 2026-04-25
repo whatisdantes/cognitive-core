@@ -303,6 +303,12 @@ class TestOptionalProviders:
         provider = BlackboxProvider(api_key="bb-test")
         assert isinstance(provider.is_available(), bool)
 
+    def test_blackbox_legacy_model_alias(self):
+        """Старое короткое имя Blackbox нормализуется в доступную модель."""
+        from brain.bridges.llm_bridge import BLACKBOX_DEFAULT_MODEL, BlackboxProvider
+        provider = BlackboxProvider(api_key="bb-test", model="gpt-5.4")
+        assert provider._model == BLACKBOX_DEFAULT_MODEL
+
     def test_blackbox_provider_complete_raises_when_unavailable(self):
         """complete() выбрасывает LLMUnavailableError если openai не установлен."""
         from brain.bridges.llm_bridge import BlackboxProvider
@@ -419,6 +425,33 @@ class TestLLMBridge:
         with pytest.raises(LLMUnavailableError):
             bridge.complete(req)
         assert call_count == 3  # 1 + 2 retry
+
+    def test_non_retryable_provider_error_is_not_retried(self):
+        """Ошибки 4xx не ретраятся, чтобы не множить одинаковые WARNING."""
+        call_count = 0
+
+        class BadRequestError(RuntimeError):
+            status_code = 400
+
+        class BadRequestProvider:
+            def complete(self, request: LLMRequest) -> LLMResponse:
+                nonlocal call_count
+                call_count += 1
+                raise BadRequestError("invalid model")
+
+            def is_available(self) -> bool:
+                return True
+
+            @property
+            def provider_name(self) -> str:
+                return "bad_request"
+
+        provider = BadRequestProvider()
+        bridge = LLMBridge(provider=provider, timeout_s=5.0, max_retries=3)
+        req = LLMRequest(prompt="Тест")
+        with pytest.raises(LLMUnavailableError):
+            bridge.complete(req)
+        assert call_count == 1
 
     def test_timeout_raises_llm_unavailable(self):
         """LLMBridge выбрасывает LLMUnavailableError при timeout."""
@@ -805,14 +838,16 @@ class TestCLIBuildLLMProvider:
         assert result is not None
         assert result.is_available() is True
 
-    def test_build_llm_provider_openai_without_key_returns_none(self):
-        """_build_llm_provider('openai', None, ...) возвращает None (нет api_key)."""
+    def test_build_llm_provider_openai_without_key_returns_none(self, monkeypatch):
+        """_build_llm_provider('openai', None, ...) возвращает None (нет api_key и env-fallback)."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from brain.cli import _build_llm_provider
         result = _build_llm_provider("openai", None, None)
         assert result is None
 
-    def test_build_llm_provider_anthropic_without_key_returns_none(self):
-        """_build_llm_provider('anthropic', None, ...) возвращает None (нет api_key)."""
+    def test_build_llm_provider_anthropic_without_key_returns_none(self, monkeypatch):
+        """_build_llm_provider('anthropic', None, ...) возвращает None (нет api_key и env-fallback)."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         from brain.cli import _build_llm_provider
         result = _build_llm_provider("anthropic", None, None)
         assert result is None
@@ -838,8 +873,9 @@ class TestCLIBuildLLMProvider:
         result = _build_llm_provider("unknown_provider", "key", "model")
         assert result is None
 
-    def test_build_llm_provider_blackbox_without_key_returns_none(self):
-        """_build_llm_provider('blackbox', None, ...) возвращает None (нет api_key)."""
+    def test_build_llm_provider_blackbox_without_key_returns_none(self, monkeypatch):
+        """_build_llm_provider('blackbox', None, ...) возвращает None (нет api_key и env-fallback)."""
+        monkeypatch.delenv("BLACKBOX_API_KEY", raising=False)
         from brain.cli import _build_llm_provider
         result = _build_llm_provider("blackbox", None, None)
         assert result is None
@@ -850,6 +886,22 @@ class TestCLIBuildLLMProvider:
         result = _build_llm_provider("blackbox", "bb-test-key", "gpt-5.4")
         assert result is not None
         assert isinstance(result, LLMProvider)
+
+    def test_build_llm_provider_env_fallback_blackbox(self, monkeypatch):
+        """env BLACKBOX_API_KEY используется когда --llm-api-key не передан."""
+        monkeypatch.setenv("BLACKBOX_API_KEY", "env-bb-key")
+        from brain.cli import _build_llm_provider
+        result = _build_llm_provider("blackbox", None, None)
+        assert result is not None
+        assert isinstance(result, LLMProvider)
+
+    def test_build_llm_provider_explicit_key_beats_env(self, monkeypatch):
+        """--llm-api-key имеет приоритет над переменной окружения."""
+        monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+        from brain.cli import _build_llm_provider
+        # Передаём явный ключ — env-переменная игнорируется
+        result = _build_llm_provider("openai", "explicit-key", None)
+        assert result is not None
 
 
 # ---------------------------------------------------------------------------

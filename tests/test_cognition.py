@@ -759,6 +759,29 @@ class TestHypothesisEngine:
         if deductive:
             assert "мозг" in deductive[0].statement.lower()
 
+    def test_generate_deductive_prefers_informative_preview(self):
+        engine = HypothesisEngine()
+        ev1 = _make_evidence(
+            "ev_1",
+            "linux: starts on page 27",
+            confidence=0.95,
+            relevance=0.95,
+            concept_refs=["linux"],
+        )
+        ev2 = _make_evidence(
+            "ev_2",
+            "linux: Linux обычно выступает основной системой для специалистов по безопасности",
+            confidence=0.7,
+            relevance=0.9,
+            concept_refs=["linux"],
+        )
+
+        result = engine.generate("Что ты помнишь про Linux?", [ev1, ev2])
+        deductive = [h for h in result if h.strategy == "deductive"]
+
+        assert deductive
+        assert "основной системой" in deductive[0].statement.lower()
+
     def test_score_confidence_bounded(self):
         engine = HypothesisEngine()
         ev = _make_evidence("ev_1", "факт", confidence=1.0, relevance=1.0)

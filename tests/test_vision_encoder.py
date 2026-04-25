@@ -9,16 +9,14 @@ from __future__ import annotations
 import contextlib
 import struct
 import zlib
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from brain.encoders.vision_encoder import PRIMARY_DIM, VisionEncoder
 from brain.core.contracts import Modality
-
+from brain.encoders.vision_encoder import PRIMARY_DIM, VisionEncoder
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 

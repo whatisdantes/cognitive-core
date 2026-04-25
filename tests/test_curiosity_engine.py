@@ -13,7 +13,7 @@ tests/test_curiosity_engine.py
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,7 +21,6 @@ from brain.motivation.curiosity_engine import (
     CURIOSITY_THRESHOLD,
     CuriosityEngine,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mock SemanticMemory
@@ -52,7 +51,7 @@ def _make_semantic(related_count: int = 0, has_node: bool = True) -> MagicMock:
 
 class TestConstants:
     def test_curiosity_threshold(self):
-        assert CURIOSITY_THRESHOLD == pytest.approx(0.8)
+        assert pytest.approx(0.8) == CURIOSITY_THRESHOLD
 
 
 # ---------------------------------------------------------------------------

@@ -114,7 +114,14 @@ nav:
       - output: api/output.md
       - logging: api/logging.md
       - encoders: api/encoders.md
-  - Разработка: development.md
+  - Разработка:
+      - Workflow: development.md
+      - CLI команды: commands.md
+  - Планы:
+      - "Roadmap (TODO)": planning/TODO.md
+      - "Autonomy Update TODO": planning/UPDATE_TODO.md
+      - "Post-MVP backlog": planning/FUTURE_TODO.md
+      - "Спека автономности": superpowers/specs/2026-04-21-autonomy-self-learning-design.md
 
 extra:
   social:

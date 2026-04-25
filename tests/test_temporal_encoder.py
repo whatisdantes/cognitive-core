@@ -7,15 +7,13 @@ TemporalEncoder: видео → 512d вектор (mean-pool CLIP frame embeddin
 from __future__ import annotations
 
 import contextlib
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from brain.encoders.temporal_encoder import PRIMARY_DIM, TemporalEncoder
 from brain.core.contracts import Modality
-
+from brain.encoders.temporal_encoder import PRIMARY_DIM, TemporalEncoder
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 

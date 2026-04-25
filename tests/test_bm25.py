@@ -581,3 +581,75 @@ class TestBM25RerankMethod:
         scores = [ev.relevance_score for ev in reranked]
         assert 0.7 in scores
         assert 0.3 in scores
+
+
+class TestKeywordBackendNoiseFiltering:
+    """Шумные semantic-узлы не должны вылезать в топ результатов."""
+
+    @staticmethod
+    def _make_memory_manager(
+        working: List[Any] = None,
+        semantic: List[Any] = None,
+        episodic: List[Any] = None,
+    ) -> MagicMock:
+        mm = MagicMock()
+        result = MagicMock()
+        result.working = working or []
+        result.semantic = semantic or []
+        result.episodic = episodic or []
+        result.answerable_claims = []
+        mm.retrieve.return_value = result
+        return mm
+
+    @staticmethod
+    def _make_working_item(content: str) -> MagicMock:
+        item = MagicMock()
+        item.content = content
+        item.source_ref = ""
+        item.tags = ["linux"]
+        item.importance = 0.7
+        item.ts = None
+        item.modality = "text"
+        return item
+
+    @staticmethod
+    def _make_relation(target: str, weight: float) -> MagicMock:
+        rel = MagicMock()
+        rel.target = target
+        rel.weight = weight
+        rel.confidence = 1.0
+        return rel
+
+    @staticmethod
+    def _make_semantic_node(
+        concept: str,
+        description: str = "",
+        relations: List[Any] | None = None,
+    ) -> MagicMock:
+        node = MagicMock()
+        node.concept = concept
+        node.description = description
+        node.confidence = 0.99
+        node.importance = 0.5
+        node.source_refs = []
+        node.updated_ts = None
+        node.relations = relations or []
+        return node
+
+    def test_empty_semantic_node_with_weak_relation_is_skipped(self) -> None:
+        mm = self._make_memory_manager(
+            working=[self._make_working_item("Linux используют на серверах и в безопасности")],
+            semantic=[
+                self._make_semantic_node(
+                    "linux",
+                    "",
+                    relations=[self._make_relation("помнишь", 0.01)],
+                )
+            ],
+        )
+        backend = KeywordRetrievalBackend(mm)
+
+        results = backend.search("Что ты помнишь про Linux?", top_n=10)
+
+        assert results
+        assert all(not (ev.memory_type == "semantic" and ev.content == "linux") for ev in results)

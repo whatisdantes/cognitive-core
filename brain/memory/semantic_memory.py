@@ -334,6 +334,45 @@ class SemanticMemory:
             self._maybe_autosave()
             return node
 
+    def set_description(
+        self,
+        concept: str,
+        description: str,
+        *,
+        confidence: Optional[float] = None,
+        importance: Optional[float] = None,
+        source_ref: str = "",
+    ) -> SemanticNode:
+        """Заменить derived description concept-а, включая пустое описание."""
+        concept = self._normalize(concept)
+
+        with self._lock:
+            if concept in self._nodes:
+                node = self._nodes[concept]
+                node.description = description
+                if confidence is not None:
+                    node.confidence = confidence
+                if importance is not None:
+                    node.importance = importance
+                if source_ref and source_ref not in node.source_refs:
+                    node.source_refs.append(source_ref)
+                node.updated_ts = time.time()
+            else:
+                node = SemanticNode(
+                    concept=concept,
+                    description=description,
+                    confidence=confidence if confidence is not None else 0.5,
+                    importance=importance if importance is not None else 0.5,
+                    source_refs=[source_ref] if source_ref else [],
+                )
+                if len(self._nodes) >= self._max_nodes:
+                    self._evict_least_important()
+                self._nodes[concept] = node
+
+            self._write_count += 1
+            self._maybe_autosave()
+            return node
+
     def get_fact(self, concept: str) -> Optional[SemanticNode]:
         """
         Получить факт о понятии.

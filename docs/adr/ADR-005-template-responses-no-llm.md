@@ -82,4 +82,4 @@ brain/bridges/llm_bridge.py
 ## Связанные решения
 
 - ADR-007: CPU-only платформа — причина отложить LLM
-- TODO.md P3-13: LLM Bridge — стратегический unlock
+- `docs/planning/TODO.md` P3-13: LLM Bridge — стратегический unlock

@@ -45,8 +45,10 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from brain.bridges.llm_bridge import LLMProvider, LLMRequest, LLMUnavailableError
+from brain.bridges.llm_budget import LLMRateLimiter
 from brain.core.attention_controller import AttentionBudget, AttentionController
 from brain.core.contracts import (
+    ClaimRef,
     CognitiveResult,
     EncodedPercept,
     EventBusProtocol,
@@ -55,20 +57,19 @@ from brain.core.contracts import (
     ResourceState,
     TextEncoderProtocol,
     TraceChain,
-    TraceRef,
     TraceStep,
 )
 from brain.learning.knowledge_gap_detector import KnowledgeGapDetector
 from brain.learning.online_learner import OnlineLearner
-from brain.safety.audit_logger import AuditLogger
-from brain.safety.boundary_guard import BoundaryGuard, GuardResult
-from brain.safety.policy_layer import SafetyDecision, SafetyPolicyLayer
 from brain.logging import (
     _NULL_LOGGER,
     _NULL_TRACE_BUILDER,
     BrainLogger,
     TraceBuilder,
 )
+from brain.safety.audit_logger import AuditLogger
+from brain.safety.boundary_guard import BoundaryGuard, GuardResult
+from brain.safety.policy_layer import SafetyDecision, SafetyPolicyLayer
 
 from .action_selector import ActionDecision, ActionSelector, ActionType
 from .context import (
@@ -123,6 +124,7 @@ class CognitivePipelineContext:
     llm_enhanced: bool = False
     llm_response_text: str = ""
     llm_provider_name: str = ""
+    llm_budget_exhausted: bool = False
 
     # --- Этап J: Learning ---
     memory_search_result: Optional[Any] = None  # MemorySearchResult из Reasoner._retrieve_evidence()
@@ -202,6 +204,7 @@ class CognitivePipeline:
         boundary_guard: Optional[BoundaryGuard] = None,
         safety_policy: Optional[SafetyPolicyLayer] = None,
         audit_logger: Optional[AuditLogger] = None,
+        llm_rate_limiter: Optional[LLMRateLimiter] = None,
     ) -> None:
         self._memory = memory
         self._encoder = encoder
@@ -221,6 +224,7 @@ class CognitivePipeline:
 
         # --- Этап N: LLM Bridge (опциональный) ---
         self._llm_provider: Optional[LLMProvider] = llm_provider
+        self._llm_rate_limiter: Optional[LLMRateLimiter] = llm_rate_limiter
 
         # --- Phase 3: BrainLogger + TraceBuilder (NullObject pattern) ---
         self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
@@ -672,6 +676,13 @@ class CognitivePipeline:
             return  # no-op: LLM не настроен или недоступен
         if ctx.trace is None:
             return  # no-op: reasoning не выполнен
+        if (
+            self._llm_rate_limiter is not None
+            and not self._llm_rate_limiter.allow("pipeline.llm_enhance")
+        ):
+            ctx.llm_budget_exhausted = True
+            logger.info("[CognitivePipeline] LLM enhance skipped: budget exhausted")
+            return
 
         try:
             # Строим промпт из query + best_statement + evidence
@@ -693,7 +704,7 @@ class CognitivePipeline:
             request = LLMRequest(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                max_tokens=256,
+                max_tokens=4096,
                 temperature=0.3,
                 metadata={
                     "trace_id": ctx.cognitive_context.trace_id if ctx.cognitive_context else "",
@@ -703,6 +714,8 @@ class CognitivePipeline:
             )
 
             response = self._llm_provider.complete(request)
+            if self._llm_rate_limiter is not None:
+                self._llm_rate_limiter.record("pipeline.llm_enhance")
 
             if response.text and response.text.strip():
                 ctx.trace.best_statement = response.text.strip()
@@ -946,10 +959,7 @@ class CognitivePipeline:
             ),
         )
 
-        memory_refs = [
-            TraceRef(ref_type="evidence", ref_id=eid)
-            for eid in ctx.trace.evidence_refs
-        ]
+        memory_refs: List[ClaimRef] = list(ctx.trace.claim_refs)
 
         # Salience и budget в metadata (Этап H)
         salience_meta: Dict[str, Any] = {}
@@ -976,6 +986,11 @@ class CognitivePipeline:
                 "llm_enhanced": True,
                 "llm_provider": ctx.llm_provider_name,
             }
+        elif ctx.llm_budget_exhausted:
+            llm_meta = {
+                "llm_enhanced": False,
+                "llm_budget_exhausted": True,
+            }
 
         ctx.result = CognitiveResult(
             action=ctx.decision.action,
@@ -997,6 +1012,8 @@ class CognitivePipeline:
                 "total_duration_ms": round(ctx.elapsed_ms, 2),
                 "hypothesis_count": ctx.trace.hypothesis_count,
                 "best_hypothesis_id": ctx.trace.best_hypothesis_id,
+                "evidence_refs": list(ctx.trace.evidence_refs),
+                "claim_refs": [ref.to_dict() for ref in memory_refs],
                 **salience_meta,
                 **budget_meta,
                 **llm_meta,

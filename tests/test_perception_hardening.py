@@ -17,11 +17,14 @@ import textwrap
 
 import pytest
 
+from brain.core.events import EventFactory
 from brain.perception.input_router import InputRouter
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import (
     MAX_FILE_SIZE_MB,
+    MAX_PDF_FILE_SIZE_MB,
     check_file_size,
+    max_file_size_mb_for_path,
     validate_file_path,
 )
 
@@ -48,6 +51,11 @@ class TestValidateFilePath:
     def test_normal_path_with_dots_in_name(self):
         safe, reason = validate_file_path("docs/file.v2.0.txt")
         assert safe is True
+
+    def test_normal_path_with_double_dot_in_filename(self):
+        safe, reason = validate_file_path("docs/Компьютер глазами хакера 3-е изд..pdf")
+        assert safe is True
+        assert reason == ""
 
     # --- Null bytes ---
 
@@ -157,6 +165,29 @@ class TestCheckFileSize:
         assert ok is False
         assert size_mb > 50.0
 
+    def test_pdf_uses_larger_default_limit(self, tmp_path):
+        f = tmp_path / "large.pdf"
+        with open(f, "wb") as fh:
+            fh.seek(60 * 1024 * 1024)
+            fh.write(b"\0")
+
+        ok, size_mb = check_file_size(str(f))
+
+        assert ok is True
+        assert size_mb > MAX_FILE_SIZE_MB
+        assert size_mb < MAX_PDF_FILE_SIZE_MB
+
+    def test_pdf_still_rejected_above_pdf_limit(self, tmp_path):
+        f = tmp_path / "too_large.pdf"
+        with open(f, "wb") as fh:
+            fh.seek(101 * 1024 * 1024)
+            fh.write(b"\0")
+
+        ok, size_mb = check_file_size(str(f))
+
+        assert ok is False
+        assert size_mb > MAX_PDF_FILE_SIZE_MB
+
     def test_custom_max_mb(self, tmp_path):
         f = tmp_path / "medium.txt"
         # 2 MB файл
@@ -181,6 +212,11 @@ class TestCheckFileSize:
 
     def test_default_max_is_50mb(self):
         assert MAX_FILE_SIZE_MB == 50.0
+
+    def test_pdf_default_max_is_100mb(self):
+        assert MAX_PDF_FILE_SIZE_MB == 100.0
+        assert max_file_size_mb_for_path("book.pdf") == 100.0
+        assert max_file_size_mb_for_path("notes.txt") == 50.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -216,6 +252,27 @@ class TestInputRouterHardening:
         stats = router.stats()
         assert stats["hard_rejected"] >= 1
 
+    def test_route_file_large_pdf_uses_pdf_limit(self, tmp_path):
+        large_pdf = tmp_path / "large.pdf"
+        with open(large_pdf, "wb") as f:
+            f.seek(60 * 1024 * 1024)
+            f.write(b"\0")
+
+        router = InputRouter(dedup=False)
+        router._ingestor.ingest = lambda *args, **kwargs: [  # type: ignore[method-assign]
+            EventFactory.percept(
+                source=str(large_pdf),
+                content="PdfFact: accepted within pdf limit.",
+                modality="text",
+                quality=1.0,
+            )
+        ]
+
+        events = router.route_file(str(large_pdf))
+
+        assert len(events) == 1
+        assert router.stats()["hard_rejected"] == 0
+
     def test_route_file_normal_file_passes(self, tmp_path):
         """Нормальный файл проходит валидацию."""
         normal = tmp_path / "normal.txt"
@@ -229,6 +286,16 @@ class TestInputRouterHardening:
         normal.write_text(content, encoding="utf-8")
         router = InputRouter(dedup=False)
         events = router.route_file(str(normal))
+        assert len(events) > 0
+
+    def test_route_file_double_dot_filename_passes(self, tmp_path):
+        tricky = tmp_path / "book..txt"
+        tricky.write_text(
+            "Нейрон: клетка нервной системы.\nСинапс: место контакта нейронов.",
+            encoding="utf-8",
+        )
+        router = InputRouter(dedup=False)
+        events = router.route_file(str(tricky))
         assert len(events) > 0
 
     def test_route_file_system_dir_rejected(self):
@@ -277,6 +344,48 @@ class TestTextIngestorHardening:
         events = ingestor.ingest(str(normal))
         assert len(events) > 0
 
+    def test_ingest_double_dot_filename_passes(self, tmp_path):
+        tricky = tmp_path / "book..txt"
+        tricky.write_text(
+            "Нейрон: клетка нервной системы.\nСинапс: место контакта нейронов.",
+            encoding="utf-8",
+        )
+        ingestor = TextIngestor()
+        events = ingestor.ingest(str(tricky))
+        assert len(events) > 0
+
+    def test_read_pdf_uses_ocr_fallback_for_empty_page(self, monkeypatch):
+        class FakePage:
+            def get_text(self, mode):
+                assert mode == "text"
+                return ""
+
+        class FakeDoc:
+            page_count = 1
+
+            def __iter__(self):
+                return iter([FakePage()])
+
+            def close(self):
+                return None
+
+        monkeypatch.setattr("brain.perception.text_ingestor._FITZ_AVAILABLE", True)
+        monkeypatch.setattr(
+            "brain.perception.text_ingestor.fitz.open",
+            lambda _: FakeDoc(),
+        )
+
+        ingestor = TextIngestor()
+        monkeypatch.setattr(
+            ingestor,
+            "_ocr_pdf_page",
+            lambda page, file_path, page_num: "OCR восстановил текст страницы",
+        )
+
+        pages = ingestor._read_pdf("scan.pdf")
+
+        assert pages == [(1, "OCR восстановил текст страницы")]
+
     def test_ingest_text_not_affected(self):
         """ingest_text() не затронут файловой валидацией."""
         ingestor = TextIngestor()
@@ -305,3 +414,7 @@ class TestPerceptionExports:
     def test_import_max_file_size_mb(self):
         from brain.perception import MAX_FILE_SIZE_MB as max_mb
         assert max_mb == 50.0
+
+    def test_import_max_pdf_file_size_mb(self):
+        from brain.perception import MAX_PDF_FILE_SIZE_MB as max_pdf_mb
+        assert max_pdf_mb == 100.0

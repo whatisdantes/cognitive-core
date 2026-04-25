@@ -55,6 +55,7 @@ def _make_result(
     source_refs: list | None = None,
     goal: str = "что такое нейрон",
     cycle_id: str = "cycle_1",
+    metadata: dict | None = None,
 ) -> CognitiveResult:
     """Создать CognitiveResult для тестов."""
     if memory_refs is None:
@@ -73,7 +74,7 @@ def _make_result(
         cycle_id=cycle_id,
         memory_refs=memory_refs,
         source_refs=source_refs,
-        metadata={},
+        metadata=metadata or {},
     )
 
 
@@ -387,6 +388,18 @@ class TestOnlineLearnerHebbian:
             expected_delta = round(0.01 * 0.9, 4)
             assert update.associations_updated[0]["delta"] == expected_delta
 
+    def test_no_associations_for_answer_question_goal_type(self):
+        """Обычный пользовательский вопрос не должен создавать новые связи."""
+        result = _make_result(
+            action="answer",
+            confidence=0.9,
+            goal="Что ты помнишь про Linux?",
+            metadata={"goal_type": "answer_question"},
+        )
+        update = self.learner.update(result)
+        assert update.associations_updated == []
+        self.memory.semantic.add_relation.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # 7. OnlineLearner.update() — обновление источников
@@ -541,6 +554,11 @@ class TestExtractConcepts:
     def test_returns_list(self):
         concepts = OnlineLearner._extract_concepts("нейрон синапс")
         assert isinstance(concepts, list)
+
+    def test_question_words_filtered(self):
+        concepts = OnlineLearner._extract_concepts("Что ты помнишь про Linux")
+        assert "помнишь" not in concepts
+        assert "linux" in concepts
 
 
 # ---------------------------------------------------------------------------

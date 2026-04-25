@@ -22,7 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from brain.core.contracts import ContractMixin, MemoryManagerProtocol
+from brain.core.contracts import ClaimRef, ContractMixin, MemoryManagerProtocol
 
 from .context import (
     CognitiveOutcome,
@@ -92,6 +92,7 @@ class ReasoningTrace(ContractMixin):
     best_statement: str = ""
     hypothesis_count: int = 0
     evidence_refs: List[str] = field(default_factory=list)
+    claim_refs: List[ClaimRef] = field(default_factory=list)
     outcome: str = ""  # CognitiveOutcome.value
     stop_reason: str = ""
     total_iterations: int = 0
@@ -373,6 +374,12 @@ class Reasoner:
                     "[Reasoner] memory.retrieve() для gap detection: %s", exc
                 )
 
+        trace.claim_refs = self._extract_claim_refs(evidence)
+        if trace.claim_refs:
+            trace.metadata["claim_refs"] = [
+                claim_ref.to_dict() for claim_ref in trace.claim_refs
+            ]
+
         step_duration = (time.perf_counter() - step_start) * 1000
 
         trace.add_step(ReasoningStep(
@@ -388,6 +395,22 @@ class Reasoner:
         ))
 
         return evidence
+
+    @staticmethod
+    def _extract_claim_refs(evidence: List[EvidencePack]) -> List[ClaimRef]:
+        refs: List[ClaimRef] = []
+        seen: set[str] = set()
+        for ev in evidence:
+            raw_ref = (ev.metadata or {}).get("claim_ref")
+            if not isinstance(raw_ref, dict):
+                continue
+            claim_ref = ClaimRef.from_dict(raw_ref)
+            key = claim_ref.claim_id or claim_ref.concept
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            refs.append(claim_ref)
+        return refs
 
     def _detect_contradictions(
         self,

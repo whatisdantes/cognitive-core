@@ -90,4 +90,4 @@ class AsyncEventBus(EventBus):
 ## Связанные решения
 
 - ADR-002: RLock для thread safety (используется в EventBus)
-- TODO.md P3-9: Async EventBus — запланированное расширение
+- `docs/planning/TODO.md` P3-9: Async EventBus — запланированное расширение

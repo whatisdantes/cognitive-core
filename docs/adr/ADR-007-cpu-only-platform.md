@@ -81,4 +81,4 @@ brain/encoders/
 
 - ADR-004: BM25 + Vector Hybrid — numpy вместо FAISS из-за CPU-only
 - ADR-005: Шаблонные ответы — LLM отложен из-за CPU-only
-- TODO.md: CUDA Backend (после понимания bottlenecks)
+- `docs/planning/TODO.md`: CUDA Backend (после понимания bottlenecks)

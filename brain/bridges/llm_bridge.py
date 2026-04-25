@@ -47,6 +47,38 @@ from brain.core.contracts import ContractMixin
 
 logger = logging.getLogger(__name__)
 
+BLACKBOX_DEFAULT_MODEL = "blackboxai/openai/gpt-5.3-codex"
+_BLACKBOX_MODEL_ALIASES = {
+    "gpt-5.4": BLACKBOX_DEFAULT_MODEL,
+    "gpt-5.3-codex": BLACKBOX_DEFAULT_MODEL,
+}
+
+
+def normalize_blackbox_model(model: str | None) -> str:
+    """Нормализовать короткие/устаревшие имена моделей Blackbox."""
+    requested = (model or "").strip() or BLACKBOX_DEFAULT_MODEL
+    return _BLACKBOX_MODEL_ALIASES.get(requested, requested)
+
+
+def _is_non_retryable_provider_error(exc: BaseException) -> bool:
+    """True для ошибок конфигурации/запроса, где retry только создаёт шум."""
+    status_code = getattr(exc, "status_code", None)
+    if status_code is None:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code in {400, 401, 403, 404, 422}
+
+    message = str(exc).lower()
+    markers = (
+        "invalid model",
+        "bad request",
+        "authentication",
+        "unauthorized",
+        "forbidden",
+    )
+    return any(marker in message for marker in markers)
+
 
 # ---------------------------------------------------------------------------
 # Контракты (ContractMixin — сериализуемые)
@@ -361,7 +393,7 @@ class BlackboxProvider:
     complete() выбрасывает LLMUnavailableError.
 
     Использование:
-        provider = BlackboxProvider(api_key="...", model="gpt-5.4")
+        provider = BlackboxProvider(api_key="...", model="blackboxai/openai/gpt-5.3-codex")
     """
 
     BLACKBOX_BASE_URL = "https://api.blackbox.ai/v1"
@@ -369,11 +401,18 @@ class BlackboxProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-5.4",
+        model: str = BLACKBOX_DEFAULT_MODEL,
     ) -> None:
-        self._model = model
+        requested_model = (model or "").strip() or BLACKBOX_DEFAULT_MODEL
+        self._model = normalize_blackbox_model(requested_model)
         self._client: Any = None
         self._available = False
+        if self._model != requested_model:
+            logger.warning(
+                "[BlackboxProvider] модель '%s' недоступна как короткое имя; использую '%s'",
+                requested_model,
+                self._model,
+            )
 
         try:
             import openai  # type: ignore[import]
@@ -521,6 +560,8 @@ class LLMBridge:
                     attempt + 1, self._max_retries + 1,
                     self._provider.provider_name, exc,
                 )
+                if _is_non_retryable_provider_error(exc):
+                    break
                 if attempt < self._max_retries:
                     time.sleep(0.5 * (attempt + 1))  # exponential backoff
 

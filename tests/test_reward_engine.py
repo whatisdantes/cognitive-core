@@ -15,18 +15,16 @@ tests/test_reward_engine.py
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock
 
 import pytest
 
+from brain.core.contracts import CognitiveResult, TraceChain
 from brain.motivation.reward_engine import (
     REWARD_VALUES,
     RewardEngine,
     RewardSignal,
     RewardType,
 )
-from brain.core.contracts import CognitiveResult, TraceChain
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,7 +73,7 @@ class TestRewardTypeValues:
         assert REWARD_VALUES[RewardType.PENALTY] == pytest.approx(-0.5)
 
     def test_all_six_types_exist(self):
-        types = {rt for rt in RewardType}
+        types = set(RewardType)
         assert len(types) == 6
 
 

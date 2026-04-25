@@ -25,7 +25,7 @@
 ### Точки входа
 
 - [`CognitiveCore`](cognition.md#brain.cognition.cognitive_core.CognitiveCore) — главный orchestrator
-- [`CognitivePipeline`](cognition.md#brain.cognition.pipeline.CognitivePipeline) — 12-шаговый пайплайн (P3-10)
+- [`CognitivePipeline`](cognition.md#brain.cognition.pipeline.CognitivePipeline) — 20-шаговый пайплайн (P3-10, расширен этапами H/L)
 - [`MemoryManager`](memory.md#brain.memory.memory_manager.MemoryManager) — единая точка доступа к памяти
 - [`InputRouter`](perception.md#brain.perception.input_router.InputRouter) — маршрутизация входных данных
 

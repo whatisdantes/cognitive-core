@@ -6,15 +6,12 @@ tests/test_vision_ingestor.py — TDD тесты для VisionIngestor (J.1).
 from __future__ import annotations
 
 import struct
-import wave
 import zlib
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from brain.perception.vision_ingestor import VISION_EXTENSIONS, VisionIngestor
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 

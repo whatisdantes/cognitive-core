@@ -1,11 +1,10 @@
 # tests/test_shared_space_projector.py
 """Тесты для brain/fusion/shared_space_projector.py (K.1)."""
 from __future__ import annotations
+
 import math
 import os
 import tempfile
-
-import pytest
 
 from brain.core.contracts import EncodedPercept, Modality
 

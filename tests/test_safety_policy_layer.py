@@ -1,8 +1,6 @@
 """Tests for brain/safety/policy_layer.py"""
 from __future__ import annotations
 
-import pytest
-
 from brain.safety.policy_layer import SafetyDecision, SafetyPolicyLayer
 
 

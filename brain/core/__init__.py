@@ -18,6 +18,7 @@ from .attention_controller import (
 from .contracts import (
     BrainOutput,
     CognitiveResult,
+    DaemonConfig,
     EncodedPercept,
     EventBusProtocol,
     FusedPercept,
@@ -47,7 +48,7 @@ from .resource_monitor import (
     ResourceMonitorConfig,
     ResourceMonitorStats,
 )
-from .scheduler import Scheduler, SchedulerConfig, SchedulerStats, TaskPriority
+from .scheduler import RecurringTask, Scheduler, SchedulerConfig, SchedulerStats, TaskPriority
 
 __all__ = [
     # events
@@ -70,6 +71,7 @@ __all__ = [
     "TraceChain",
     "CognitiveResult",
     "BrainOutput",
+    "DaemonConfig",
     # protocols
     "MemoryManagerProtocol",
     "EventBusProtocol",
@@ -81,6 +83,7 @@ __all__ = [
     # scheduler
     "Scheduler",
     "TaskPriority",
+    "RecurringTask",
     "SchedulerConfig",
     "SchedulerStats",
     # resource_monitor

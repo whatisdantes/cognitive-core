@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -30,8 +31,11 @@ _logger = logging.getLogger(__name__)
 MAX_FILE_SIZE_MB: float = 50.0
 """Максимальный размер файла в мегабайтах (по умолчанию)."""
 
-# Опасные компоненты пути
-_TRAVERSAL_PATTERNS = ("..", "..\\", "../")
+MAX_PDF_FILE_SIZE_MB: float = 100.0
+"""Максимальный размер PDF-файла в мегабайтах."""
+
+# Опасный шаблон traversal как отдельного компонента пути.
+_TRAVERSAL_RE = re.compile(r"(^|[\\/])\.\.($|[\\/])")
 
 # Null byte
 _NULL_BYTE = "\x00"
@@ -78,15 +82,12 @@ def validate_file_path(
         _logger.warning("validators: path traversal обнаружен: %s", file_path)
         return False, "path_traversal"
 
-    # Дополнительно: проверяем исходную строку на паттерны traversal
-    # (до нормализации, чтобы поймать обфускацию)
-    for pattern in _TRAVERSAL_PATTERNS:
-        if pattern in file_path:
-            _logger.warning(
-                "validators: path traversal pattern '%s' в пути: %s",
-                pattern, file_path,
-            )
-            return False, "path_traversal"
+    # Дополнительно: проверяем исходную строку до нормализации, но только
+    # на ".." как отдельный компонент пути, чтобы не ломать имена вроде
+    # "book..pdf".
+    if _TRAVERSAL_RE.search(file_path):
+        _logger.warning("validators: path traversal pattern в пути: %s", file_path)
+        return False, "path_traversal"
 
     # 3. Symlink escape — resolve и проверить что внутри allowed_dirs
     if allowed_dirs is not None:
@@ -130,19 +131,21 @@ def validate_file_path(
 
 def check_file_size(
     file_path: str,
-    max_mb: float = MAX_FILE_SIZE_MB,
+    max_mb: Optional[float] = None,
 ) -> Tuple[bool, float]:
     """
     Проверить размер файла.
 
     Args:
         file_path: путь к файлу
-        max_mb:    максимальный размер в мегабайтах (default: MAX_FILE_SIZE_MB)
+        max_mb:    максимальный размер в мегабайтах.
+                   Если None — выбирается по расширению файла.
 
     Returns:
         (ok: bool, size_mb: float) — True если размер допустим.
         Если файл не существует, возвращает (False, 0.0).
     """
+    limit_mb = max_file_size_mb_for_path(file_path) if max_mb is None else max_mb
     try:
         size_bytes = os.path.getsize(file_path)
     except OSError as e:
@@ -151,10 +154,10 @@ def check_file_size(
 
     size_mb = size_bytes / (1024 * 1024)
 
-    if size_mb > max_mb:
+    if size_mb > limit_mb:
         _logger.warning(
             "validators: файл слишком большой: %s (%.1f MB > %.1f MB)",
-            file_path, size_mb, max_mb,
+            file_path, size_mb, limit_mb,
         )
         return False, round(size_mb, 2)
 
@@ -162,6 +165,13 @@ def check_file_size(
 
 
 # ─── Вспомогательные ─────────────────────────────────────────────────────────
+
+def max_file_size_mb_for_path(file_path: str) -> float:
+    """Вернуть лимит размера файла по расширению."""
+    if Path(file_path).suffix.lower() == ".pdf":
+        return MAX_PDF_FILE_SIZE_MB
+    return MAX_FILE_SIZE_MB
+
 
 def _get_dangerous_prefixes() -> List[str]:
     """

@@ -82,6 +82,7 @@ logs/
 # Local environment / secrets
 .env
 .envrc
+.claude/
 
 # Databases / local app state
 db.sqlite3
@@ -94,6 +95,7 @@ instance/
 brain/data/memory/
 brain/data/logs/
 brain/data/weights/
+materials/
 *.npy
 *.npz
 *.pt

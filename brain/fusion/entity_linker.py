@@ -18,7 +18,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 try:
     import numpy as np
@@ -26,7 +26,7 @@ try:
 except ImportError:
     _NUMPY_AVAILABLE = False
 
-from brain.core.contracts import EncodedPercept, Modality
+from brain.core.contracts import EncodedPercept
 
 logger = logging.getLogger(__name__)
 

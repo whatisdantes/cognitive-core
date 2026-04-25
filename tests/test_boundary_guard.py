@@ -1,8 +1,6 @@
 """Tests for brain/safety/boundary_guard.py"""
 from __future__ import annotations
 
-import pytest
-
 from brain.safety.boundary_guard import BoundaryGuard, GuardResult
 
 

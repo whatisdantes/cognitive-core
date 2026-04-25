@@ -212,15 +212,18 @@ class SourceMemory:
             self._maybe_autosave()
             return record
 
-    def get_trust(self, source_id: str) -> float:
+    def get_trust(self, source_group_id: str) -> float:
         """
-        Получить уровень доверия к источнику.
+        Получить уровень доверия к root-source (`source_group_id`).
+
+        `source_ref` (например, page/chunk pointer) не должен использоваться
+        как независимый trust-root в conflict lifecycle.
 
         Returns:
             float: 0.0 — 1.0 (0.5 если источник неизвестен)
         """
         with self._lock:
-            record = self._sources.get(source_id)
+            record = self._sources.get(source_group_id)
             if not record:
                 return 0.5  # нейтральное доверие к неизвестному источнику
             if record.blacklisted:

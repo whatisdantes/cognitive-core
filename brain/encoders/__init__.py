@@ -11,11 +11,11 @@ encoders — Модальные энкодеры (перевод сырых да
     encoder_router.py   — EncoderRouter (маршрутизация по modality)
 """
 
+from brain.encoders.audio_encoder import AudioEncoder
+from brain.encoders.encoder_router import EncoderRouter
+from brain.encoders.temporal_encoder import TemporalEncoder
 from brain.encoders.text_encoder import TextEncoder
 from brain.encoders.vision_encoder import VisionEncoder
-from brain.encoders.audio_encoder import AudioEncoder
-from brain.encoders.temporal_encoder import TemporalEncoder
-from brain.encoders.encoder_router import EncoderRouter
 
 __all__ = [
     "TextEncoder",

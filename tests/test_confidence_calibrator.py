@@ -1,9 +1,8 @@
 # tests/test_confidence_calibrator.py
 """Тесты для brain/fusion/confidence_calibrator.py (K.3)."""
 from __future__ import annotations
-import math
 
-import pytest
+import math
 
 from brain.core.contracts import EncodedPercept, Modality
 

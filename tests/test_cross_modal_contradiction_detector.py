@@ -1,9 +1,8 @@
 # tests/test_cross_modal_contradiction_detector.py
 """Тесты для brain/fusion/cross_modal_contradiction_detector.py (K.4)."""
 from __future__ import annotations
-import math
 
-import pytest
+import math
 
 from brain.core.contracts import EncodedPercept, Modality
 

@@ -64,6 +64,7 @@ _CATEGORY_MAP: Dict[str, str] = {
     "memory_": "memory",
     "confidence_": "memory",
     "source_": "memory",
+    "claim_": "memory",
     # Perception
     "text_ingested": "perception",
     "image_ingested": "perception",
@@ -72,6 +73,11 @@ _CATEGORY_MAP: Dict[str, str] = {
     "asr_": "perception",
     "parse_": "perception",
     "percept_": "perception",
+    "material_": "perception",
+    # Motivation
+    "idle_": "motivation",
+    "reward_": "motivation",
+    "motivation_": "motivation",
     # Learning
     "online_update": "learning",
     "replay_": "learning",
@@ -171,6 +177,8 @@ class BrainLogger:
 
         # Открыть основной файл
         self._open_file("brain")
+        # safety_audit должен существовать сразу, даже если safety events ещё не было.
+        self._open_file("safety_audit")
 
         # Гарантировать закрытие файлов при завершении процесса.
         # weakref предотвращает удержание объекта в памяти только из-за atexit.

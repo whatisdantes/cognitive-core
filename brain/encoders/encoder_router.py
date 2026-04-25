@@ -122,25 +122,24 @@ class EncoderRouter:
         try:
             if modality_str == "text":
                 return self._route_text(percept, source, trace_id, session_id, cycle_id)
-            elif modality_str == "image":
+            if modality_str == "image":
                 return self._route_image(percept, source, trace_id, session_id, cycle_id)
-            elif modality_str == "audio":
+            if modality_str == "audio":
                 return self._route_audio(percept, source, trace_id, session_id, cycle_id)
-            elif modality_str == "video":
+            if modality_str == "video":
                 return self._route_video(percept, source, trace_id, session_id, cycle_id)
-            else:
-                logger.warning(
-                    "[EncoderRouter] неизвестная модальность: %r", modality_str
-                )
-                return _zeros_percept(
-                    modality_str=modality_str,
-                    source=source,
-                    trace_id=trace_id,
-                    session_id=session_id,
-                    cycle_id=cycle_id,
-                    status="failed",
-                    reason=f"unknown modality: {modality_str!r}",
-                )
+            logger.warning(
+                "[EncoderRouter] неизвестная модальность: %r", modality_str
+            )
+            return _zeros_percept(
+                modality_str=modality_str,
+                source=source,
+                trace_id=trace_id,
+                session_id=session_id,
+                cycle_id=cycle_id,
+                status="failed",
+                reason=f"unknown modality: {modality_str!r}",
+            )
         except Exception as exc:
             logger.warning("[EncoderRouter] ошибка маршрутизации: %s", exc)
             return _zeros_percept(

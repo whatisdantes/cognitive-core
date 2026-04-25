@@ -26,7 +26,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from brain.core.contracts import CognitiveResult, ContractMixin
+from brain.core.contracts import ClaimStatus, CognitiveResult, ContractMixin
 from brain.core.text_utils import detect_language as _canonical_detect_language
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,7 @@ class ValidationResult(ContractMixin):
     corrected_response: str = ""
     applied_corrections: List[str] = field(default_factory=list)
     original_response: str = ""
+    reasons: List[str] = field(default_factory=list)
 
     @property
     def has_critical(self) -> bool:
@@ -158,6 +159,7 @@ class ResponseValidator:
         original = response
         issues: List[ValidationIssue] = []
         corrections: List[str] = []
+        reasons: List[str] = []
 
         # --- 1. Пустой ответ ---
         response, empty_issue, empty_correction = self._check_empty(
@@ -191,6 +193,9 @@ class ResponseValidator:
         if lang_issue:
             issues.append(lang_issue)
 
+        if self._has_disputed_claim_group(result):
+            reasons.append("respond_hedged_due_to_dispute")
+
         # --- Результат ---
         is_valid = not any(i.severity == "critical" for i in issues)
 
@@ -200,6 +205,7 @@ class ResponseValidator:
             corrected_response=response,
             applied_corrections=corrections,
             original_response=original,
+            reasons=reasons,
         )
 
     # ------------------------------------------------------------------
@@ -368,6 +374,21 @@ class ResponseValidator:
             ),
             correction="",  # Без автокоррекции
         )
+
+    @staticmethod
+    def _has_disputed_claim_group(result: CognitiveResult) -> bool:
+        grouped: dict[str, set[str]] = {}
+        for ref in result.memory_refs or []:
+            status = getattr(ref, "status", "")
+            status_value = getattr(status, "value", str(status))
+            if status_value != ClaimStatus.DISPUTED.value:
+                continue
+            concept = str(getattr(ref, "concept", "") or "").strip().lower()
+            if not concept:
+                continue
+            claim_id = str(getattr(ref, "claim_id", "") or getattr(ref, "ref_id", ""))
+            grouped.setdefault(concept, set()).add(claim_id or concept)
+        return any(len(claim_ids) >= 2 for claim_ids in grouped.values())
 
     # ------------------------------------------------------------------
     # Утилиты

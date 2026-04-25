@@ -82,7 +82,7 @@ def _validate_encryption_key(key: str) -> None:
 
 # ─── Версия схемы ────────────────────────────────────────────────────────────
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 # ─── SQL для создания таблиц ─────────────────────────────────────────────────
@@ -186,6 +186,87 @@ CREATE TABLE IF NOT EXISTS sources (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sources_trust ON sources(trust_score);
+
+-- ═══════════════════════════════════════════════════════
+-- Claim-based memory (schema v2)
+-- ═══════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS claims (
+    claim_id TEXT PRIMARY KEY,
+    concept TEXT NOT NULL,
+    claim_text TEXT NOT NULL,
+    claim_family_key TEXT NOT NULL,
+    stance_key TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    material_sha256 TEXT,
+    source_group_id TEXT NOT NULL,
+    evidence_span_offset INTEGER,
+    evidence_span_length INTEGER,
+    evidence_kind TEXT NOT NULL DEFAULT 'timeless',
+    confidence REAL NOT NULL,
+    status TEXT NOT NULL,
+    supersedes TEXT,
+    superseded_by TEXT,
+    created_ts REAL NOT NULL,
+    updated_ts REAL NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY (material_sha256) REFERENCES materials_registry(sha256),
+    FOREIGN KEY (supersedes) REFERENCES claims(claim_id),
+    FOREIGN KEY (superseded_by) REFERENCES claims(claim_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_claims_concept ON claims(concept);
+CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);
+CREATE INDEX IF NOT EXISTS idx_claims_material ON claims(material_sha256);
+CREATE INDEX IF NOT EXISTS idx_claims_source_group ON claims(source_group_id);
+CREATE INDEX IF NOT EXISTS idx_claims_family ON claims(concept, claim_family_key);
+CREATE INDEX IF NOT EXISTS idx_claims_stance ON claims(concept, claim_family_key, stance_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_unique_source
+    ON claims(concept, claim_text, source_ref);
+
+CREATE TABLE IF NOT EXISTS claim_conflicts (
+    claim_id_a TEXT NOT NULL,
+    claim_id_b TEXT NOT NULL,
+    detected_ts REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'candidate',
+    resolution TEXT,
+    resolved_ts REAL,
+    PRIMARY KEY (claim_id_a, claim_id_b),
+    FOREIGN KEY (claim_id_a) REFERENCES claims(claim_id),
+    FOREIGN KEY (claim_id_b) REFERENCES claims(claim_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_claim_conflicts_status ON claim_conflicts(status);
+
+CREATE TABLE IF NOT EXISTS materials_registry (
+    sha256 TEXT PRIMARY KEY,
+    path TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    mtime REAL NOT NULL,
+    ingest_status TEXT NOT NULL,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    claim_count INTEGER NOT NULL DEFAULT 0,
+    last_ingested_at REAL,
+    error_message TEXT
+);
+
+CREATE TABLE IF NOT EXISTS material_chunks (
+    material_sha256 TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    chunk_hash TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    status TEXT NOT NULL,
+    claim_count INTEGER NOT NULL DEFAULT 0,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    processed_ts REAL,
+    error_message TEXT,
+    PRIMARY KEY (material_sha256, chunk_index),
+    FOREIGN KEY (material_sha256) REFERENCES materials_registry(sha256)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_pending ON material_chunks(material_sha256, status)
+    WHERE status = 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chunks_hash ON material_chunks(material_sha256, chunk_hash);
 
 -- ═══════════════════════════════════════════════════════
 -- Процедурная память
@@ -323,16 +404,30 @@ class MemoryDatabase:
                     self._migrate_schema(existing_version, SCHEMA_VERSION)
 
     def _migrate_schema(self, from_version: int, to_version: int):
-        """Миграция схемы между версиями (заглушка для будущих миграций)."""
+        """Миграция схемы между версиями."""
         _logger.info(
             "Миграция схемы: v%d → v%d", from_version, to_version
         )
-        # Будущие миграции добавляются здесь
+        if from_version < 2 <= to_version:
+            self._migrate_v1_to_v2()
         self._conn.execute(
             "UPDATE _meta SET value = ? WHERE key = 'schema_version'",
             (str(to_version),),
         )
         self._conn.commit()
+
+    def _migrate_v1_to_v2(self):
+        """
+        Idempotent additive migration v1 → v2.
+
+        `_CREATE_TABLES_SQL` уже создаёт новые v2 таблицы через IF NOT EXISTS.
+        Этот метод оставлен как явная точка расширения и marker для тестов:
+        legacy SemanticNode → Claim backfill намеренно не выполняется.
+        """
+        self._conn.execute(
+            "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)",
+            ("schema_v2_migrated_ts", str(time.time())),
+        )
 
     @property
     def schema_version(self) -> int:
@@ -819,8 +914,12 @@ class MemoryDatabase:
         """Количество записей в каждой таблице."""
         with self._lock:
             counts = {}
-            for table in ("semantic_nodes", "relations", "episodes",
-                          "modal_evidence", "sources", "procedures", "procedure_steps"):
+            for table in (
+                "semantic_nodes", "relations", "episodes",
+                "modal_evidence", "sources", "claims", "claim_conflicts",
+                "materials_registry", "material_chunks",
+                "procedures", "procedure_steps",
+            ):
                 row = self._conn.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()  # noqa: S608  # nosec B608
                 counts[table] = row["cnt"]
             return counts

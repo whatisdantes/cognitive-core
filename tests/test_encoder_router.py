@@ -5,14 +5,12 @@ EncoderRouter маршрутизирует PerceptEvent → правильный
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
-from brain.encoders.encoder_router import EncoderRouter
 from brain.core.contracts import EncodedPercept, Modality
-
+from brain.encoders.encoder_router import EncoderRouter
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 

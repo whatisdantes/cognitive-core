@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set
 
 from brain.core.contracts import ContractMixin
+from brain.core.text_utils import estimate_text_signal
 
 from .context import EvidencePack
 
@@ -214,6 +215,9 @@ class HypothesisEngine:
                 metadata={
                     "source_evidence": ev.evidence_id,
                     "memory_type": ev.memory_type,
+                    "claim_id": ev.metadata.get("claim_id", ""),
+                    "claim_status": ev.metadata.get("claim_status", ""),
+                    "source_group_id": ev.metadata.get("source_group_id", ""),
                 },
             )
             h.final_score = h.support_score - h.risk_score
@@ -262,7 +266,10 @@ class HypothesisEngine:
             # Включаем контент наиболее релевантного evidence в statement,
             # чтобы ответ содержал фактическую информацию, а не только
             # generic "несколько источников подтверждают концепт X".
-            best_ev = max(evs, key=lambda e: e.relevance_score * e.confidence)
+            best_ev = max(
+                evs,
+                key=lambda ev: self._preview_score_for_concept(ev, concept),
+            )
             best_content = best_ev.content.strip()[:200]
 
             if best_content:
@@ -506,6 +513,20 @@ class HypothesisEngine:
                 seen.add(key)
                 unique.append(h)
         return unique
+
+    @staticmethod
+    def _preview_score(ev: EvidencePack) -> float:
+        """Выбрать для statement более содержательное evidence, а не служебный шум."""
+        return ev.relevance_score * ev.confidence * estimate_text_signal(ev.content)
+
+    @classmethod
+    def _preview_score_for_concept(cls, ev: EvidencePack, concept: str) -> float:
+        """Поднять шанс evidence, где первичный concept совпадает с темой гипотезы."""
+        score = cls._preview_score(ev)
+        primary_concept = str(ev.concept_refs[0]).strip().lower() if ev.concept_refs else ""
+        if primary_concept == concept:
+            score += 0.2
+        return score
 
     @staticmethod
     def _has_causal_markers(text: str) -> bool:

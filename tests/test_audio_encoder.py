@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import contextlib
 import wave
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from brain.encoders.audio_encoder import AudioEncoder
 from brain.core.contracts import Modality
-
+from brain.encoders.audio_encoder import AudioEncoder
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -87,7 +85,6 @@ def test_encode_no_whisper_vector_dim_matches_output_dim(tmp_wav):
 def _whisper_context(audio_vec: np.ndarray):
     """Контекстный менеджер: все патчи для Whisper happy-path."""
     mock_model = MagicMock()
-    mock_preprocess = MagicMock()
     with (
         patch("brain.encoders.audio_encoder._WHISPER_AVAILABLE", True),
         patch(

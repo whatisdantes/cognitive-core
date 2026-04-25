@@ -27,7 +27,7 @@
 
 ## CognitivePipeline
 
-Явный 12-шаговый пайплайн когнитивного цикла (P3-10).
+Явный 20-шаговый пайплайн когнитивного цикла (P3-10, расширен этапами H/L).
 
 ::: brain.cognition.pipeline.CognitivePipeline
     options:

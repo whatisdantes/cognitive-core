@@ -18,21 +18,20 @@ tests/test_motivation_engine.py
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from brain.motivation.motivation_engine import (
     ALPHA,
+    CURIOSITY_TRIGGER_THRESHOLD,
     DECAY_EVERY,
     DECAY_FACTOR,
     FRUSTRATION_THRESHOLD,
-    CURIOSITY_TRIGGER_THRESHOLD,
     MotivationEngine,
     MotivationState,
 )
 from brain.motivation.reward_engine import RewardSignal, RewardType
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -143,7 +142,7 @@ class TestEMAUpdate:
 
     def test_ema_alpha_constant(self):
         """ALPHA = 0.1 по спецификации."""
-        assert ALPHA == pytest.approx(0.1)
+        assert pytest.approx(0.1) == ALPHA
 
     def test_update_returns_state(self):
         """update() возвращает MotivationState."""
@@ -161,7 +160,7 @@ class TestCycleCount:
 
     def test_cycle_count_increments(self):
         engine = MotivationEngine()
-        for i in range(5):
+        for _ in range(5):
             state = engine.update(_signal())
         assert state.cycle_count == 5
 
@@ -178,7 +177,7 @@ class TestDecay:
     """Проверяем decay ×0.95 каждые 100 циклов."""
 
     def test_decay_factor_constant(self):
-        assert DECAY_FACTOR == pytest.approx(0.95)
+        assert pytest.approx(0.95) == DECAY_FACTOR
 
     def test_decay_every_constant(self):
         assert DECAY_EVERY == 100
@@ -219,7 +218,7 @@ class TestFrustration:
     """Проверяем флаг is_frustrated."""
 
     def test_frustration_threshold_constant(self):
-        assert FRUSTRATION_THRESHOLD == pytest.approx(0.2)
+        assert pytest.approx(0.2) == FRUSTRATION_THRESHOLD
 
     def test_not_frustrated_initially(self):
         engine = MotivationEngine()
@@ -318,7 +317,7 @@ class TestGoalManagerSideEffect:
             engine.update(_signal(value=1.0))  # не должно бросать исключение
 
     def test_curiosity_trigger_threshold_constant(self):
-        assert CURIOSITY_TRIGGER_THRESHOLD == pytest.approx(0.7)
+        assert pytest.approx(0.7) == CURIOSITY_TRIGGER_THRESHOLD
 
 
 # ---------------------------------------------------------------------------

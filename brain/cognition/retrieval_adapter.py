@@ -31,9 +31,13 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
+from brain.core.contracts import ClaimRef, ClaimStatus
+from brain.core.text_utils import estimate_text_signal, search_terms
+
 from .context import EvidencePack
 
 logger = logging.getLogger(__name__)
+_MIN_RELATION_WEIGHT = 0.05
 
 # Optional: pymorphy3 для лемматизации (graceful fallback)
 try:
@@ -328,8 +332,15 @@ class KeywordRetrievalBackend:
             ev = self._from_working(item, query)
             evidence.append(ev)
 
+        # --- Claim memory ---
+        for claim in getattr(result, "answerable_claims", []):
+            ev = self._from_claim(claim, query)
+            evidence.append(ev)
+
         # --- Semantic memory ---
         for node in getattr(result, "semantic", []):
+            if not self._should_surface_semantic(node):
+                continue
             ev = self._from_semantic(node, query)
             evidence.append(ev)
 
@@ -362,14 +373,20 @@ class KeywordRetrievalBackend:
         relevance_score. Иначе оставляет оригинальные scores.
         """
         texts = [ev.content for ev in evidence]
+        query_terms = sorted(search_terms(query, drop_stopwords=True))
+        bm25_query = " ".join(query_terms) if query_terms else query
         scorer = BM25Scorer(use_lemmatization=True)
         scorer.fit(texts)
 
         if not scorer.fitted:
             return evidence
 
-        raw_scores = scorer.score_batch(query, texts)
-        max_score = max(raw_scores) if raw_scores else 0.0
+        raw_scores = scorer.score_batch(bm25_query, texts)
+        adjusted_scores = [
+            raw_score * KeywordRetrievalBackend._evidence_signal_factor(ev)
+            for ev, raw_score in zip(evidence, raw_scores)
+        ]
+        max_score = max(adjusted_scores) if adjusted_scores else 0.0
 
         # Если BM25 не дал ненулевых scores — оставить оригинальные
         if max_score <= 0.0:
@@ -377,8 +394,8 @@ class KeywordRetrievalBackend:
 
         # Нормализация в [0, 1]
         reranked: List[EvidencePack] = []
-        for ev, bm25_score in zip(evidence, raw_scores):
-            normalized = bm25_score / max_score if max_score > 0 else 0.0
+        for ev, bm25_score, adjusted_score in zip(evidence, raw_scores, adjusted_scores):
+            normalized = adjusted_score / max_score if max_score > 0 else 0.0
             reranked.append(
                 dataclasses.replace(
                     ev,
@@ -386,6 +403,10 @@ class KeywordRetrievalBackend:
                     metadata={
                         **ev.metadata,
                         "bm25_raw_score": round(bm25_score, 6),
+                        "content_signal": round(
+                            KeywordRetrievalBackend._evidence_signal_factor(ev),
+                            6,
+                        ),
                         "reranking": "bm25",
                     },
                 )
@@ -433,13 +454,25 @@ class KeywordRetrievalBackend:
         source_refs = getattr(node, "source_refs", [])
         updated_ts = getattr(node, "updated_ts", None)
 
-        # concept_refs: сам concept + targets первых 3 relations
+        # concept_refs: сам concept + targets только достаточно сильных relations
         concept_refs = [concept]
-        relations = getattr(node, "relations", [])
-        for rel in relations[:3]:
+        relations = sorted(
+            getattr(node, "relations", []) or [],
+            key=lambda rel: (
+                -float(getattr(rel, "weight", 0.0) or 0.0)
+                * float(getattr(rel, "confidence", 0.0) or 0.0),
+                str(getattr(rel, "target", "")),
+            ),
+        )
+        for rel in relations:
+            weight = float(getattr(rel, "weight", 0.0) or 0.0)
+            if weight < _MIN_RELATION_WEIGHT:
+                continue
             target = getattr(rel, "target", "")
             if target and target not in concept_refs:
                 concept_refs.append(target)
+            if len(concept_refs) >= 4:
+                break
 
         relevance = self._compute_relevance(query, content)
         freshness = self._compute_freshness(updated_ts)
@@ -493,9 +526,101 @@ class KeywordRetrievalBackend:
             supports_hypotheses=[],
         )
 
+    def _from_claim(self, claim: Any, query: str) -> EvidencePack:
+        """Конвертировать Claim → EvidencePack с provenance для output."""
+        concept = getattr(claim, "concept", "")
+        claim_text = getattr(claim, "claim_text", "")
+        claim_id = getattr(claim, "claim_id", "")
+        source_ref = getattr(claim, "source_ref", "")
+        source_group_id = getattr(claim, "source_group_id", "")
+        confidence = float(getattr(claim, "confidence", 0.5) or 0.5)
+        status = getattr(claim, "status", ClaimStatus.ACTIVE)
+        status_value = getattr(status, "value", str(status))
+        conflict_refs = list(getattr(claim, "conflict_refs", []) or [])
+        trust = self._get_source_trust(source_group_id)
+        content = f"{concept}: {claim_text}" if concept else claim_text
+        query_terms = search_terms(query, drop_stopwords=True)
+        concept_terms = search_terms(concept)
+        matched_terms = sorted(query_terms & search_terms(content))
+
+        flags: List[str] = []
+        if status_value in {
+            ClaimStatus.DISPUTED.value,
+            ClaimStatus.POSSIBLY_CONFLICTING.value,
+        }:
+            flags.append(f"claim_status:{status_value}")
+        flags.extend(f"conflict_ref:{ref}" for ref in conflict_refs)
+
+        claim_ref = ClaimRef.from_claim(claim, trust=trust)
+        relevance = self._compute_relevance(query, content)
+        concept_refs = [concept] if concept else []
+        for term in matched_terms[:3]:
+            if term and term not in concept_refs:
+                concept_refs.append(term)
+
+        return EvidencePack(
+            evidence_id=self._make_evidence_id("claim", claim_id or content),
+            content=content,
+            memory_type="claim",
+            concept_refs=concept_refs,
+            source_refs=[source_ref] if source_ref else [],
+            confidence=confidence,
+            trust=trust,
+            timestamp=self._format_ts(getattr(claim, "updated_ts", None)),
+            modality="text",
+            contradiction_flags=flags,
+            relevance_score=relevance,
+            freshness_score=self._compute_freshness(getattr(claim, "updated_ts", None)),
+            retrieval_stage=1,
+            supports_hypotheses=[],
+            metadata={
+                "claim_id": claim_id,
+                "claim_text": claim_text,
+                "claim_status": status_value,
+                "source_ref": source_ref,
+                "source_group_id": source_group_id,
+                "query_overlap_terms": matched_terms,
+                "query_concept_match": bool(query_terms & concept_terms),
+                "conflict_refs": conflict_refs,
+                "claim_family_key": getattr(claim, "claim_family_key", ""),
+                "stance_key": getattr(claim, "stance_key", ""),
+                "claim_metadata": dict(getattr(claim, "metadata", {}) or {}),
+                "claim_ref": claim_ref.to_dict(),
+            },
+        )
+
     # ------------------------------------------------------------------
     # Утилиты
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _should_surface_semantic(node: Any) -> bool:
+        """Не показывать пустые semantic-узлы без описания и сильных связей."""
+        concept = str(getattr(node, "concept", "") or "").strip()
+        description = str(getattr(node, "description", "") or "").strip()
+        if not concept:
+            return False
+        content = f"{concept}: {description}" if description else concept
+        if estimate_text_signal(content) >= 0.12:
+            return True
+
+        source_refs = list(getattr(node, "source_refs", []) or [])
+        if source_refs:
+            return True
+
+        for rel in list(getattr(node, "relations", []) or []):
+            weight = float(getattr(rel, "weight", 0.0) or 0.0)
+            if weight >= _MIN_RELATION_WEIGHT:
+                return True
+        return False
+
+    @staticmethod
+    def _evidence_signal_factor(ev: EvidencePack) -> float:
+        """Понизить BM25-score для служебных хвостов, TOC и пустых concept-узлов."""
+        factor = estimate_text_signal(ev.content)
+        if ev.memory_type == "semantic" and ":" not in ev.content:
+            factor *= 0.5
+        return max(0.05, min(factor, 1.1))
 
     @staticmethod
     def _compute_relevance(query: str, content: str) -> float:
@@ -508,14 +633,25 @@ class KeywordRetrievalBackend:
         if not query or not content:
             return 0.0
 
-        query_words = set(re.findall(r'\w+', query.lower()))
-        content_words = set(re.findall(r'\w+', content.lower()))
+        query_words = search_terms(query, drop_stopwords=True)
+        content_words = search_terms(content)
 
         if not query_words:
             return 0.0
 
         overlap = query_words & content_words
         return len(overlap) / len(query_words)
+
+    def _get_source_trust(self, source_group_id: str) -> float:
+        if not source_group_id:
+            return 0.5
+        source_memory = getattr(self._memory, "source", None)
+        if source_memory is None or not hasattr(source_memory, "get_trust"):
+            return 0.5
+        try:
+            return float(source_memory.get_trust(source_group_id))
+        except Exception:
+            return 0.5
 
     @staticmethod
     def _compute_freshness(ts: Any) -> float:

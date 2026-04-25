@@ -2,7 +2,7 @@
 
 **Биоинспирированная когнитивная система на Python**
 
-[![Tests](https://img.shields.io/badge/test%20suite-2198%20collected-brightgreen)](https://github.com/whatisdantes/cognitive-core)
+[![Tests](https://img.shields.io/badge/test%20suite-2311%20collected-brightgreen)](https://github.com/whatisdantes/cognitive-core)
 [![Coverage](https://img.shields.io/badge/coverage-gate%2070%25-green)](https://codecov.io)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/whatisdantes/cognitive-core/blob/main/LICENSE)
@@ -96,7 +96,7 @@ cognitive-core --log-dir brain/data/logs --log-level DEBUG "что такое н
 
 | Параметр | Значение |
 |----------|----------|
-| Тестовый набор | **2198 collected** в текущем дереве |
+| Тестовый набор | **2311 collected** в текущем дереве |
 | Coverage | **gate 70%** в CI |
 | Ruff | **0 errors** |
 | Mypy | **0 errors** |

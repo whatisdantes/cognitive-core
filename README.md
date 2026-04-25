@@ -1,6 +1,7 @@
 # 🧠 Cognitive Core
 
 [![CI](https://github.com/whatisdantes/cognitive-core/actions/workflows/ci.yml/badge.svg)](https://github.com/whatisdantes/cognitive-core/actions/workflows/ci.yml)
+[![Docs workflow](https://github.com/whatisdantes/cognitive-core/actions/workflows/docs.yml/badge.svg)](https://github.com/whatisdantes/cognitive-core/actions/workflows/docs.yml)
 [![codecov](https://codecov.io/gh/whatisdantes/cognitive-core/graph/badge.svg)](https://codecov.io/gh/whatisdantes/cognitive-core)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
@@ -10,7 +11,7 @@
 > **Статус:** 🚧 В разработке — MVP Phase A ✅, Phase B ✅, Phase C ✅, P0/P1/P2 ✅, H/I/N/J/K/L/M ✅  
 > **Платформа:** CPU-only · AMD Ryzen 7 5700X · 32 GB DDR4  
 > **CI/CD:** GitHub Actions (Python 3.11/3.12/3.13, pytest + pytest-cov, ruff lint, mypy)  
-> **Тестовый набор:** 2198 collected в текущем дереве · **Ruff/Mypy/Bandit:** проверяются в CI · **Coverage gate:** 70%
+> **Тестовый набор:** 2311 collected в текущем дереве · **Ruff/Mypy/Bandit:** проверяются в CI · **Coverage gate:** 70%
 
 Проект по созданию **искусственного мозга**, вдохновлённого принципами человеческого мозга и адаптированного под цифровую среду. Система воспринимает, понимает, запоминает, рассуждает, учится и рефлексирует — автономно, без постоянного участия человека.
 
@@ -118,7 +119,7 @@ mm.stop()
 | CI/CD (GitHub Actions) | ✅ Реализовано | pytest + coverage + ruff + mypy |
 | Attention & Resource Control | ✅ Реализовано | SalienceEngine, AttentionController, PolicyLayer (Этап H) |
 | LLM Bridge | ✅ Реализовано | OpenAI/Anthropic/Blackbox providers, safety wrapper (Этап N) |
-| BrainLogger Integration | ✅ Реализовано | JSONL-логи через `--log-dir`/`--log-level` (LOG_PLAN.md v2.0) |
+| BrainLogger Integration | ✅ Реализовано | JSONL-логи через `--log-dir`/`--log-level` |
 | Learning Loop | ✅ Реализовано | OnlineLearner + KnowledgeGapDetector + ReplayEngine + интеграция в pipeline (Этап I) |
 | Vision/Audio/Temporal Encoders + EncoderRouter | ✅ Реализовано | VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter (Этап J) |
 | Vision/Audio Ingestors | ✅ Реализовано | VisionIngestor, AudioIngestor (Этап J) |
@@ -127,7 +128,7 @@ mm.stop()
 | Reward & Motivation | ✅ Реализовано | RewardEngine, MotivationEngine, CuriosityEngine (Этап M) |
 
 > 📖 Полная архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md)  
-> 📋 **Единый план реализации (MVP + Post-MVP):** [`TODO.md`](TODO.md)  
+> 📋 **Единый план реализации (MVP + Post-MVP):** [`docs/planning/TODO.md`](docs/planning/TODO.md)  
 > 🗂️ Документация по слоям: [`docs/layers/`](docs/layers/)
 
 ---
@@ -421,7 +422,7 @@ cognitive-core/
 │   └── demo.py                         # ✅ Демо: полный pipeline в 30 строк
 │
 ├── CONTRIBUTING.md                     # ✅ Гайд для контрибьюторов — P3-2
-├── tests/                              # Тесты (pytest-совместимые, 2198 collected в текущем дереве)
+├── tests/                              # Тесты (pytest-совместимые, 2311 collected в текущем дереве)
 │   ├── conftest.py                     # Общая конфигурация pytest + fixtures
 │   ├── test_bm25.py                    # ✅ 55/55 тестов BM25 Scorer + KeywordBackend reranking
 │   ├── test_cli.py                    # ✅ 20/20 тестов CLI entrypoint (Phase A)
@@ -827,7 +828,7 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 
 ### Состав тестового набора
 
-В текущем рабочем дереве `pytest` собирает 2198 тестов. Точный total может меняться по мере развития проекта, поэтому ниже приведён состав набора по файлам, а актуальный status лучше сверять по CI и локальному `pytest --collect-only`.
+В текущем рабочем дереве `pytest` собирает 2311 тестов. Точный total может меняться по мере развития проекта, поэтому ниже приведён состав набора по файлам, а актуальный status лучше сверять по CI и локальному `pytest --collect-only`.
 
 | Файл | Модуль | Тестов |
 |------|--------|--------|
@@ -856,7 +857,7 @@ python -m pytest tests/ --cov=brain --cov-report=term-missing
 | `test_attention_controller.py` | AttentionController + budgets (Этап H) | 10 |
 | `test_salience_engine.py` | SalienceEngine + scoring (Этап H) | 12 |
 | `test_policy_layer.py` | PolicyLayer filters + modifiers (Этап H) | 9 |
-| `test_brain_logger_integration.py` | BrainLogger integration (LOG_PLAN.md v2.0) | 19 |
+| `test_brain_logger_integration.py` | BrainLogger integration | 19 |
 | `test_llm_bridge.py` | LLMBridge + providers + safety (Этап N) | 82 |
 | `test_online_learner.py` | OnlineLearner (Этап I) | 12 |
 | `test_knowledge_gap_detector.py` | KnowledgeGapDetector (Этап I) | 8 |
@@ -992,14 +993,14 @@ cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level INF
 | [`11_midbrain_reward.md`](docs/layers/11_midbrain_reward.md) | Reward & Motivation | Средний мозг | ✅ Реализовано (Этап M, 84 теста) |
 
 Архитектурная спецификация: [`BRAIN.md`](docs/BRAIN.md) (15 разделов)  
-**Единый план реализации (MVP + Post-MVP):** [`TODO.md`](TODO.md)
+**Единый план реализации (MVP + Post-MVP):** [`docs/planning/TODO.md`](docs/planning/TODO.md)
 
 ---
 
 ## ✅ Прогресс реализации
 
 > **Примечание:** Нумерация этапов ниже — историческая (из BRAIN.md).
-> Актуальный roadmap с MVP-фазами: [`TODO.md`](TODO.md).
+> Актуальный roadmap с MVP-фазами: [`docs/planning/TODO.md`](docs/planning/TODO.md).
 
 | Этап | Название | Статус | Тестов |
 |------|----------|--------|--------|
@@ -1023,7 +1024,7 @@ cognitive-core --autonomous --ticks 10 --log-dir brain/data/logs --log-level INF
 | **P3** | **Nice-to-have (DX, architecture, testing)** | **✅ 12/12** | **1800** |
 | **H** | **Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer)** | **✅ Завершено 4/5** | **31 (в 1800)** |
 | **N** | **LLM Bridge (OpenAI/Anthropic/Blackbox, safety wrapper, CLI)** | **✅ Завершено 5/5** | **82 (в 1812)** |
-| **LOG** | **BrainLogger Integration (LOG_PLAN.md v2.0, 13 фаз)** | **✅ Завершено 13/13** | **19 (в 1800)** |
+| **LOG** | **BrainLogger Integration (13 фаз)** | **✅ Завершено 13/13** | **19 (в 1800)** |
 | **I** | **Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine + интеграция)** | **✅ Завершено** | **42 (в 1800)** |
 | **J** | **Vision/Audio/Temporal Encoders + Ingestors (VisionIngestor, AudioIngestor, VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter)** | **✅ Завершено** | **109** |
 | **K** | **Cross-Modal Fusion (SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector)** | **✅ Завершено** | **61** |
@@ -1145,7 +1146,7 @@ tests/
 
 ### Следующий шаг
 
-> 📋 Единый план реализации: [`TODO.md`](TODO.md)
+> 📋 Единый план реализации: [`docs/planning/TODO.md`](docs/planning/TODO.md)
 
 **MVP Phase A** ✅ — CLI entrypoint, Docker, ResourceMonitor.snapshot(), mypy без `|| true`.  
 **MVP Phase B** ✅ — Auto-encode, Perception hardening, Retrieval scope docs, README update, Golden-answer benchmarks (414 тестов).  
@@ -1153,13 +1154,12 @@ tests/
 **P0 Hardening** ✅ — Thread safety (6 модулей), memory leaks, real vector/hybrid retrieval (60 тестов).  
 **P1 Hardening** ✅ — CI coverage gate 70%, ruff rules (B/SIM/C4/RET/PIE), mypy 0 errors, Docker multi-stage + non-root, Protocol types.  
 **P2 Hardening** ✅ — Алгоритмические оптимизации (BFS deque, batch_remove, min вместо sorted), локальные дефекты (UUID, ZeroDivisionError, decay), инфраструктура (Dependabot, Bandit, Codecov).  
-**P3 (mostly done)** ✅ — DX (CONTRIBUTING, ADR, mkdocs, development docs), архитектура (CognitivePipeline 15 шагов, ThreadPoolEventBus, --autonomous CLI, SQLCipher), тестирование (Hypothesis, stress tests).  
+**P3 (mostly done)** ✅ — DX (CONTRIBUTING, ADR, mkdocs, development docs), архитектура (CognitivePipeline 20 шагов, ThreadPoolEventBus, --autonomous CLI, SQLCipher), тестирование (Hypothesis, stress tests).  
 **Этап H** ✅ — Attention & Resource Control (SalienceEngine, AttentionController, PolicyLayer).  
 **Этап N** ✅ — LLM Bridge (OpenAI/Anthropic/Blackbox providers, safety wrapper, CLI integration).  
 **Этап I** ✅ — Learning Loop (OnlineLearner, KnowledgeGapDetector, ReplayEngine — модули + интеграция в CognitivePipeline + CLI).  
-**LOG_PLAN.md v2.0** ✅ — BrainLogger интегрирован во все слои (CLI, CognitiveCore, Pipeline, MemoryManager, InputRouter, OutputPipeline, EventBus, Scheduler). NullObject pattern обеспечивает backward compatibility.  
 **Этап J** ✅ — Vision/Audio/Temporal Encoders + Ingestors (VisionIngestor, AudioIngestor, VisionEncoder, AudioEncoder, TemporalEncoder, EncoderRouter — 109 тестов).  
 **Этап K** ✅ — Cross-Modal Fusion (SharedSpaceProjector, EntityLinker, ConfidenceCalibrator, CrossModalContradictionDetector — 61 тест).  
 **Этап L** ✅ — Safety & Boundaries (AuditLogger, SourceTrustManager, ConflictDetector, BoundaryGuard, SafetyPolicyLayer + интеграция в CognitivePipeline 20 шагов — 107 тестов).  
 **Этап M** ✅ — Reward & Motivation (RewardEngine, MotivationEngine, CuriosityEngine — 84 теста).  
-Roadmap: [`TODO.md`](TODO.md).
+Roadmap: [`docs/planning/TODO.md`](docs/planning/TODO.md).

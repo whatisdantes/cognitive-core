@@ -63,6 +63,7 @@ class SchedulerConfig:
     tick_emergency_ms: int = 5000  # 0.2 Hz при RAM > 30 GB (EMERGENCY)
     max_queue_size: int   = 256    # максимум задач в очереди
     max_tasks_per_tick: int = 1    # MVP: одна задача за тик
+    max_low_queue_backlog: int = 8  # максимум LOW/IDLE задач для idle enqueue
     cpu_degraded_threshold: float = 70.0
     cpu_critical_threshold: float = 85.0
     ram_degraded_gb: float = 22.0  # порог DEGRADED по RAM (GB)
@@ -84,6 +85,20 @@ class SchedulerStats:
     tasks_failed: int   = 0
     tasks_dropped: int  = 0   # очередь переполнена
     idle_ticks: int     = 0   # тики без задач
+
+
+# ---------------------------------------------------------------------------
+# Повторяющиеся задачи
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RecurringTask:
+    """Описание периодической задачи, создаваемой Scheduler на тиках."""
+    task_type: str
+    every_n_ticks: int
+    priority: TaskPriority = TaskPriority.LOW
+    last_tick: int = 0
+    enqueued_count: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +145,9 @@ class Scheduler:
         # Зарегистрированные обработчики задач: task_type → callable
         self._handlers: Dict[str, Callable[[Task], Any]] = {}
 
+        # Повторяющиеся задачи: task_type → RecurringTask
+        self._recurring: Dict[str, RecurringTask] = {}
+
         # --- Phase 7b: BrainLogger (NullObject pattern) ---
         self._blog: BrainLogger = brain_logger or _NULL_LOGGER  # type: ignore[assignment]
 
@@ -157,6 +175,38 @@ class Scheduler:
         """
         self._handlers[task_type] = handler
         logger.debug("[Scheduler] handler зарегистрирован: %s → %s", task_type, handler.__name__)
+
+    def register_recurring(
+        self,
+        task_type: str,
+        handler: Callable[[Task], Any],
+        every_n_ticks: int,
+        priority: TaskPriority = TaskPriority.LOW,
+    ) -> RecurringTask:
+        """
+        Зарегистрировать периодическую задачу.
+
+        Scheduler будет ставить задачу в очередь каждые `every_n_ticks` тиков.
+        Если pending-задача того же `task_type` уже есть в очереди, новая копия
+        не создаётся: это защищает idle/maintenance work от раздувания очереди.
+        """
+        if every_n_ticks <= 0:
+            raise ValueError("every_n_ticks must be positive")
+
+        self.register_handler(task_type, handler)
+        recurring = RecurringTask(
+            task_type=task_type,
+            every_n_ticks=every_n_ticks,
+            priority=priority,
+        )
+        self._recurring[task_type] = recurring
+        logger.debug(
+            "[Scheduler] recurring task зарегистрирована: %s every=%d priority=%s",
+            task_type,
+            every_n_ticks,
+            priority.name,
+        )
+        return recurring
 
     # ------------------------------------------------------------------
     # Управление очередью
@@ -206,6 +256,108 @@ class Scheduler:
     def queue_size(self) -> int:
         """Текущий размер очереди."""
         return len(self._queue)
+
+    def pending_counts_by_priority(self) -> Dict[str, int]:
+        """Количество pending-задач по приоритетам очереди."""
+        counts = {priority.name: 0 for priority in TaskPriority}
+        for priority_value, _, _, _ in self._queue:
+            try:
+                priority = TaskPriority(priority_value)
+                counts[priority.name] += 1
+            except ValueError:
+                continue
+        return counts
+
+    def low_backlog_size(self) -> int:
+        """Количество низкоприоритетной работы (LOW + IDLE) в очереди."""
+        return sum(
+            1
+            for priority_value, _, _, _ in self._queue
+            if priority_value >= int(TaskPriority.LOW)
+        )
+
+    def has_pending_high_or_normal(self) -> bool:
+        """True если в очереди есть работа пользовательского/обычного приоритета."""
+        return any(
+            priority_value <= int(TaskPriority.NORMAL)
+            for priority_value, _, _, _ in self._queue
+        )
+
+    def can_enqueue_idle_work(self) -> bool:
+        """
+        True если idle-диспетчер может добавить LOW/IDLE работу.
+
+        Idle work не ставится, пока есть HIGH/NORMAL задачи, и не раздувает
+        backlog низкоприоритетной очереди выше `max_low_queue_backlog`.
+        """
+        return (
+            not self.has_pending_high_or_normal()
+            and self.low_backlog_size() < self._config.max_low_queue_backlog
+        )
+
+    def enqueue_idle(
+        self,
+        task: Task,
+        priority: TaskPriority = TaskPriority.LOW,
+    ) -> bool:
+        """
+        Добавить idle/maintenance задачу с учётом backlog guard.
+
+        Используется IdleDispatcher-ом: HIGH/NORMAL задачи должны попадать в
+        очередь через обычный enqueue(), а idle work — через этот метод.
+        """
+        if priority < TaskPriority.LOW:
+            raise ValueError("idle work priority must be LOW or IDLE")
+        if not self.can_enqueue_idle_work():
+            logger.debug(
+                "[Scheduler] idle enqueue skipped: high_or_normal=%s low_backlog=%d limit=%d",
+                self.has_pending_high_or_normal(),
+                self.low_backlog_size(),
+                self._config.max_low_queue_backlog,
+            )
+            return False
+        return self.enqueue(task, priority)
+
+    def _has_pending_task_type(self, task_type: str) -> bool:
+        """True если в очереди уже есть pending task указанного типа."""
+        return any(task.task_type == task_type for _, _, _, task in self._queue)
+
+    def _check_recurring(self, current_tick: int) -> List[str]:
+        """
+        Поставить due recurring-задачи в очередь.
+
+        Возвращает список task_id, которые были добавлены на текущем тике.
+        """
+        enqueued_ids: List[str] = []
+        for recurring in self._recurring.values():
+            if current_tick - recurring.last_tick < recurring.every_n_ticks:
+                continue
+
+            recurring.last_tick = current_tick
+            if self._has_pending_task_type(recurring.task_type):
+                logger.debug(
+                    "[Scheduler] recurring skip duplicate pending: %s tick=%d",
+                    recurring.task_type,
+                    current_tick,
+                )
+                continue
+
+            task_id = f"recurring_{recurring.task_type}_{current_tick:06d}"
+            task = Task(
+                task_id=task_id,
+                task_type=recurring.task_type,
+                payload={
+                    "recurring": True,
+                    "due_tick": current_tick,
+                    "every_n_ticks": recurring.every_n_ticks,
+                },
+                trace_id=task_id,
+            )
+            if self.enqueue(task, recurring.priority):
+                recurring.enqueued_count += 1
+                enqueued_ids.append(task_id)
+
+        return enqueued_ids
 
     # ------------------------------------------------------------------
     # Выполнение одной задачи
@@ -335,6 +487,8 @@ class Scheduler:
         cycle_id = f"cycle-{self._cycle_counter:06d}"
         ts_start = time.monotonic()
 
+        recurring_enqueued = self._check_recurring(self._cycle_counter)
+
         # Публикуем tick_start
         self._bus.publish(
             "tick_start",
@@ -342,6 +496,7 @@ class Scheduler:
                 "cycle_id": cycle_id,
                 "tick_number": self._cycle_counter,
                 "queue_size": self.queue_size(),
+                "recurring_enqueued": recurring_enqueued,
                 "resource_state": resource_state.to_dict() if resource_state else None,
             },
             trace_id=cycle_id,
@@ -369,6 +524,7 @@ class Scheduler:
                 "tasks_executed": len(executed),
                 "duration_ms": round(duration_ms, 2),
                 "queue_size": self.queue_size(),
+                "recurring_enqueued": recurring_enqueued,
             },
             trace_id=cycle_id,
         )
@@ -387,6 +543,7 @@ class Scheduler:
                 "tick_number": self._cycle_counter,
                 "tasks_executed": len(executed),
                 "queue_size": self.queue_size(),
+                "recurring_enqueued": recurring_enqueued,
                 "session_id": self._config.session_id,
             },
             latency_ms=round(duration_ms, 2),
@@ -399,6 +556,7 @@ class Scheduler:
             "executed": executed,
             "duration_ms": round(duration_ms, 2),
             "queue_size": self.queue_size(),
+            "recurring_enqueued": recurring_enqueued,
         }
 
     # ------------------------------------------------------------------
@@ -530,7 +688,11 @@ class Scheduler:
             "running": self._running,
             "cycle_counter": self._cycle_counter,
             "queue_size": self.queue_size(),
+            "pending_by_priority": self.pending_counts_by_priority(),
+            "low_backlog_size": self.low_backlog_size(),
+            "max_low_queue_backlog": self._config.max_low_queue_backlog,
             "registered_handlers": list(self._handlers.keys()),
+            "registered_recurring": list(self._recurring.keys()),
             "ticks": s.ticks,
             "tasks_enqueued": s.tasks_enqueued,
             "tasks_executed": s.tasks_executed,

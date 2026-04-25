@@ -11,11 +11,22 @@ tests/test_cli.py — Тесты для brain/cli.py
 from __future__ import annotations
 
 import tempfile
+import threading
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
-from brain.cli import build_parser, main, run_query
+from brain.cli import (
+    _enqueue_stdin_query,
+    _load_dotenv,
+    _stdin_reader_loop,
+    build_parser,
+    main,
+    run_daemon,
+    run_query,
+)
+from brain.core import EventBus, Scheduler, Task, TaskPriority
 
 # ---------------------------------------------------------------------------
 # build_parser
@@ -66,6 +77,25 @@ class TestBuildParser:
         with pytest.raises(SystemExit) as exc_info:
             parser.parse_args(["--version"])
         assert exc_info.value.code == 0
+
+    def test_parse_daemon_flags(self):
+        parser = build_parser()
+        args = parser.parse_args([
+            "--daemon",
+            "--materials",
+            "materials",
+            "--watch",
+            "--stdin",
+        ])
+        assert args.daemon is True
+        assert args.materials == "materials"
+        assert args.watch is True
+        assert args.stdin is True
+
+    def test_parse_no_watch_overrides_watch(self):
+        parser = build_parser()
+        args = parser.parse_args(["--daemon", "--watch", "--no-watch"])
+        assert args.watch is False
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +174,59 @@ class TestRunQuery:
 
 
 # ---------------------------------------------------------------------------
+# daemon / stdin
+# ---------------------------------------------------------------------------
+
+class TestDaemonMode:
+    """Тесты daemon-оркестрации и stdin reader-а."""
+
+    def test_run_daemon_without_materials_or_llm_smoke(self):
+        """Daemon стартует и завершает bounded smoke-run без materials и LLM."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code = run_daemon(tmpdir, max_ticks=1)
+            assert code == 0
+
+    def test_stdin_query_goes_to_high_queue(self):
+        scheduler = Scheduler(EventBus())
+        scheduler.register_handler("cognitive_cycle", lambda task: {"query": task.payload["query"]})
+
+        assert _enqueue_stdin_query(scheduler, "привет", 1)
+        counts = scheduler.pending_counts_by_priority()
+        assert counts["HIGH"] == 1
+
+    def test_stdin_high_priority_beats_low_backlog(self):
+        scheduler = Scheduler(EventBus())
+        executed: list[str] = []
+
+        def handle_low(task: Task) -> dict:
+            executed.append(task.task_id)
+            return {"task": task.task_id}
+
+        def handle_high(task: Task) -> dict:
+            executed.append(task.task_id)
+            return {"query": task.payload["query"]}
+
+        scheduler.register_handler("idle_task", handle_low)
+        scheduler.register_handler("cognitive_cycle", handle_high)
+        scheduler.enqueue(Task(task_id="low_001", task_type="idle_task"), TaskPriority.LOW)
+        _enqueue_stdin_query(scheduler, "важный вопрос", 1)
+
+        result = scheduler.execute_one()
+        assert result is not None
+        assert result["task_id"] == "stdin_cycle_000001"
+        assert executed == ["stdin_cycle_000001"]
+
+    def test_stdin_eof_does_not_stop_daemon(self):
+        scheduler = Scheduler(EventBus())
+        stop_event = threading.Event()
+
+        _stdin_reader_loop(scheduler, StringIO(""), stop_event)
+
+        assert not stop_event.is_set()
+        assert scheduler.queue_size() == 0
+
+
+# ---------------------------------------------------------------------------
 # Интеграция: GoalManager в CognitiveCore
 # ---------------------------------------------------------------------------
 
@@ -174,3 +257,65 @@ class TestImports:
         from brain import __version__
         assert isinstance(__version__, str)
         assert "." in __version__
+
+
+# ---------------------------------------------------------------------------
+# _load_dotenv — автозагрузка .env
+# ---------------------------------------------------------------------------
+
+class TestLoadDotenv:
+    """Тесты для _load_dotenv()."""
+
+    def test_load_dotenv_missing_file_returns_zero(self, tmp_path):
+        """Нет файла → 0 переменных применено, без ошибок."""
+        n = _load_dotenv(str(tmp_path / "nonexistent.env"))
+        assert n == 0
+
+    def test_load_dotenv_applies_simple_pairs(self, tmp_path, monkeypatch):
+        """KEY=VALUE попадает в os.environ."""
+        import os
+        monkeypatch.delenv("TEST_DOTENV_KEY", raising=False)
+        env_file = tmp_path / ".env"
+        env_file.write_text("TEST_DOTENV_KEY=abc123\n", encoding="utf-8")
+        n = _load_dotenv(str(env_file))
+        assert n == 1
+        assert os.environ.get("TEST_DOTENV_KEY") == "abc123"
+
+    def test_load_dotenv_ignores_comments_and_blank_lines(self, tmp_path, monkeypatch):
+        """Строки с '#' и пустые — пропускаются."""
+        import os
+        monkeypatch.delenv("TEST_DOTENV_K1", raising=False)
+        monkeypatch.delenv("TEST_DOTENV_K2", raising=False)
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            "# комментарий\n\nTEST_DOTENV_K1=v1\n  # другой коммент\nTEST_DOTENV_K2=v2\n",
+            encoding="utf-8",
+        )
+        n = _load_dotenv(str(env_file))
+        assert n == 2
+        assert os.environ.get("TEST_DOTENV_K1") == "v1"
+        assert os.environ.get("TEST_DOTENV_K2") == "v2"
+
+    def test_load_dotenv_strips_surrounding_quotes(self, tmp_path, monkeypatch):
+        """KEY=\"value\" и KEY='value' — кавычки снимаются."""
+        import os
+        monkeypatch.delenv("TEST_DOTENV_DQ", raising=False)
+        monkeypatch.delenv("TEST_DOTENV_SQ", raising=False)
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            'TEST_DOTENV_DQ="double"\nTEST_DOTENV_SQ=\'single\'\n',
+            encoding="utf-8",
+        )
+        _load_dotenv(str(env_file))
+        assert os.environ.get("TEST_DOTENV_DQ") == "double"
+        assert os.environ.get("TEST_DOTENV_SQ") == "single"
+
+    def test_load_dotenv_does_not_overwrite_existing(self, tmp_path, monkeypatch):
+        """Уже заданная переменная окружения имеет приоритет над .env."""
+        import os
+        monkeypatch.setenv("TEST_DOTENV_EXISTING", "real-value")
+        env_file = tmp_path / ".env"
+        env_file.write_text("TEST_DOTENV_EXISTING=file-value\n", encoding="utf-8")
+        n = _load_dotenv(str(env_file))
+        assert n == 0  # ничего не применено
+        assert os.environ.get("TEST_DOTENV_EXISTING") == "real-value"

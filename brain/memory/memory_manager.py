@@ -33,10 +33,19 @@ try:
 except ImportError:
     _PSUTIL_AVAILABLE = False
 
-from brain.core.text_utils import parse_fact_pattern  # noqa: E402
+from brain.core.contracts import Claim, ClaimStatus, EvidenceKind  # noqa: E402
+from brain.core.text_utils import (  # noqa: E402
+    build_claim_grouping_keys,
+    estimate_text_signal,
+    normalize_concept,
+    parse_fact_pattern,
+)
 
+from .claim_store import ClaimStore  # noqa: E402
+from .conflict_guard import ConflictGuard  # noqa: E402
 from .consolidation_engine import ConsolidationEngine  # noqa: E402
 from .episodic_memory import Episode, EpisodicMemory, ModalEvidence  # noqa: E402
+from .material_registry import MaterialRegistry  # noqa: E402
 from .procedural_memory import ProceduralMemory  # noqa: E402
 from .semantic_memory import SemanticMemory, SemanticNode  # noqa: E402
 from .source_memory import SourceMemory  # noqa: E402
@@ -52,6 +61,8 @@ class MemorySearchResult:
         self.working: List[MemoryItem] = []
         self.semantic: List[SemanticNode] = []
         self.episodic: List[Episode] = []
+        self.active_claims: List[Claim] = []
+        self.answerable_claims: List[Claim] = []
         self.total: int = 0
 
     def is_empty(self) -> bool:
@@ -77,6 +88,10 @@ class MemorySearchResult:
         if self.working:
             item = self.working[0]
             parts.append(f"[Контекст] {str(item.content)[:100]}")
+        if self.answerable_claims:
+            claim = self.answerable_claims[0]
+            label = "Спорный claim" if claim.status == ClaimStatus.DISPUTED else "Claim"
+            parts.append(f"[{label}] {claim.concept}: {claim.claim_text[:100]}")
         return "\n".join(parts) if parts else "(ничего не найдено)"
 
     def __repr__(self) -> str:
@@ -85,6 +100,7 @@ class MemorySearchResult:
             f"working={len(self.working)} | "
             f"semantic={len(self.semantic)} | "
             f"episodic={len(self.episodic)} | "
+            f"claims={len(self.answerable_claims)} | "
             f"total={self.total})"
         )
 
@@ -126,6 +142,9 @@ class MemoryManager:
 
         # ── SQLite backend (если запрошен) ────────────────────────────────────
         self._db: Optional[MemoryDatabase] = None
+        self.claim_store: Optional[ClaimStore] = None
+        self.material_registry: Optional[MaterialRegistry] = None
+        self.conflict_guard: Optional[ConflictGuard] = None
 
         if storage_backend == "sqlite" or (
             storage_backend == "auto" and self._should_use_sqlite()
@@ -133,6 +152,8 @@ class MemoryManager:
             self._db = MemoryDatabase(
                 db_path=f"{data_dir}/memory.db",
             )
+            self.claim_store = ClaimStore(self._db)
+            self.material_registry = MaterialRegistry(self._db)
             self._effective_backend = "sqlite"
         else:
             self._effective_backend = "json"
@@ -159,6 +180,13 @@ class MemoryManager:
             storage_backend=self._effective_backend,
             db=self._db,
         )
+
+        if self.claim_store is not None:
+            self.conflict_guard = ConflictGuard(
+                claim_store=self.claim_store,
+                source_memory=self.source,
+                brain_logger=self._blog,
+            )
 
         self.procedural = ProceduralMemory(
             data_path=f"{data_dir}/procedures.json",
@@ -266,19 +294,24 @@ class MemoryManager:
             fact = parse_fact_pattern(content_str)
             if fact:
                 concept, description = fact
-                node = self.semantic.store_fact(
+                node = self._store_semantic_fact_with_claim(
                     concept=concept,
                     description=description,
                     tags=tags or [],
+                    confidence=importance,
                     importance=importance,
                     source_ref=source_ref,
+                    evidence_kind=EvidenceKind.TIMELESS,
+                    trace_id=trace_id,
+                    session_id=session_id,
                 )
                 result["semantic"] = node
 
         # 4. Регистрация источника
         if source_ref:
-            self.source.register(source_ref)
-            self.source.add_fact(source_ref)
+            source_group_id = self._source_group_id(source_ref)
+            self.source.register(source_group_id)
+            self.source.add_fact(source_group_id)
 
         self._store_count += 1
 
@@ -303,6 +336,8 @@ class MemoryManager:
         confidence: float = 1.0,
         importance: float = 0.7,
         source_ref: str = "",
+        trace_id: str = "",
+        session_id: str = "",
     ) -> SemanticNode:
         """
         Явно сохранить факт в семантическую память.
@@ -310,17 +345,21 @@ class MemoryManager:
         Returns:
             SemanticNode
         """
-        node = self.semantic.store_fact(
+        node = self._store_semantic_fact_with_claim(
             concept=concept,
             description=description,
             tags=tags or [],
             confidence=confidence,
             importance=importance,
             source_ref=source_ref,
+            evidence_kind=EvidenceKind.TIMELESS,
+            trace_id=trace_id,
+            session_id=session_id,
         )
         if source_ref:
-            self.source.register(source_ref)
-            self.source.add_fact(source_ref)
+            source_group_id = self._source_group_id(source_ref)
+            self.source.register(source_group_id)
+            self.source.add_fact(source_group_id)
         self._store_count += 1
 
         # --- Phase 4: memory_store_fact (INFO) ---
@@ -335,6 +374,129 @@ class MemoryManager:
         )
 
         return node
+
+    def _store_semantic_fact_with_claim(
+        self,
+        concept: str,
+        description: str,
+        tags: Optional[List[str]] = None,
+        confidence: float = 1.0,
+        importance: float = 0.7,
+        source_ref: str = "",
+        evidence_kind: EvidenceKind = EvidenceKind.TIMELESS,
+        trace_id: str = "",
+        session_id: str = "",
+    ) -> SemanticNode:
+        concept_norm = normalize_concept(concept)
+        claim_text = description[:500]
+        if self.claim_store is not None:
+            family_key, stance_key = build_claim_grouping_keys(concept_norm, claim_text)
+            source_group_id = self._source_group_id(source_ref)
+            claim = self.claim_store.create(
+                Claim(
+                    concept=concept_norm,
+                    claim_text=claim_text,
+                    claim_family_key=family_key,
+                    stance_key=stance_key,
+                    source_ref=source_ref,
+                    source_group_id=source_group_id,
+                    evidence_kind=evidence_kind,
+                    confidence=confidence,
+                    status=ClaimStatus.ACTIVE,
+                    metadata={"source": "memory_manager"},
+                )
+            )
+            if self.conflict_guard is not None:
+                self.conflict_guard.check_new_claim(
+                    claim,
+                    session_id=session_id or "memory_direct",
+                    trace_id=trace_id,
+                )
+            else:
+                self._blog.info(
+                    "memory", "claim_created",
+                    session_id=session_id or "memory_direct",
+                    trace_id=trace_id,
+                    state={
+                        "claim_id": claim.claim_id,
+                        "concept": claim.concept,
+                        "status": claim.status.value,
+                        "source_group_id": claim.source_group_id,
+                    },
+                )
+            return self._refresh_semantic_description_from_claims(
+                concept_norm,
+                tags=tags or [],
+                importance=importance,
+                source_ref=source_ref,
+            )
+
+        return self.semantic.store_fact(
+            concept=concept_norm,
+            description=description,
+            tags=tags or [],
+            confidence=confidence,
+            importance=importance,
+            source_ref=source_ref,
+        )
+
+    def _refresh_semantic_description_from_claims(
+        self,
+        concept: str,
+        tags: Optional[List[str]] = None,
+        importance: float = 0.7,
+        source_ref: str = "",
+    ) -> SemanticNode:
+        if self.claim_store is None:
+            return self.semantic.store_fact(
+                concept=concept,
+                description="",
+                tags=tags or [],
+                importance=importance,
+                source_ref=source_ref,
+            )
+        active = self.claim_store.active_claims(concept)
+        if active:
+            scored_active = [
+                (estimate_text_signal(f"{claim.concept}: {claim.claim_text}"), claim)
+                for claim in active
+            ]
+            filtered = [
+                claim for signal, claim in scored_active
+                if signal >= 0.3
+            ]
+            candidates = filtered or active
+            top = sorted(
+                candidates,
+                key=lambda c: (
+                    -estimate_text_signal(f"{c.concept}: {c.claim_text}"),
+                    -c.confidence,
+                    c.created_ts,
+                ),
+            )[:3]
+            description = "; ".join(c.claim_text for c in top)
+            confidence = max(c.confidence for c in top)
+        else:
+            description = ""
+            confidence = 0.5
+        return self.semantic.set_description(
+            concept=concept,
+            description=description,
+            confidence=confidence,
+            importance=importance,
+            source_ref=source_ref,
+        )
+
+    @staticmethod
+    def _source_group_id(source_ref: str) -> str:
+        if not source_ref:
+            return "unknown"
+        if source_ref.startswith("material:"):
+            root = source_ref.split("#", 1)[0]
+            return root.removeprefix("material:")
+        if "#" in source_ref:
+            return source_ref.split("#", 1)[0]
+        return source_ref
 
     def store_episode(
         self,
@@ -386,7 +548,7 @@ class MemoryManager:
             MemorySearchResult с результатами из всех видов памяти
         """
         if memory_types is None:
-            memory_types = ["working", "semantic", "episodic"]
+            memory_types = ["working", "semantic", "episodic", "claims"]
 
         result = MemorySearchResult()
 
@@ -403,7 +565,24 @@ class MemoryManager:
                 query, top_n=top_n, min_importance=min_importance
             )
 
-        result.total = len(result.working) + len(result.semantic) + len(result.episodic)
+        if "claims" in memory_types and self.claim_store is not None:
+            result.answerable_claims = self.claim_store.search(
+                query,
+                statuses=[ClaimStatus.ACTIVE, ClaimStatus.DISPUTED],
+                top_n=top_n,
+            )
+            result.active_claims = [
+                claim
+                for claim in result.answerable_claims
+                if claim.status == ClaimStatus.ACTIVE
+            ]
+
+        result.total = (
+            len(result.working)
+            + len(result.semantic)
+            + len(result.episodic)
+            + len({claim.claim_id for claim in result.answerable_claims})
+        )
         self._retrieve_count += 1
 
         # --- Phase 4: memory_retrieve (DEBUG) ---
@@ -416,6 +595,8 @@ class MemoryManager:
                 "semantic_count": len(result.semantic),
                 "episodic_count": len(result.episodic),
                 "working_count": len(result.working),
+                "active_claim_count": len(result.active_claims),
+                "answerable_claim_count": len(result.answerable_claims),
             },
         )
 

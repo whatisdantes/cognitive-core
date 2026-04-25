@@ -34,6 +34,7 @@ from .llm_bridge import (
     MockProvider,
     OpenAIProvider,
 )
+from .llm_budget import LLMRateLimitConfig, LLMRateLimiter
 from .safety_wrapper import LLMSafetyWrapper, SafetyViolationError
 
 __all__ = [
@@ -42,6 +43,8 @@ __all__ = [
     # Контракты
     "LLMRequest",
     "LLMResponse",
+    "LLMRateLimitConfig",
+    "LLMRateLimiter",
     # Исключения
     "LLMUnavailableError",
     "SafetyViolationError",

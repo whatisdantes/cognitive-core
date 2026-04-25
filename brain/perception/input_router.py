@@ -29,11 +29,11 @@ from brain.core.events import PerceptEvent
 from brain.core.hash_utils import sha256_file as _sha256_file
 from brain.core.hash_utils import sha256_text
 from brain.logging import _NULL_LOGGER, BrainLogger
+from brain.perception.audio_ingestor import AudioIngestor
 from brain.perception.metadata_extractor import MetadataExtractor
 from brain.perception.text_ingestor import TextIngestor
 from brain.perception.validators import check_file_size, validate_file_path
 from brain.perception.vision_ingestor import VisionIngestor
-from brain.perception.audio_ingestor import AudioIngestor
 
 # ─── Тип входных данных ──────────────────────────────────────────────────────
 
